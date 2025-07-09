@@ -10,10 +10,8 @@ on:
   pull_request:
 
 env:
-  # GitHub Container Registry namespace
-  REGISTRY: ghcr.io/uzleosharif
   # Base image tag (fully inlined)
-  BASE_IMAGE: ghcr.io/uzleosharif/cpp-modules-base:v1.0.1
+  BASE_IMAGE: ghcr.io/circuit555/cpp-modules-base:v1.0.1
   # Path to your base-image Dockerfile
   BASE_DOCKERFILE: dockers/cpp-modules-base/cpp_modules_base.dockerfile
   # Tag for your final build image
@@ -32,12 +30,15 @@ jobs:
           submodules: recursive
 
       - name: Log in to GHCR
-        if: ${{ github.event_name == 'push' }}
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | docker login ghcr.io \
                 -u "${{ github.actor }}" \
                 --password-stdin
+
+      - name: Pull base image
+        run: |
+          docker pull ${{ env.BASE_IMAGE }} || true
 
       - name: Setup buildx
         run: |
@@ -89,6 +90,7 @@ jobs:
         run: |
           docker buildx build \
             --builder ci-builder \
+            --pull \
             --load \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to type=local,dest=/tmp/.buildx-cache-new \

@@ -1,0 +1,8 @@
+
+
+
+{
+  "src": ["src/io/main.cpp"],
+  "imp": ["fmt"],
+  "e": "svt"
+}

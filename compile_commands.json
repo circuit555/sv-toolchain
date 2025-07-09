@@ -1,0 +1,6 @@
+
+
+
+[
+{ "directory": "/tmp/sv-toolchain", "file": "src/io/main.cpp", "output": "build/main.o", "arguments": ["/usr/lib/llvm-20/bin/clang", "-xc++", "src/io/main.cpp", "-o", "build/main.o", "--driver-mode=g++", "-std=c++26", "-stdlib=libc++", "-O3", "-fsanitize=address,leak", "-fmodule-file=fmt=/modules/bmi/fmt.pcm", "-fprebuilt-module-path=build/", "-c", "--target=x86_64-pc-linux-gnu"]},
+]

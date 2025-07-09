@@ -1,0 +1,123 @@
+name: C++ CI
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+env:
+  # GitHub Container Registry namespace
+  REGISTRY: ghcr.io/uzleosharif
+  # Base image tag (fully inlined)
+  BASE_IMAGE: ghcr.io/uzleosharif/cpp-modules-base:v1.0.1
+  # Path to your base-image Dockerfile
+  BASE_DOCKERFILE: dockers/cpp-modules-base/cpp_modules_base.dockerfile
+  # Tag for your final build image
+  FINAL_IMAGE: cpp-final
+  # Path to your final Dockerfile
+  FINAL_DOCKERFILE: dockers/sv-toolchain.dockerfile
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login ghcr.io \
+                -u "${{ github.actor }}" \
+                --password-stdin
+
+      - name: Setup buildx
+        run: |
+          docker buildx create --driver docker-container --use --name ci-builder
+          docker buildx inspect --bootstrap
+
+      - name: Restore BuildKit cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build & push base image
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          docker buildx build \
+            --builder ci-builder \
+            --push \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new \
+            -f ${{ env.BASE_DOCKERFILE }} \
+            -t ${{ env.BASE_IMAGE }} \
+            .
+
+      - name: Refresh BuildKit cache (post-base)
+        run: |
+          rm -rf /tmp/.buildx-cache
+          if [ -d /tmp/.buildx-cache-new ]; then
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          fi
+
+      - name: Restore cached final image
+        id: final-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/${{ env.FINAL_IMAGE }}.tar
+          key: ${{ runner.os }}-final-${{ hashFiles(env.FINAL_DOCKERFILE) }}
+          restore-keys: |
+            ${{ runner.os }}-final-
+
+      - name: Load cached final image
+        if: steps.final-cache.outputs.cache-hit == 'true'
+        run: docker load -i /tmp/${{ env.FINAL_IMAGE }}.tar
+
+      - name: Build final image
+        if: steps.final-cache.outputs.cache-hit != 'true'
+        run: |
+          docker buildx build \
+            --builder ci-builder \
+            --load \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new \
+            -f ${{ env.FINAL_DOCKERFILE }} \
+            -t ${{ env.FINAL_IMAGE }} \
+            .
+
+      - name: Save final image for caching
+        if: steps.final-cache.outputs.cache-hit != 'true'
+        run: docker save ${{ env.FINAL_IMAGE }} -o /tmp/${{ env.FINAL_IMAGE }}.tar
+
+      - name: Cache final image
+        if: steps.final-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: /tmp/${{ env.FINAL_IMAGE }}.tar
+          key: ${{ runner.os }}-final-${{ hashFiles(env.FINAL_DOCKERFILE) }}
+
+      - name: Refresh BuildKit cache (post-final)
+        if: steps.final-cache.outputs.cache-hit != 'true'
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Run build & tests in container
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/work -w /work \
+            -e LD_LIBRARY_PATH="/modules/lib/:/modules/lib/uzleo" \
+            ${{ env.FINAL_IMAGE }} \
+            bash -c "modi && ninja -f build/build.ninja && ./build/svt"
+

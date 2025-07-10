@@ -1,6 +1,9 @@
 # sv-toolchain
 End-to-end SystemVerilog toolchain
 
+## resource
+
+head over to Wiki section for helpful reference material.
 
 ## build
 
@@ -18,7 +21,7 @@ $ docker run -it --rm -e LD_LIBRARY_PATH="/modules/lib;/modules/lib/uzleo" <your
 # inside docker shell ...
 
 # clone this repo and navigate into it
-$ git clone git@github.com:circuit555/sv-toolchain
+$ git clone git@github.com:circuit555/sv-toolchain --recurse
 $ cd sv-toolchain
 
 # generated build files using modi tool

@@ -2,7 +2,10 @@
 
 
 {
-  "src": ["src/io/main.cpp"],
-  "imp": ["fmt"],
+  "src": [
+    "src/io/main.cpp",
+    "src/model/token.cppm"
+  ],
+  "imp": ["fmt", "std"],
   "e": "svt"
 }

@@ -3,4 +3,6 @@
 
 [
 { "directory": "/tmp/sv-toolchain", "file": "src/io/main.cpp", "output": "build/main.o", "arguments": ["/usr/lib/llvm-20/bin/clang", "-xc++", "src/io/main.cpp", "-o", "build/main.o", "--driver-mode=g++", "-std=c++26", "-stdlib=libc++", "-O3", "-fsanitize=address,leak", "-fmodule-file=fmt=/modules/bmi/fmt.pcm", "-fprebuilt-module-path=build/", "-c", "--target=x86_64-pc-linux-gnu"]},
+{ "directory": "/tmp/sv-toolchain", "file": "src/model/token.cppm", "output": "build/svt.model.token.pcm", "arguments": ["/usr/lib/llvm-20/bin/clang", "-xc++-module", "src/model/token.cppm", "-o", "build/svt.model.token.pcm", "--driver-mode=g++", "-std=c++26", "-stdlib=libc++", "-O3", "-fsanitize=address,leak", "-fmodule-file=fmt=/modules/bmi/fmt.pcm", "-fmodule-file=std=/modules/bmi/std.pcm", "-fprebuilt-module-path=build/", "-fmodule-output", "-c", "--target=x86_64-pc-linux-gnu"]},
+{ "directory": "/tmp/sv-toolchain", "file": "build/svt.model.token.pcm", "output": "build/svt.model.token.o", "arguments": ["/usr/lib/llvm-20/bin/clang", "-xpcm", "build/svt.model.token.pcm", "-o", "build/svt.model.token.o", "--driver-mode=g++", "-std=c++26", "-stdlib=libc++", "-O3", "-fsanitize=address,leak", "-fmodule-file=fmt=/modules/bmi/fmt.pcm", "-fmodule-file=std=/modules/bmi/std.pcm", "-fprebuilt-module-path=build/", "-fmodule-output", "-c", "--target=x86_64-pc-linux-gnu"]},
 ]

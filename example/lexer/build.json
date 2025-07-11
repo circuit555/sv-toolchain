@@ -1,0 +1,13 @@
+
+
+
+{
+  "src": [
+    "../../src/model/token.cppm",
+    "../../src/core/parser/parser.cppm",
+    "../../src/core/parser/parser_impl.cpp",
+    "main.cpp"
+  ],
+  "imp": ["std", "fmt"],
+  "e": "lex"
+}

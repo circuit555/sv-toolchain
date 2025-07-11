@@ -1,0 +1,18 @@
+
+
+
+{
+  "src": [
+    "../src/core/parser/parser.cppm",
+    "../src/core/parser/parser_impl.cpp",
+    "../src/model/token.cppm",
+
+    "lexer_tests.cpp"
+  ],
+
+  "imp": ["std", "fmt"],
+
+  "l": ["Catch2Main", "Catch2"],
+
+  "e": "test_svt"
+}

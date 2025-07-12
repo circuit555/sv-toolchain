@@ -1,13 +1,16 @@
 # sv-toolchain
-End-to-end SystemVerilog toolchain
+tools for system-verilog language
+
+## features
+- Lexer : raw system-verilog code (per source-file) to token-stream
 
 ## resource
 
-head over to Wiki section for helpful reference material.
+head over to [Wiki](https://github.com/circuit555/sv-toolchain/wiki) section for helpful reference material.
 
 ## build
 
-### Docker based workflow
+### docker based workflow
 
 #### first run
 

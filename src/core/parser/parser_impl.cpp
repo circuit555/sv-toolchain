@@ -7,7 +7,7 @@ import fmt;
 
 namespace rng = std::ranges;
 
-namespace svt::core::parser {
+namespace svt::core {
 
 Lexer::Lexer(std::string_view sv_source_code)
     : m_sv_source_code_view{sv_source_code} {
@@ -265,4 +265,4 @@ auto Lexer::SkipWhiteSpaceAndComments() -> void {
 Parser::Parser(std::string_view sv_source_code) : m_lexer{sv_source_code} {
 }
 
-}  // namespace svt::core::parser
+}  // namespace svt::core

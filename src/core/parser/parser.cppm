@@ -5,7 +5,7 @@ export module svt.core.parser;
 import std;
 import svt.model.token;
 
-namespace svt::core::parser {
+namespace svt::core {
 
 export class Lexer final {
   using SourceLocation = ::svt::model::SourceLocation;
@@ -38,4 +38,4 @@ export class Parser final {
   Lexer m_lexer;
 };
 
-}  // namespace svt::core::parser
+}  // namespace svt::core

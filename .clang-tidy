@@ -10,6 +10,7 @@ Checks: >-
   misc-*, 
   portability-*, 
   cppcoreguidelines-*,
+  -readability-identifier-length,
   -misc-use-internal-linkage
 FormatStyle: file
 CheckOptions: []

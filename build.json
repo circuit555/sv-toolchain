@@ -6,6 +6,7 @@
     "src/io/main.cpp",
     "src/core/parser/parser.cppm",
     "src/core/parser/parser_impl.cpp",
+    "src/model/ast.cppm",
     "src/model/token.cppm"
   ],
   "imp": ["fmt", "std"],

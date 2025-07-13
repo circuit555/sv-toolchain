@@ -21,7 +21,7 @@ auto main() -> int {
   file_stream.read(sv_code.data(), rng::size(sv_code));
 
   // extract token-stream using Lexer
-  svt::core::parser::Lexer lexer{sv_code};
+  svt::core::Lexer lexer{sv_code};
   std::vector<svt::model::Token> token_stream{};
   while (true) {
     auto const token = lexer.Next();

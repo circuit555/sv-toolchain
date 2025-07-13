@@ -7,7 +7,7 @@ import fmt;
 
 namespace rng = std::ranges;
 
-namespace svt::core::parser {
+namespace svt::core {
 
 Lexer::Lexer(std::string_view sv_source_code)
     : m_sv_source_code_view{sv_source_code} {
@@ -265,4 +265,49 @@ auto Lexer::SkipWhiteSpaceAndComments() -> void {
 Parser::Parser(std::string_view sv_source_code) : m_lexer{sv_source_code} {
 }
 
-}  // namespace svt::core::parser
+auto Parser::Peek(std::size_t offset) -> Token {
+  while (rng::size(m_lookahead_buffer) <= offset) {
+    m_lookahead_buffer.push_back(m_lexer.Next());
+  }
+
+  return m_lookahead_buffer.front();
+}
+
+auto Parser::Parse() -> ::svt::model::TranslationUnit {
+  ::svt::model::TranslationUnit translation_unit{};
+
+  while (Peek().type != TokenType::kEndOfFile) {
+    translation_unit.declarations.push_back(ParseDeclaration());
+  }
+
+  return translation_unit;
+}
+
+auto Parser::ParseDeclaration() -> AstNodePtr {
+  auto const token{Peek()};
+
+  switch (token.type) {
+    case TokenType::kKeyword: {
+      if (token.lexeme == "module") {
+        return ParseModuleDeclaration();
+      }
+
+      throw std::runtime_error{
+          fmt::format("Unexpected top-level token at ({}, {})",
+                      token.location.row, token.location.column)};
+    }
+
+    default: {
+      throw std::runtime_error{
+          fmt::format("Unexpected top-level token at ({}, {})",
+                      token.location.row, token.location.column)};
+    }
+  }
+}
+
+auto Parser::ParseModuleDeclaration() -> AstNodePtr {
+  // consume module keyword token
+  m_lookahead_buffer.pop_front();
+}
+
+}  // namespace svt::core

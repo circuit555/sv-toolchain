@@ -4,14 +4,18 @@ export module svt.core.parser;
 
 import std;
 import svt.model.token;
+import svt.model.ast;
 
-namespace svt::core::parser {
+namespace {
+using SourceLocation = ::svt::model::SourceLocation;
+using TokenType = ::svt::model::TokenType;
+using Token = ::svt::model::Token;
+using AstNodePtr = ::svt::model::AstNodePtr;
+}  // namespace
+
+namespace svt::core {
 
 export class Lexer final {
-  using SourceLocation = ::svt::model::SourceLocation;
-  using TokenType = ::svt::model::TokenType;
-  using Token = ::svt::model::Token;
-
  public:
   explicit Lexer(std::string_view sv_source_code);
   [[nodiscard]] auto Next() -> Token;
@@ -33,9 +37,15 @@ export class Lexer final {
 export class Parser final {
  public:
   explicit Parser(std::string_view sv_source_code);
+  auto Parse() -> ::svt::model::TranslationUnit;
 
  private:
+  auto Peek(std::size_t offset = 0) -> Token;
+  auto ParseDeclaration() -> AstNodePtr;
+  auto ParseModuleDeclaration() -> AstNodePtr;
+
   Lexer m_lexer;
+  std::deque<Token> m_lookahead_buffer;
 };
 
-}  // namespace svt::core::parser
+}  // namespace svt::core

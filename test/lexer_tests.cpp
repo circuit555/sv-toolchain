@@ -10,7 +10,7 @@ import svt.core.parser;
 namespace {
 using Token = svt::model::Token;
 using TokenType = svt::model::TokenType;
-using Lexer = svt::core::parser::Lexer;
+using Lexer = svt::core::Lexer;
 }  // namespace
 
 TEST_CASE("Identifier and keyword tokens", "[lexer]") {

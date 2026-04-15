@@ -15,7 +15,7 @@ section for helpful reference material.
 
 ### docker based workflow
 
-#### first run
+#### build and launch docker
 
 ```shell
 # build docker image if not already on your system
@@ -33,8 +33,9 @@ Additionally, a convenience docker-compose file is also provided which can be
 used to `up` docker service. This setup assumes that the host has
 `/stuff/work` available which will be mounted on the launched container.
 
+#### inside docker
+
 ```shell
-# inside docker shell ...
 
 # clone this repo and navigate into it
 $ git clone git@github.com:circuit555/sv-toolchain --recursive

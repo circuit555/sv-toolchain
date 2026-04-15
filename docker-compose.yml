@@ -1,0 +1,18 @@
+
+services:
+  sv-toolchain:
+    image: sv-toolchain:25.10
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /stuff/work/sv-toolchain
+    environment:
+      USER: "${USER}"
+      HOME: "/home/${USER}/"
+      SSH_AUTH_SOCK: /ssh-agent
+      LD_LIBRARY_PATH: "/modules/lib:/modules/lib/uzleo"
+    entrypoint: ["/usr/bin/env", "fish"]
+    volumes:
+      - /stuff:/stuff
+      - ${HOME}:/home/${USER}
+      - ${SSH_AUTH_SOCK}:/ssh-agent
+    stdin_open: true
+    tty: true

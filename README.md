@@ -29,10 +29,6 @@ $ docker run -it --rm -e LD_LIBRARY_PATH="/modules/lib;/modules/lib/uzleo" \
 <your-flag-soup> sv-toolchain-dev
 ```
 
-Additionally, a convenience docker-compose file is also provided which can be
-used to `up` docker service. This setup assumes that the host has
-`/stuff/work` available which will be mounted on the launched container.
-
 #### inside docker
 
 ```shell

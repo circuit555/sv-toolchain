@@ -40,6 +40,9 @@ $ cd sv-toolchain
 # generated build files using modi tool
 $ modi
 
+# generate compile_commands.json at repo root (for clangd/clang-tidy)
+$ python3 scripts/generate_compile_commands.py
+
 # build project
 $ ninja -f build/build.ninja
 
@@ -53,4 +56,11 @@ $ build/svt
 # source code modified ...
 $ ninja -f build/build.ninja
 $ build/svt
+```
+
+If `build.json` changes (for example, new source files or modules), run:
+
+```shell
+$ modi
+$ python3 scripts/generate_compile_commands.py
 ```

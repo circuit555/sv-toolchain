@@ -13,7 +13,7 @@ using TokenType = ::svt::model::TokenType;
 using Token = ::svt::model::Token;
 using token_stream_t = ::svt::model::token_stream_t;
 using SourceLocation = ::svt::model::SourceLocation;
-using AstNodePtr = ::svt::model::AstNodePtr;
+using AstNodePointer = ::svt::model::AstNodePointer;
 
 Lexer::Lexer(std::string_view sv_source_code)
     : m_sv_source_code_view{sv_source_code} {
@@ -304,7 +304,7 @@ auto Parser::Parse() -> ::svt::model::TranslationUnit {
   return translation_unit;
 }
 
-auto Parser::ParseDeclaration() -> AstNodePtr {
+auto Parser::ParseDeclaration() -> AstNodePointer {
   auto const token{Peek()};
 
   switch (token.type) {
@@ -326,7 +326,7 @@ auto Parser::ParseDeclaration() -> AstNodePtr {
   }
 }
 
-auto Parser::ParseModuleDeclaration() -> AstNodePtr {
+auto Parser::ParseModuleDeclaration() -> AstNodePointer {
   // consume module keyword token
   m_lookahead_buffer.pop_front();
 }

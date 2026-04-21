@@ -14,9 +14,11 @@ enum class PortDirection : std::uint8_t { kInput, kOutput };
 
 enum class NetType : std::uint8_t { kWire, kLogic };
 
+/// @brief Forward declaration for the generic AST node wrapper.
 export struct AstNode;
 
-export using AstNodePtr = std::unique_ptr<AstNode>;
+/// @brief Owning pointer to an AST node.
+export using AstNodePointer = std::unique_ptr<AstNode>;
 
 struct IdentifierExpression {
   std::string name;
@@ -28,14 +30,14 @@ struct NumberExpression {
 
 struct BinaryExpression {
   BinaryOperation operation;
-  AstNodePtr left_operand_ptr;
-  AstNodePtr right_operand_ptr;
+  AstNodePointer left_operand_ptr;
+  AstNodePointer right_operand_ptr;
 };
 
 struct ParameterDeclaration {
   std::string name;
   ParameterType type;
-  AstNodePtr default_value;
+  AstNodePointer default_value;
 };
 
 struct PortDeclaration {
@@ -46,19 +48,21 @@ struct PortDeclaration {
 struct NetDeclaration {
   std::string name;
   NetType type;
-  AstNodePtr msb;
-  AstNodePtr lsb;
+  AstNodePointer msb;
+  AstNodePointer lsb;
 };
 
 struct ModuleDeclaration {
   std::string name;
   std::vector<ParameterDeclaration> parameters;
   std::vector<PortDeclaration> ports;
-  std::vector<AstNodePtr> items;
+  std::vector<AstNodePointer> items;
 };
 
+/// @brief Root AST object containing top-level declarations.
 export struct TranslationUnit {
-  std::vector<AstNodePtr> declarations;
+  /// Top-level declarations parsed from the source.
+  std::vector<AstNodePointer> declarations;
 };
 
 using AstNodeVariant =
@@ -66,7 +70,9 @@ using AstNodeVariant =
                  ParameterDeclaration, PortDeclaration, NetDeclaration,
                  ModuleDeclaration>;
 
+/// @brief Type-erased AST node that stores one concrete node variant.
 export struct AstNode {
+  /// Concrete AST node payload.
   AstNodeVariant node;
 };
 

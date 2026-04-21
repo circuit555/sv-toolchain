@@ -13,10 +13,15 @@ using TokenType = ::svt::model::TokenType;
 using Token = ::svt::model::Token;
 using token_stream_t = ::svt::model::token_stream_t;
 using SourceLocation = ::svt::model::SourceLocation;
+using AstNode = ::svt::model::AstNode;
 using AstNodePointer = ::svt::model::AstNodePointer;
+using ModuleDeclaration = ::svt::model::ModuleDeclaration;
+using ParameterDeclaration = ::svt::model::ParameterDeclaration;
+using PortDeclaration = ::svt::model::PortDeclaration;
 
-Lexer::Lexer(std::string_view sv_source_code)
-    : m_sv_source_code_view{sv_source_code} {
+Lexer::Lexer(std::string&& sv_source_code)
+    : m_sv_source_code{std::move(sv_source_code)},
+      m_sv_source_code_view{m_sv_source_code} {
 }
 
 auto Lexer::Next() -> Token {
@@ -84,21 +89,6 @@ auto Lexer::Next() -> Token {
   throw std::runtime_error{
       fmt::format("Unexpected character '{}' at row: {}, column: {}", character,
                   token_source_location.row, token_source_location.column)};
-}
-
-auto Lexer::Lex() -> ::svt::model::token_stream_t {
-  ::svt::model::token_stream_t token_stream{};
-
-  while (true) {
-    auto const token = Next();
-    if (token.type == svt::model::TokenType::kEndOfFile) {
-      break;
-    }
-
-    token_stream.push_back(token);
-  }
-
-  return token_stream;
 }
 
 auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
@@ -283,52 +273,108 @@ auto Lexer::SkipWhiteSpaceAndComments() -> void {
   }
 }
 
-Parser::Parser(std::string_view sv_source_code) : m_lexer{sv_source_code} {
+Parser::Parser(std::string&& sv_source_code)
+    : m_lexer{std::move(sv_source_code)} {
 }
 
 auto Parser::Peek(std::size_t offset) -> Token {
   while (rng::size(m_lookahead_buffer) <= offset) {
-    m_lookahead_buffer.push_back(m_lexer.Next());
+    m_lookahead_buffer.push(m_lexer.Next());
   }
 
   return m_lookahead_buffer.front();
 }
 
-auto Parser::Parse() -> ::svt::model::TranslationUnit {
-  ::svt::model::TranslationUnit translation_unit{};
+auto Parser::ConsumeToken() -> void {
+  m_lookahead_buffer.pop();
+}
 
-  while (Peek().type != TokenType::kEndOfFile) {
-    translation_unit.declarations.push_back(ParseDeclaration());
+auto Parser::Parse() -> TranslationUnit {
+  TranslationUnit translation_unit{};
+
+  while (true) {
+    if (Peek().type == TokenType::kEndOfFile) {
+      break;
+    }
+
+    translation_unit.push_back(ParseDeclaration());
+  }
+
+  for (auto const& declaration : translation_unit) {
+    fmt::print("name: {}", std::get<ModuleDeclaration>(declaration).name);
   }
 
   return translation_unit;
 }
 
-auto Parser::ParseDeclaration() -> AstNodePointer {
+auto Parser::ParseDeclaration() -> AstNode {
   auto const token{Peek()};
 
   switch (token.type) {
     case TokenType::kKeyword: {
       if (token.lexeme == "module") {
+        ConsumeToken();
         return ParseModuleDeclaration();
       }
 
       throw std::runtime_error{
-          fmt::format("Unexpected top-level token at ({}, {})",
+          fmt::format("[Parser/Debug] unexpected top-level token at ({}, {})",
                       token.location.row, token.location.column)};
     }
 
     default: {
       throw std::runtime_error{
-          fmt::format("Unexpected top-level token at ({}, {})",
+          fmt::format("[Parser] unexpected top-level token at ({}, {})",
                       token.location.row, token.location.column)};
     }
   }
 }
 
-auto Parser::ParseModuleDeclaration() -> AstNodePointer {
-  // consume module keyword token
-  m_lookahead_buffer.pop_front();
+auto Parser::ParseModuleDeclaration() -> AstNode {
+  AstNode result{std::in_place_type<ModuleDeclaration>};
+
+  auto& module_declaration = std::get<ModuleDeclaration>(result);
+  module_declaration.name = Peek().lexeme;
+  ConsumeToken();
+
+  if (auto const& token{Peek()}; token.type == TokenType::kPunctuation) {
+    if (token.lexeme == "#") {
+      ConsumeToken();
+      module_declaration.parameters.push_back(ParseParameters());
+    } else if (token.lexeme == "(") {
+      ConsumeToken();
+      module_declaration.ports.push_back(ParsePorts());
+    } else {
+      throw std::runtime_error{
+          fmt::format("[Parser] unexpected punctuation token at ({}, {})",
+                      token.location.row, token.location.column)};
+    }
+  } else {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected punctuation token (param/port) at ({}, {})",
+        token.location.row, token.location.column)};
+  }
+
+  return result;
+}
+
+auto Parser::ParseParameters() -> ParameterDeclaration {
+  ParameterDeclaration result{};
+  result.name = Peek().lexeme;
+  ConsumeToken();
+
+  if (auto const& token{Peek()}; token.type == TokenType::kPunctuation) {
+  }
+
+  return result;
+}
+
+auto Parser::ParsePorts() -> PortDeclaration {
+  PortDeclaration result{};
+  return result;
 }
 
 }  // namespace svt::core
+
+// TODO(): do we really need m_lookeahead_buffer in Parser? can't we just use
+// Lexer's token-stream directly?

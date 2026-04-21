@@ -4,14 +4,14 @@ export module svt.model.token;
 
 import std;
 
-export namespace svt::model {
+namespace svt::model {
 
-struct SourceLocation {
+export struct SourceLocation {
   std::size_t row{1};
   std::size_t column{1};
 };
 
-enum class TokenType : std::uint8_t {
+export enum class TokenType : std::uint8_t {
   kEndOfFile,
   kIdentifier,
   kIntegerLiteral,
@@ -23,10 +23,12 @@ enum class TokenType : std::uint8_t {
   kComment
 };
 
-struct Token {
+export struct Token {
   TokenType type;
   std::string_view lexeme;
   SourceLocation location;
 };
+
+export using token_stream_t = std::vector<Token>;
 
 }  // namespace svt::model

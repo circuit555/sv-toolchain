@@ -9,6 +9,12 @@ namespace rng = std::ranges;
 
 namespace svt::core {
 
+using TokenType = ::svt::model::TokenType;
+using Token = ::svt::model::Token;
+using token_stream_t = ::svt::model::token_stream_t;
+using SourceLocation = ::svt::model::SourceLocation;
+using AstNodePtr = ::svt::model::AstNodePtr;
+
 Lexer::Lexer(std::string_view sv_source_code)
     : m_sv_source_code_view{sv_source_code} {
 }
@@ -78,6 +84,21 @@ auto Lexer::Next() -> Token {
   throw std::runtime_error{
       fmt::format("Unexpected character '{}' at row: {}, column: {}", character,
                   token_source_location.row, token_source_location.column)};
+}
+
+auto Lexer::Lex() -> ::svt::model::token_stream_t {
+  ::svt::model::token_stream_t token_stream{};
+
+  while (true) {
+    auto const token = Next();
+    if (token.type == svt::model::TokenType::kEndOfFile) {
+      break;
+    }
+
+    token_stream.push_back(token);
+  }
+
+  return token_stream;
 }
 
 auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {

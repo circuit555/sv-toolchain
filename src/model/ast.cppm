@@ -8,20 +8,29 @@ namespace svt::model {
 
 enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
 
-enum class ParameterType : std::uint8_t { kInt };
-
 enum class PortDirection : std::uint8_t { kInput, kOutput };
 
 enum class NetType : std::uint8_t { kWire, kLogic };
 
-/// @brief Forward declaration for the generic AST node wrapper.
-export struct AstNode;
+class IdentifierExpression;
+class NumberExpression;
+class BinaryExpression;
+export class ParameterDeclaration;
+export class PortDeclaration;
+class NetDeclaration;
+export class ModuleDeclaration;
+
+/// @brief Type-erased AST node that stores one concrete node variant.
+export using AstNode =
+    std::variant<IdentifierExpression, NumberExpression, BinaryExpression,
+                 ParameterDeclaration, PortDeclaration, NetDeclaration,
+                 ModuleDeclaration>;
 
 /// @brief Owning pointer to an AST node.
-export using AstNodePointer = std::unique_ptr<AstNode>;
+export using AstNodePointer = AstNode*;
 
 struct IdentifierExpression {
-  std::string name;
+  std::string_view name;
 };
 
 struct NumberExpression {
@@ -35,45 +44,29 @@ struct BinaryExpression {
 };
 
 struct ParameterDeclaration {
-  std::string name;
-  ParameterType type;
-  AstNodePointer default_value;
+  std::string_view name;
+  std::vector<std::string_view> type_specifier;
+  std::vector<std::string_view> default_value;
+  bool is_type_parameter{false};
 };
 
 struct PortDeclaration {
-  std::string name;
+  std::string_view name;
   PortDirection direction;
 };
 
 struct NetDeclaration {
-  std::string name;
+  std::string_view name;
   NetType type;
   AstNodePointer msb;
   AstNodePointer lsb;
 };
 
-struct ModuleDeclaration {
-  std::string name;
+export struct ModuleDeclaration {
+  std::string_view name;
   std::vector<ParameterDeclaration> parameters;
   std::vector<PortDeclaration> ports;
   std::vector<AstNodePointer> items;
-};
-
-/// @brief Root AST object containing top-level declarations.
-export struct TranslationUnit {
-  /// Top-level declarations parsed from the source.
-  std::vector<AstNodePointer> declarations;
-};
-
-using AstNodeVariant =
-    std::variant<IdentifierExpression, NumberExpression, BinaryExpression,
-                 ParameterDeclaration, PortDeclaration, NetDeclaration,
-                 ModuleDeclaration>;
-
-/// @brief Type-erased AST node that stores one concrete node variant.
-export struct AstNode {
-  /// Concrete AST node payload.
-  AstNodeVariant node;
 };
 
 }  // namespace svt::model

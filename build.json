@@ -2,6 +2,7 @@
 
 
 {
+  "mode": "debug",
   "src": [
     "src/io/main.cpp",
     "src/core/parser/parser.cppm",

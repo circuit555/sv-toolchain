@@ -46,8 +46,8 @@ export class Parser final {
 
  private:
   auto Peek(std::size_t offset = 0) -> ::svt::model::Token;
-  auto ParseDeclaration() -> ::svt::model::AstNodePtr;
-  auto ParseModuleDeclaration() -> ::svt::model::AstNodePtr;
+  auto ParseDeclaration() -> ::svt::model::AstNodePointer;
+  auto ParseModuleDeclaration() -> ::svt::model::AstNodePointer;
 
   Lexer m_lexer;
   std::deque<::svt::model::Token> m_lookahead_buffer;

@@ -15,7 +15,7 @@ using Lexer = svt::core::Lexer;
 
 TEST_CASE("Identifier and keyword tokens", "[lexer]") {
   std::string src = "module foo endmodule";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   Token t1 = lexer.Next();
   REQUIRE(t1.type == TokenType::kKeyword);
@@ -35,7 +35,7 @@ TEST_CASE("Identifier and keyword tokens", "[lexer]") {
 
 TEST_CASE("Integer and real literals", "[lexer]") {
   std::string src = "123 45.67";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   Token t1 = lexer.Next();
   REQUIRE(t1.type == TokenType::kIntegerLiteral);
@@ -52,7 +52,7 @@ TEST_CASE("Integer and real literals", "[lexer]") {
 TEST_CASE("String literal", "[lexer]") {
   // The src string literally contains: "hello \"world\""
   std::string src = R"("hello \"world\"")";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   // First token should be our string literal (without the quotes)
   Token t = lexer.Next();
@@ -67,7 +67,7 @@ TEST_CASE("String literal", "[lexer]") {
 
 TEST_CASE("Operators and punctuation", "[lexer]") {
   std::string src = "+ - * / == != && || < <= > >= ( ) ; , [ ] { } # : ?";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   struct Expect {
     TokenType type;
@@ -113,7 +113,7 @@ TEST_CASE("Skip whitespace and comments", "[lexer]") {
   std::string src = R"(  // comment line
 /* block
 comment */ foo)";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   Token t = lexer.Next();
   REQUIRE(t.type == TokenType::kIdentifier);
@@ -125,7 +125,7 @@ comment */ foo)";
 
 TEST_CASE("Unknown character throws", "[lexer]") {
   std::string src = "@";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   REQUIRE_THROWS_AS(lexer.Next(), std::runtime_error);
 }
@@ -138,7 +138,7 @@ TEST_CASE("Lex module declaration with parameter and vector", "[lexer]") {
     wire [N-1:0] bus;
     endmodule
   )";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   struct Expect {
     TokenType type;
@@ -185,7 +185,7 @@ TEST_CASE("Token source locations are correct", "[lexer]") {
   // 'a' at (1,1), 'b' at (1,3), then 'c' at (2,1)
   std::string src = R"(a b
 c)";
-  Lexer lexer{src};
+  Lexer lexer{std::move(src)};
 
   Token t1 = lexer.Next();
   REQUIRE(t1.type == TokenType::kIdentifier);

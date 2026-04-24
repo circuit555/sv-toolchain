@@ -3,11 +3,13 @@
 
 {
   "src": [
+    "../src/model/token.cppm",
+    "../src/model/ast.cppm",
     "../src/core/parser/parser.cppm",
     "../src/core/parser/parser_impl.cpp",
-    "../src/model/token.cppm",
 
-    "lexer_tests.cpp"
+    "lexer_tests.cpp",
+    "parser_tests.cpp"
   ],
 
   "imp": ["std", "fmt"],

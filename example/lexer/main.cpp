@@ -22,20 +22,16 @@ auto main() -> int {
 
   // extract token-stream using Lexer
   svt::core::Lexer lexer{std::move(sv_code)};
-  std::vector<svt::model::Token> token_stream{};
-  while (true) {
-    auto const token = lexer.Next();
-    if (token.type == svt::model::TokenType::kEndOfFile) {
-      break;
-    }
-
-    token_stream.push_back(token);
-  }
+  auto const token_stream{lexer.Tokens()};
 
   // print out token-stream
   fmt::println("Token-Stream for foo.sv:");
   fmt::println("");
   for (auto const& token : token_stream) {
+    if (token.type == svt::model::TokenType::kEndOfFile) {
+      break;
+    }
+
     fmt::println("({}, {}) `{}`", token.location.row, token.location.column,
                  token.lexeme);
   }

@@ -6,6 +6,8 @@ import svt.core.parser;
 namespace {
 using Parser = svt::core::Parser;
 using ModuleDeclaration = svt::model::ModuleDeclaration;
+using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
+using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 }  // namespace
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
@@ -27,42 +29,38 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
   REQUIRE(module_declaration.name == "foo");
   REQUIRE(module_declaration.parameters.size() == 5);
 
-  auto const& mask_parameter{module_declaration.parameters.at(0)};
+  auto const& mask_parameter{
+      std::get<ParameterValueDeclaration>(module_declaration.parameters.at(0))};
   REQUIRE(mask_parameter.name == "MASK");
   REQUIRE(mask_parameter.type_specifier ==
           std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
   REQUIRE(mask_parameter.default_value ==
           std::vector<std::string_view>{"WIDTH", "-", "1"});
-  REQUIRE(mask_parameter.is_type_parameter == false);
 
-  auto const& continued_mask_parameter{module_declaration.parameters.at(1)};
+  auto const& continued_mask_parameter{
+      std::get<ParameterValueDeclaration>(module_declaration.parameters.at(1))};
   REQUIRE(continued_mask_parameter.name == "ALT_MASK");
   REQUIRE(continued_mask_parameter.type_specifier ==
           std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
   REQUIRE(continued_mask_parameter.default_value ==
           std::vector<std::string_view>{"2"});
-  REQUIRE(continued_mask_parameter.is_type_parameter == false);
 
-  auto const& type_parameter{module_declaration.parameters.at(2)};
+  auto const& type_parameter{
+      std::get<ParameterTypeDeclaration>(module_declaration.parameters.at(2))};
   REQUIRE(type_parameter.name == "T");
-  REQUIRE(type_parameter.type_specifier ==
-          std::vector<std::string_view>{"type"});
-  REQUIRE(type_parameter.default_value ==
+  REQUIRE(type_parameter.default_type ==
           std::vector<std::string_view>{"logic", "[", "3", ":", "0", "]"});
-  REQUIRE(type_parameter.is_type_parameter == true);
 
-  auto const& continued_type_parameter{module_declaration.parameters.at(3)};
+  auto const& continued_type_parameter{
+      std::get<ParameterTypeDeclaration>(module_declaration.parameters.at(3))};
   REQUIRE(continued_type_parameter.name == "U");
-  REQUIRE(continued_type_parameter.type_specifier ==
-          std::vector<std::string_view>{"type"});
-  REQUIRE(continued_type_parameter.default_value ==
+  REQUIRE(continued_type_parameter.default_type ==
           std::vector<std::string_view>{"bit"});
-  REQUIRE(continued_type_parameter.is_type_parameter == true);
 
-  auto const& implicit_type_parameter{module_declaration.parameters.at(4)};
-  REQUIRE(implicit_type_parameter.name == "WIDTH");
-  REQUIRE(implicit_type_parameter.type_specifier.empty());
-  REQUIRE(implicit_type_parameter.default_value ==
+  auto const& implicit_value_parameter{
+      std::get<ParameterValueDeclaration>(module_declaration.parameters.at(4))};
+  REQUIRE(implicit_value_parameter.name == "WIDTH");
+  REQUIRE(implicit_value_parameter.type_specifier.empty());
+  REQUIRE(implicit_value_parameter.default_value ==
           std::vector<std::string_view>{"8"});
-  REQUIRE(implicit_type_parameter.is_type_parameter == false);
 }

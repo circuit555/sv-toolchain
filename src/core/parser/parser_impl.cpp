@@ -17,14 +17,171 @@ using AstNode = ::svt::model::AstNode;
 using AstNodePointer = ::svt::model::AstNodePointer;
 using ModuleDeclaration = ::svt::model::ModuleDeclaration;
 using ParameterDeclaration = ::svt::model::ParameterDeclaration;
+using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
+using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
 using PortDeclaration = ::svt::model::PortDeclaration;
+
+namespace {
+
+inline auto IsParameterDeclarationPrefix(std::span<Token const> tokens)
+    -> bool {
+  return tokens.front().lexeme == "parameter" or
+         tokens.front().lexeme == "localparam";
+}
+
+auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
+                                 std::size_t const head_begin,
+                                 std::size_t const head_end) -> std::size_t {
+  auto name_index{head_end};
+  while (name_index > head_begin) {
+    name_index -= 1;
+    if (tokens.at(name_index).type == TokenType::kIdentifier) {
+      break;
+    }
+  }
+
+  if (tokens.at(name_index).type != TokenType::kIdentifier) [[unlikely]] {
+    throw std::runtime_error{
+        fmt::format("[Parser] expected parameter name at ({}, {})",
+                    tokens.at(head_begin).location.row,
+                    tokens.at(head_begin).location.column)};
+  }
+
+  return name_index;
+}
+
+auto ParseParameterDeclaration(std::span<Token const> const tokens)
+    -> ParameterDeclaration {
+  if (rng::empty(tokens)) [[unlikely]] {
+    throw std::runtime_error{"[Parser] expected parameter declarations"};
+  }
+
+  auto const parameter_begin_iterator{rng::next(
+      rng::cbegin(tokens), IsParameterDeclarationPrefix(tokens) ? 1 : 0,
+      rng::cend(tokens))};
+  auto const equals_operator_iterator{rng::find_if(
+      std::span{rng::next(parameter_begin_iterator, 1, rng::cend(tokens)),
+                rng::cend(tokens)},
+      [](Token const& token) -> bool {
+        return token.type == TokenType::kOperator and token.lexeme == "=";
+      })};
+
+  auto const tokens_slice{
+      std::span{parameter_begin_iterator,
+                rng::next(equals_operator_iterator, 1, rng::cend(tokens))}};
+  if (rng::empty(tokens_slice)) [[unlikely]] {
+    throw std::runtime_error{"[Parser] expected parameter tokens"};
+  }
+
+  auto parameter{[tokens_slice]() -> ParameterDeclaration {
+    if (tokens_slice.front().lexeme == "type") {
+      return [tokens_slice]() -> ParameterTypeDeclaration {
+        ParameterTypeDeclaration type_parameter{};
+
+        auto const parameter_name_iterator{
+            rng::next(rng::cbegin(tokens_slice), 1, rng::cend(tokens_slice))};
+
+        // NOTE(): we do not use bounded check for rng::prev() in following as
+        // we are assured that `tokens_slice` is not empty
+        if (parameter_name_iterator == rng::prev(rng::cend(tokens_slice)))
+            [[unlikely]] {
+          throw std::runtime_error{
+              fmt::format("[Parser] expected type parameter name at ({}, {})",
+                          tokens_slice.front().location.row,
+                          tokens_slice.front().location.column)};
+        }
+
+        if (parameter_name_iterator->type != TokenType::kIdentifier)
+            [[unlikely]] {
+          throw std::runtime_error{
+              fmt::format("[Parser] unexpected token '{}' while parsing type "
+                          "parameter name at ({}, {})",
+                          parameter_name_iterator->lexeme,
+                          parameter_name_iterator->location.row,
+                          parameter_name_iterator->location.column)};
+        }
+
+        type_parameter.name = parameter_name_iterator->lexeme;
+
+        return type_parameter;
+      }();
+    }
+
+    return [tokens_slice]() -> ParameterValueDeclaration {
+      ParameterValueDeclaration value_parameter{};
+
+      auto const parameter_name_riterator{rng::find_if(
+          tokens_slice | rng::views::reverse, [](Token const& token) -> bool {
+            return token.type == TokenType::kIdentifier;
+          })};
+      if (parameter_name_riterator == rng::crend(tokens_slice)) {
+        throw std::runtime_error{
+            fmt::format("[Parser] expected parameter name at ({}, {})",
+                        tokens_slice.front().location.row,
+                        tokens_slice.front().location.column)};
+      }
+
+      value_parameter.name = parameter_name_riterator->lexeme;
+
+      value_parameter.type_specifier =
+          std::span{rng::cbegin(tokens_slice),
+                    rng::prev(parameter_name_riterator.base(), 1,
+                              rng::cbegin(tokens_slice))} |
+          rng::views::transform([](auto const& token) -> std::string_view {
+            return token.lexeme;
+          }) |
+          rng::to<std::vector>();
+
+      return value_parameter;
+    }();
+  }()};
+
+  if (equals_operator_iterator != rng::cend(tokens)) {
+    std::visit(
+        [equals_operator_iterator, tokens](auto& resolved_parameter) -> void {
+          auto& default_value = [&resolved_parameter]() -> auto& {
+            if constexpr (std::same_as<
+                              std::remove_cvref_t<decltype(resolved_parameter)>,
+                              ParameterTypeDeclaration>) {
+              return resolved_parameter.default_type;
+            } else {
+              return resolved_parameter.default_value;
+            }
+          }();
+
+          default_value =
+              std::span{
+                  rng::next(equals_operator_iterator, 1, rng::cend(tokens)),
+                  rng::cend(tokens)} |
+              rng::views::transform([](auto const& token) -> std::string_view {
+                return token.lexeme;
+              }) |
+              rng::to<std::vector>();
+        },
+        parameter);
+  }
+
+  return parameter;
+}
+
+}  // namespace
 
 Lexer::Lexer(std::string&& sv_source_code)
     : m_sv_source_code{std::move(sv_source_code)},
       m_sv_source_code_view{m_sv_source_code} {
+  while (true) {
+    m_tokens.push_back(ScanNext());
+    if (m_tokens.back().type == TokenType::kEndOfFile) {
+      break;
+    }
+  }
 }
 
-auto Lexer::Next() -> Token {
+auto Lexer::Tokens() const -> std::span<Token const> {
+  return m_tokens;
+}
+
+auto Lexer::ScanNext() -> Token {
   SkipWhiteSpaceAndComments();
   if (m_position >= rng::size(m_sv_source_code_view)) {
     return Token{.type = TokenType::kEndOfFile,
@@ -151,7 +308,7 @@ auto Lexer::ScanString(SourceLocation const& token_source_location) -> Token {
   while (true) {
     auto const character{Peek()};
 
-    if (character == '\0') {
+    if (character == '\0') [[unlikely]] {
       throw std::runtime_error{
           fmt::format("Unterminated string literal at row: {}, column: {}",
                       token_source_location.row, token_source_location.column)};
@@ -163,7 +320,7 @@ auto Lexer::ScanString(SourceLocation const& token_source_location) -> Token {
       m_source_location.column += 1;
 
       auto const next_character{Peek()};
-      if (next_character == '\0') {
+      if (next_character == '\0') [[unlikely]] {
         throw std::runtime_error{fmt::format(
             "Unterminated string literal at row: {}, column: {}",
             token_source_location.row, token_source_location.column)};
@@ -274,99 +431,177 @@ auto Lexer::SkipWhiteSpaceAndComments() -> void {
 }
 
 Parser::Parser(std::string&& sv_source_code)
-    : m_lexer{std::move(sv_source_code)} {
+    : m_lexer{std::move(sv_source_code)},
+      m_tokens{m_lexer.Tokens()},
+      m_token_iterator{rng::cbegin(m_tokens)} {
 }
 
-auto Parser::Peek(std::size_t offset) -> Token {
-  while (rng::size(m_lookahead_buffer) <= offset) {
-    m_lookahead_buffer.push(m_lexer.Next());
+auto Parser::ExpectToken(TokenType const expected_type,
+                         std::string_view const expected_lexeme,
+                         std::string_view const context) -> Token {
+  if (m_token_iterator->type != expected_type or
+      m_token_iterator->lexeme != expected_lexeme) [[unlikely]] {
+    throw std::runtime_error{
+        fmt::format("[Parser] expected '{}' while parsing {} at ({}, {})",
+                    expected_lexeme, context, m_token_iterator->location.row,
+                    m_token_iterator->location.column)};
   }
 
-  return m_lookahead_buffer.front();
-}
-
-auto Parser::ConsumeToken() -> void {
-  m_lookahead_buffer.pop();
+  m_token_iterator++;
+  return *m_token_iterator;
 }
 
 auto Parser::Parse() -> TranslationUnit {
   TranslationUnit translation_unit{};
-
-  while (true) {
-    if (Peek().type == TokenType::kEndOfFile) {
-      break;
-    }
-
+  while (m_token_iterator->type != TokenType::kEndOfFile) {
     translation_unit.push_back(ParseDeclaration());
   }
-
-  for (auto const& declaration : translation_unit) {
-    fmt::print("name: {}", std::get<ModuleDeclaration>(declaration).name);
-  }
-
   return translation_unit;
 }
 
 auto Parser::ParseDeclaration() -> AstNode {
-  auto const token{Peek()};
-
-  switch (token.type) {
+  switch (m_token_iterator->type) {
     case TokenType::kKeyword: {
-      if (token.lexeme == "module") {
-        ConsumeToken();
+      if (m_token_iterator->lexeme == "module") {
+        m_token_iterator++;
         return ParseModuleDeclaration();
       }
 
-      throw std::runtime_error{
-          fmt::format("[Parser/Debug] unexpected top-level token at ({}, {})",
-                      token.location.row, token.location.column)};
+      throw std::runtime_error{fmt::format(
+          "[Parser/Debug] unexpected top-level token at ({}, {})",
+          m_token_iterator->location.row, m_token_iterator->location.column)};
     }
 
-    default: {
-      throw std::runtime_error{
-          fmt::format("[Parser] unexpected top-level token at ({}, {})",
-                      token.location.row, token.location.column)};
+    [[unlikely]] default: {
+      throw std::runtime_error{fmt::format(
+          "[Parser] unexpected top-level token at ({}, {})",
+          m_token_iterator->location.row, m_token_iterator->location.column)};
     }
   }
 }
 
-auto Parser::ParseModuleDeclaration() -> AstNode {
-  AstNode result{std::in_place_type<ModuleDeclaration>};
+auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
+  if (m_token_iterator->type != TokenType::kIdentifier) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected module name at ({}, {})",
+        m_token_iterator->location.row, m_token_iterator->location.column)};
+  }
 
-  auto& module_declaration = std::get<ModuleDeclaration>(result);
-  module_declaration.name = Peek().lexeme;
-  ConsumeToken();
+  ModuleDeclaration module_declaration{};
+  module_declaration.name = m_token_iterator->lexeme;
+  m_token_iterator++;
 
-  if (auto const& token{Peek()}; token.type == TokenType::kPunctuation) {
-    if (token.lexeme == "#") {
-      ConsumeToken();
-      module_declaration.parameters.push_back(ParseParameters());
-    } else if (token.lexeme == "(") {
-      ConsumeToken();
-      module_declaration.ports.push_back(ParsePorts());
-    } else {
-      throw std::runtime_error{
-          fmt::format("[Parser] unexpected punctuation token at ({}, {})",
-                      token.location.row, token.location.column)};
-    }
-  } else {
+  if (m_token_iterator->type != TokenType::kPunctuation) [[unlikely]] {
     throw std::runtime_error{fmt::format(
         "[Parser] expected punctuation token (param/port) at ({}, {})",
-        token.location.row, token.location.column)};
+        m_token_iterator->location.row, m_token_iterator->location.column)};
   }
+  if (m_token_iterator->lexeme != "#" and m_token_iterator->lexeme != "(" and
+      m_token_iterator->lexeme != ";") [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] unexpected punctuation token at ({}, {})",
+        m_token_iterator->location.row, m_token_iterator->location.column)};
+  }
+
+  if (m_token_iterator->lexeme == "#") {
+    m_token_iterator++;
+    module_declaration.parameters = ParseParameters();
+  }
+
+  if (m_token_iterator->lexeme == "(") {
+    m_token_iterator++;
+    module_declaration.ports.push_back(ParsePorts());
+  }
+
+  return module_declaration;
+}
+
+auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
+  auto is_parameter_list_end{[this]() -> bool {
+    return m_token_iterator->type == TokenType::kPunctuation and
+           m_token_iterator->lexeme == ")";
+  }};
+
+  std::vector<ParameterDeclaration> result{};
+
+  ExpectToken(TokenType::kPunctuation, "(", "parameter list");
+
+  while (not is_parameter_list_end()) {
+    auto const parameter_tokens{ParseParameterTokens()};
+    auto parameter{ParseParameterDeclaration(parameter_tokens)};
+
+    if (auto const has_declaration_prefix{
+            not rng::empty(parameter_tokens) and
+            IsParameterDeclarationPrefix(parameter_tokens)};
+        not has_declaration_prefix and
+        not std::holds_alternative<ParameterTypeDeclaration>(parameter) and
+        not rng::empty(result)) {
+      auto& value_parameter{std::get<ParameterValueDeclaration>(parameter)};
+      auto const& previous_parameter{result.back()};
+
+      if (rng::empty(value_parameter.type_specifier)) {
+        if (std::holds_alternative<ParameterTypeDeclaration>(
+                previous_parameter)) {
+          ParameterTypeDeclaration type_parameter{};
+          type_parameter.name = value_parameter.name;
+          type_parameter.default_type =
+              std::move(value_parameter.default_value);
+          parameter = std::move(type_parameter);
+        } else {
+          value_parameter.type_specifier =
+              std::get<ParameterValueDeclaration>(previous_parameter)
+                  .type_specifier;
+        }
+      }
+    }
+
+    result.push_back(std::move(parameter));
+
+    if (m_token_iterator->type == TokenType::kPunctuation and
+        m_token_iterator->lexeme == ",") {
+      m_token_iterator++;
+    } else if (not is_parameter_list_end()) [[unlikely]] {
+      throw std::runtime_error{fmt::format(
+          "[Parser] expected ',' or ')' while parsing parameter "
+          "list at ({}, {})",
+          m_token_iterator->location.row, m_token_iterator->location.column)};
+    }
+  }
+
+  ExpectToken(TokenType::kPunctuation, ")", "parameter list");
 
   return result;
 }
 
-auto Parser::ParseParameters() -> ParameterDeclaration {
-  ParameterDeclaration result{};
-  result.name = Peek().lexeme;
-  ConsumeToken();
+auto Parser::ParseParameterTokens() -> std::span<Token const> {
+  auto const parameter_begin{m_token_iterator};
 
-  if (auto const& token{Peek()}; token.type == TokenType::kPunctuation) {
+  auto delimiter_depth{0UZ};
+  while (true) {
+    if (m_token_iterator->type == TokenType::kPunctuation) {
+      // TODO(): later replace with token.type such as LParen, LBracket, LBrace,
+      // RParen, RBracket, RBrace etc.
+      if (m_token_iterator->lexeme == "(" or m_token_iterator->lexeme == "[" or
+          m_token_iterator->lexeme == "{") {
+        delimiter_depth++;
+      } else if (m_token_iterator->lexeme == ")" or
+                 m_token_iterator->lexeme == "]" or
+                 m_token_iterator->lexeme == "}") {
+        if (std::cmp_equal(delimiter_depth, 0UZ)) {
+          break;
+        }
+
+        delimiter_depth--;
+      } else if (m_token_iterator->lexeme == "," and
+                 std::cmp_equal(delimiter_depth, 0UZ)) {
+        break;
+      }
+    }
+
+    m_token_iterator++;
   }
 
-  return result;
+  return {parameter_begin, m_token_iterator};
 }
 
 auto Parser::ParsePorts() -> PortDeclaration {
@@ -375,6 +610,3 @@ auto Parser::ParsePorts() -> PortDeclaration {
 }
 
 }  // namespace svt::core
-
-// TODO(): do we really need m_lookeahead_buffer in Parser? can't we just use
-// Lexer's token-stream directly?

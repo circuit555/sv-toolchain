@@ -11,42 +11,48 @@ namespace {
 using Token = svt::model::Token;
 using TokenType = svt::model::TokenType;
 using Lexer = svt::core::Lexer;
+
+struct ExpectedToken {
+  TokenType type;
+  std::string_view lexeme;
+};
+
+auto RequireTokens(std::span<Token const> const tokens,
+                   std::span<ExpectedToken const> const expected) -> void {
+  REQUIRE(tokens.size() == expected.size());
+  for (std::size_t i{0}; i < expected.size(); i += 1) {
+    REQUIRE(tokens.at(i).type == expected.at(i).type);
+    REQUIRE(tokens.at(i).lexeme == expected.at(i).lexeme);
+  }
+}
 }  // namespace
 
 TEST_CASE("Identifier and keyword tokens", "[lexer]") {
   std::string src = "module foo endmodule";
   Lexer lexer{std::move(src)};
 
-  Token t1 = lexer.Next();
-  REQUIRE(t1.type == TokenType::kKeyword);
-  REQUIRE(t1.lexeme == "module");
-
-  Token t2 = lexer.Next();
-  REQUIRE(t2.type == TokenType::kIdentifier);
-  REQUIRE(t2.lexeme == "foo");
-
-  Token t3 = lexer.Next();
-  REQUIRE(t3.type == TokenType::kKeyword);
-  REQUIRE(t3.lexeme == "endmodule");
-
-  Token t4 = lexer.Next();
-  REQUIRE(t4.type == TokenType::kEndOfFile);
+  std::array expected{ExpectedToken{.type = TokenType::kKeyword,
+                                    .lexeme = "module"},
+                      ExpectedToken{.type = TokenType::kIdentifier,
+                                    .lexeme = "foo"},
+                      ExpectedToken{.type = TokenType::kKeyword,
+                                    .lexeme = "endmodule"},
+                      ExpectedToken{.type = TokenType::kEndOfFile,
+                                    .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
 }
 
 TEST_CASE("Integer and real literals", "[lexer]") {
   std::string src = "123 45.67";
   Lexer lexer{std::move(src)};
 
-  Token t1 = lexer.Next();
-  REQUIRE(t1.type == TokenType::kIntegerLiteral);
-  REQUIRE(t1.lexeme == "123");
-
-  Token t2 = lexer.Next();
-  REQUIRE(t2.type == TokenType::kRealLiteral);
-  REQUIRE(t2.lexeme == "45.67");
-
-  Token t3 = lexer.Next();
-  REQUIRE(t3.type == TokenType::kEndOfFile);
+  std::array expected{ExpectedToken{.type = TokenType::kIntegerLiteral,
+                                    .lexeme = "123"},
+                      ExpectedToken{.type = TokenType::kRealLiteral,
+                                    .lexeme = "45.67"},
+                      ExpectedToken{.type = TokenType::kEndOfFile,
+                                    .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
 }
 
 TEST_CASE("String literal", "[lexer]") {
@@ -54,58 +60,43 @@ TEST_CASE("String literal", "[lexer]") {
   std::string src = R"("hello \"world\"")";
   Lexer lexer{std::move(src)};
 
-  // First token should be our string literal (without the quotes)
-  Token t = lexer.Next();
-  REQUIRE(t.type == TokenType::kStringLiteral);
-  // The lexeme is the interior: hello \"world\"
-  REQUIRE(t.lexeme == R"(hello \"world\")");
-
-  // Then we hit EOF
-  Token t2 = lexer.Next();
-  REQUIRE(t2.type == TokenType::kEndOfFile);
+  std::array expected{
+      ExpectedToken{.type = TokenType::kStringLiteral,
+                    .lexeme = R"(hello \"world\")"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
 }
 
 TEST_CASE("Operators and punctuation", "[lexer]") {
   std::string src = "+ - * / == != && || < <= > >= ( ) ; , [ ] { } # : ?";
   Lexer lexer{std::move(src)};
 
-  struct Expect {
-    TokenType type;
-    std::string_view lex;
-  };
-  std::vector<Expect> expected = {
-      {.type = TokenType::kOperator, .lex = "+"},
-      {.type = TokenType::kOperator, .lex = "-"},
-      {.type = TokenType::kOperator, .lex = "*"},
-      {.type = TokenType::kOperator, .lex = "/"},
-      {.type = TokenType::kOperator, .lex = "=="},
-      {.type = TokenType::kOperator, .lex = "!="},
-      {.type = TokenType::kOperator, .lex = "&&"},
-      {.type = TokenType::kOperator, .lex = "||"},
-      {.type = TokenType::kOperator, .lex = "<"},
-      {.type = TokenType::kOperator, .lex = "<="},
-      {.type = TokenType::kOperator, .lex = ">"},
-      {.type = TokenType::kOperator, .lex = ">="},
-      {.type = TokenType::kPunctuation, .lex = "("},
-      {.type = TokenType::kPunctuation, .lex = ")"},
-      {.type = TokenType::kPunctuation, .lex = ";"},
-      {.type = TokenType::kPunctuation, .lex = ","},
-      {.type = TokenType::kPunctuation, .lex = "["},
-      {.type = TokenType::kPunctuation, .lex = "]"},
-      {.type = TokenType::kPunctuation, .lex = "{"},
-      {.type = TokenType::kPunctuation, .lex = "}"},
-      {.type = TokenType::kPunctuation, .lex = "#"},
-      {.type = TokenType::kPunctuation, .lex = ":"},
-      {.type = TokenType::kPunctuation, .lex = "?"}};
-
-  for (auto const& ex : expected) {
-    Token t = lexer.Next();
-    REQUIRE(t.type == ex.type);
-    REQUIRE(t.lexeme == ex.lex);
-  }
-
-  Token eof = lexer.Next();
-  REQUIRE(eof.type == TokenType::kEndOfFile);
+  std::array expected{
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "+"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "-"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "*"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "/"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "=="},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "!="},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "&&"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "||"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "<"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "<="},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = ">"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = ">="},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "("},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ")"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ";"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ","},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "["},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "]"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "{"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "}"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "#"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ":"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "?"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
 }
 
 TEST_CASE("Skip whitespace and comments", "[lexer]") {
@@ -115,19 +106,17 @@ TEST_CASE("Skip whitespace and comments", "[lexer]") {
 comment */ foo)";
   Lexer lexer{std::move(src)};
 
-  Token t = lexer.Next();
-  REQUIRE(t.type == TokenType::kIdentifier);
-  REQUIRE(t.lexeme == "foo");
-
-  Token eof = lexer.Next();
-  REQUIRE(eof.type == TokenType::kEndOfFile);
+  std::array expected{ExpectedToken{.type = TokenType::kIdentifier,
+                                    .lexeme = "foo"},
+                      ExpectedToken{.type = TokenType::kEndOfFile,
+                                    .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
 }
 
 TEST_CASE("Unknown character throws", "[lexer]") {
   std::string src = "@";
-  Lexer lexer{std::move(src)};
 
-  REQUIRE_THROWS_AS(lexer.Next(), std::runtime_error);
+  REQUIRE_THROWS_AS(Lexer{std::move(src)}, std::runtime_error);
 }
 
 TEST_CASE("Lex module declaration with parameter and vector", "[lexer]") {
@@ -140,45 +129,33 @@ TEST_CASE("Lex module declaration with parameter and vector", "[lexer]") {
   )";
   Lexer lexer{std::move(src)};
 
-  struct Expect {
-    TokenType type;
-    std::string_view lex;
-  };
-  std::vector<Expect> expected = {
-      {.type = TokenType::kKeyword, .lex = "module"},
-      {.type = TokenType::kIdentifier, .lex = "foo"},
-      {.type = TokenType::kPunctuation, .lex = "#"},
-      {.type = TokenType::kPunctuation, .lex = "("},
-      {.type = TokenType::kKeyword, .lex = "parameter"},
-      {.type = TokenType::kIdentifier, .lex = "int"},
-      {.type = TokenType::kIdentifier, .lex = "N"},
-      {.type = TokenType::kOperator, .lex = "="},
-      {.type = TokenType::kIntegerLiteral, .lex = "8"},
-      {.type = TokenType::kPunctuation, .lex = ")"},
-      {.type = TokenType::kPunctuation, .lex = "("},
-      {.type = TokenType::kPunctuation, .lex = ")"},
-      {.type = TokenType::kPunctuation, .lex = ";"},
-      {.type = TokenType::kKeyword, .lex = "wire"},
-      {.type = TokenType::kPunctuation, .lex = "["},
-      {.type = TokenType::kIdentifier, .lex = "N"},
-      {.type = TokenType::kOperator, .lex = "-"},
-      {.type = TokenType::kIntegerLiteral, .lex = "1"},
-      {.type = TokenType::kPunctuation, .lex = ":"},
-      {.type = TokenType::kIntegerLiteral, .lex = "0"},
-      {.type = TokenType::kPunctuation, .lex = "]"},
-      {.type = TokenType::kIdentifier, .lex = "bus"},
-      {.type = TokenType::kPunctuation, .lex = ";"},
-      {.type = TokenType::kKeyword, .lex = "endmodule"},
-  };
-
-  for (auto const& ex : expected) {
-    Token t = lexer.Next();
-    REQUIRE(t.type == ex.type);
-    REQUIRE(t.lexeme == ex.lex);
-  }
-
-  Token eof = lexer.Next();
-  REQUIRE(eof.type == TokenType::kEndOfFile);
+  std::array expected{
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "module"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "foo"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "#"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "("},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "parameter"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "int"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "N"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "="},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "8"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ")"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "("},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ")"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ";"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "wire"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "["},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "N"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "-"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "1"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ":"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "0"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = "]"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "bus"},
+      ExpectedToken{.type = TokenType::kPunctuation, .lexeme = ";"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "endmodule"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
 }
 
 TEST_CASE("Token source locations are correct", "[lexer]") {
@@ -187,24 +164,27 @@ TEST_CASE("Token source locations are correct", "[lexer]") {
 c)";
   Lexer lexer{std::move(src)};
 
-  Token t1 = lexer.Next();
+  auto const tokens{lexer.Tokens()};
+  REQUIRE(tokens.size() == 4);
+
+  Token const& t1 = tokens.at(0);
   REQUIRE(t1.type == TokenType::kIdentifier);
   REQUIRE(t1.lexeme == "a");
   REQUIRE(t1.location.row == 1);
   REQUIRE(t1.location.column == 1);
 
-  Token t2 = lexer.Next();
+  Token const& t2 = tokens.at(1);
   REQUIRE(t2.type == TokenType::kIdentifier);
   REQUIRE(t2.lexeme == "b");
   REQUIRE(t2.location.row == 1);
   REQUIRE(t2.location.column == 3);
 
-  Token t3 = lexer.Next();
+  Token const& t3 = tokens.at(2);
   REQUIRE(t3.type == TokenType::kIdentifier);
   REQUIRE(t3.lexeme == "c");
   REQUIRE(t3.location.row == 2);
   REQUIRE(t3.location.column == 1);
 
-  Token eof = lexer.Next();
+  Token const& eof = tokens.at(3);
   REQUIRE(eof.type == TokenType::kEndOfFile);
 }

@@ -12,13 +12,28 @@ enum class PortDirection : std::uint8_t { kInput, kOutput };
 
 enum class NetType : std::uint8_t { kWire, kLogic };
 
+struct Declaration {
+  std::string_view name;
+};
+
 class IdentifierExpression;
 class NumberExpression;
 class BinaryExpression;
-export class ParameterDeclaration;
 export class PortDeclaration;
 class NetDeclaration;
 export class ModuleDeclaration;
+
+export struct ParameterTypeDeclaration : Declaration {
+  std::vector<std::string_view> default_type;
+};
+
+export struct ParameterValueDeclaration : Declaration {
+  std::vector<std::string_view> type_specifier;
+  std::vector<std::string_view> default_value;
+};
+
+export using ParameterDeclaration =
+    std::variant<ParameterTypeDeclaration, ParameterValueDeclaration>;
 
 /// @brief Type-erased AST node that stores one concrete node variant.
 export using AstNode =
@@ -29,9 +44,7 @@ export using AstNode =
 /// @brief Owning pointer to an AST node.
 export using AstNodePointer = AstNode*;
 
-struct IdentifierExpression {
-  std::string_view name;
-};
+struct IdentifierExpression : Declaration {};
 
 struct NumberExpression {
   int value;
@@ -43,27 +56,17 @@ struct BinaryExpression {
   AstNodePointer right_operand_ptr;
 };
 
-struct ParameterDeclaration {
-  std::string_view name;
-  std::vector<std::string_view> type_specifier;
-  std::vector<std::string_view> default_value;
-  bool is_type_parameter{false};
-};
-
-struct PortDeclaration {
-  std::string_view name;
+struct PortDeclaration : Declaration {
   PortDirection direction;
 };
 
-struct NetDeclaration {
-  std::string_view name;
+struct NetDeclaration : Declaration {
   NetType type;
   AstNodePointer msb;
   AstNodePointer lsb;
 };
 
-export struct ModuleDeclaration {
-  std::string_view name;
+export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;
   std::vector<PortDeclaration> ports;
   std::vector<AstNodePointer> items;

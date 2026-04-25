@@ -12,11 +12,12 @@ namespace svt::core {
 export class Lexer final {
  public:
   explicit Lexer(std::string&& sv_source_code);
-  [[nodiscard]] auto Next() -> ::svt::model::Token;
+  [[nodiscard]] auto Tokens() const -> std::span<::svt::model::Token const>;
 
  private:
   template <std::size_t kOffset = 0>
   [[nodiscard]] auto Peek() const -> char;
+  auto ScanNext() -> ::svt::model::Token;
   auto SkipWhiteSpaceAndComments() -> void;
   auto ScanString(::svt::model::SourceLocation const& token_source_location)
       -> ::svt::model::Token;
@@ -30,6 +31,7 @@ export class Lexer final {
   std::string_view m_sv_source_code_view;
   std::size_t m_position{0};
   ::svt::model::SourceLocation m_source_location{};
+  ::svt::model::token_stream_t m_tokens;
 };
 
 /// @brief Recursive-descent parser for SystemVerilog source text.
@@ -47,15 +49,18 @@ export class Parser final {
   [[nodiscard]] auto Parse() -> TranslationUnit;
 
  private:
-  auto Peek(std::size_t offset = 0) -> ::svt::model::Token;
-  auto ConsumeToken() -> void;
+  auto ExpectToken(::svt::model::TokenType expected_type,
+                   std::string_view expected_lexeme, std::string_view context)
+      -> ::svt::model::Token;
   auto ParseDeclaration() -> ::svt::model::AstNode;
-  auto ParseModuleDeclaration() -> ::svt::model::AstNode;
+  auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
+  auto ParseParameterTokens() -> std::span<::svt::model::Token const>;
   auto ParseParameters() -> std::vector<::svt::model::ParameterDeclaration>;
   auto ParsePorts() -> ::svt::model::PortDeclaration;
 
   Lexer m_lexer;
-  std::queue<::svt::model::Token> m_lookahead_buffer;
+  std::span<::svt::model::Token const> m_tokens;
+  std::span<::svt::model::Token const>::iterator m_token_iterator;
 };
 
 }  // namespace svt::core

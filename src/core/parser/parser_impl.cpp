@@ -20,6 +20,7 @@ using ParameterDeclaration = ::svt::model::ParameterDeclaration;
 using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
 using PortDeclaration = ::svt::model::PortDeclaration;
+using PortDirection = ::svt::model::PortDirection;
 
 namespace {
 
@@ -27,6 +28,21 @@ inline auto IsParameterDeclarationPrefix(std::span<Token const> tokens)
     -> bool {
   return tokens.front().lexeme == "parameter" or
          tokens.front().lexeme == "localparam";
+}
+
+// TODO(): replace with token.type such as LParen, LBracket, LBrace, RParen,
+inline auto IsOpeningDelimiter(Token const& token) -> bool {
+  return token.type == TokenType::kPunctuation and
+         (token.lexeme == "(" or token.lexeme == "[" or token.lexeme == "{");
+}
+
+inline auto IsClosingDelimiter(Token const& token) -> bool {
+  return token.type == TokenType::kPunctuation and
+         (token.lexeme == ")" or token.lexeme == "]" or token.lexeme == "}");
+}
+
+inline auto IsListSeparator(Token const& token) -> bool {
+  return token.type == TokenType::kPunctuation and token.lexeme == ",";
 }
 
 auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
@@ -162,6 +178,58 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
   }
 
   return parameter;
+}
+
+auto ParsePortDeclaration(
+    std::span<Token const> const port_tokens,
+    std::optional<PortDirection> const& previous_direction) -> PortDeclaration {
+  auto is_port_direction_token{[](Token const& token) -> bool {
+    return token.lexeme == "input" or token.lexeme == "output";
+  }};
+
+  auto parse_port_direction{[port_tokens]() -> PortDirection {
+    if (port_tokens.front().lexeme == "input") {
+      return PortDirection::kInput;
+    }
+
+    if (port_tokens.front().lexeme == "output") {
+      return PortDirection::kOutput;
+    }
+
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected port direction at ({}, {})",
+        port_tokens.front().location.row, port_tokens.front().location.column)};
+  }};
+
+  if (rng::empty(port_tokens)) [[unlikely]] {
+    throw std::runtime_error{"[Parser] expected port declaration"};
+  }
+
+  if (not is_port_direction_token(port_tokens.front()) and
+      not previous_direction.has_value()) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected port direction at ({}, {})",
+        port_tokens.front().location.row, port_tokens.front().location.column)};
+  }
+
+  auto const port_name_iterator{
+      rng::find_if(port_tokens | rng::views::reverse,
+                   [&is_port_direction_token](Token const& token) -> bool {
+                     return token.type == TokenType::kIdentifier and
+                            not is_port_direction_token(token);
+                   })};
+  if (port_name_iterator == rng::crend(port_tokens)) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected port name at ({}, {})",
+        port_tokens.front().location.row, port_tokens.front().location.column)};
+  }
+
+  PortDeclaration port{};
+  port.name = port_name_iterator->lexeme;
+  port.direction = is_port_direction_token(port_tokens.front())
+                       ? parse_port_direction()
+                       : previous_direction.value();
+  return port;
 }
 
 }  // namespace
@@ -510,7 +578,7 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
 
   if (m_token_iterator->lexeme == "(") {
     m_token_iterator++;
-    module_declaration.ports.push_back(ParsePorts());
+    module_declaration.ports = ParsePorts();
   }
 
   return module_declaration;
@@ -578,24 +646,17 @@ auto Parser::ParseParameterTokens() -> std::span<Token const> {
 
   auto delimiter_depth{0UZ};
   while (true) {
-    if (m_token_iterator->type == TokenType::kPunctuation) {
-      // TODO(): later replace with token.type such as LParen, LBracket, LBrace,
-      // RParen, RBracket, RBrace etc.
-      if (m_token_iterator->lexeme == "(" or m_token_iterator->lexeme == "[" or
-          m_token_iterator->lexeme == "{") {
-        delimiter_depth++;
-      } else if (m_token_iterator->lexeme == ")" or
-                 m_token_iterator->lexeme == "]" or
-                 m_token_iterator->lexeme == "}") {
-        if (std::cmp_equal(delimiter_depth, 0UZ)) {
-          break;
-        }
-
-        delimiter_depth--;
-      } else if (m_token_iterator->lexeme == "," and
-                 std::cmp_equal(delimiter_depth, 0UZ)) {
+    if (IsOpeningDelimiter(*m_token_iterator)) {
+      delimiter_depth++;
+    } else if (IsClosingDelimiter(*m_token_iterator)) {
+      if (std::cmp_equal(delimiter_depth, 0UZ)) {
         break;
       }
+
+      delimiter_depth--;
+    } else if (IsListSeparator(*m_token_iterator) and
+               std::cmp_equal(delimiter_depth, 0UZ)) {
+      break;
     }
 
     m_token_iterator++;
@@ -604,8 +665,57 @@ auto Parser::ParseParameterTokens() -> std::span<Token const> {
   return {parameter_begin, m_token_iterator};
 }
 
-auto Parser::ParsePorts() -> PortDeclaration {
-  PortDeclaration result{};
+auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
+  std::vector<PortDeclaration> result{};
+
+  auto const is_port_list_end{[this]() -> bool {
+    return m_token_iterator->type == TokenType::kPunctuation and
+           m_token_iterator->lexeme == ")";
+  }};
+
+  while (not is_port_list_end()) {
+    auto const port_begin{m_token_iterator};
+
+    auto delimiter_depth{0UZ};
+    while (true) {
+      if (m_token_iterator->type == TokenType::kEndOfFile) [[unlikely]] {
+        throw std::runtime_error{fmt::format(
+            "[Parser] unexpected end-of-file while parsing port list at ({}, "
+            "{})",
+            m_token_iterator->location.row, m_token_iterator->location.column)};
+      }
+
+      if (IsOpeningDelimiter(*m_token_iterator)) {
+        delimiter_depth++;
+      } else if (IsClosingDelimiter(*m_token_iterator)) {
+        if (std::cmp_equal(delimiter_depth, 0UZ)) {
+          break;
+        }
+
+        delimiter_depth--;
+      } else if (IsListSeparator(*m_token_iterator) and
+                 std::cmp_equal(delimiter_depth, 0UZ)) {
+        break;
+      }
+
+      m_token_iterator++;
+    }
+
+    auto const port_tokens{
+        std::span<Token const>{port_begin, m_token_iterator}};
+    auto const previous_direction{
+        rng::empty(result)
+            ? std::optional<PortDirection>{}
+            : std::optional<PortDirection>{result.back().direction}};
+    result.push_back(ParsePortDeclaration(port_tokens, previous_direction));
+
+    if (IsListSeparator(*m_token_iterator)) {
+      m_token_iterator++;
+    }
+  }
+
+  ExpectToken(TokenType::kPunctuation, ")", "port list");
+
   return result;
 }
 

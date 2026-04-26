@@ -19,6 +19,10 @@ export class Lexer final {
   [[nodiscard]] auto Peek() const -> char;
   auto ScanNext() -> ::svt::model::Token;
   auto SkipWhiteSpaceAndComments() -> void;
+  auto SkipHorizontalWhiteSpace() -> void;
+  auto SkipLineBreak() -> void;
+  auto SkipLineComment() -> void;
+  auto SkipBlockComment() -> void;
   auto ScanString(::svt::model::SourceLocation const& token_source_location)
       -> ::svt::model::Token;
   auto ScanIdentifierOrKeyword(

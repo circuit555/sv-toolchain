@@ -44,6 +44,24 @@ inline auto IsListSeparator(Token const& token) -> bool {
   return token.type == TokenType::kComma;
 }
 
+inline auto IsHorizontalWhiteSpace(char const character) -> bool {
+  return character == ' ' or character == '\t' or character == '\r';
+}
+
+inline auto IsLineBreak(char const character) -> bool {
+  return character == '\n';
+}
+
+inline auto StartsLineComment(char const current_character,
+                              char const next_character) -> bool {
+  return current_character == '/' and next_character == '/';
+}
+
+inline auto StartsBlockComment(char const current_character,
+                               char const next_character) -> bool {
+  return current_character == '/' and next_character == '*';
+}
+
 auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
                                  std::size_t const head_begin,
                                  std::size_t const head_end) -> std::size_t {
@@ -547,56 +565,71 @@ auto Lexer::SkipWhiteSpaceAndComments() -> void {
   while (true) {
     auto const next_character{Peek()};
 
-    // whitespace
-    if (next_character == ' ' or next_character == '\t' or
-        next_character == '\r') {
-      m_position += 1;
-      m_source_location.column += 1;
+    if (IsHorizontalWhiteSpace(next_character)) {
+      SkipHorizontalWhiteSpace();
+      continue;
     }
-    // line break
-    else if (next_character == '\n') {
-      m_position += 1;
+
+    if (IsLineBreak(next_character)) {
+      SkipLineBreak();
+      continue;
+    }
+
+    if (StartsLineComment(next_character, Peek<1>())) {
+      SkipLineComment();
+      continue;
+    }
+
+    if (StartsBlockComment(next_character, Peek<1>())) {
+      SkipBlockComment();
+      continue;
+    }
+
+    break;
+  }
+}
+
+auto Lexer::SkipHorizontalWhiteSpace() -> void {
+  m_position += 1;
+  m_source_location.column += 1;
+}
+
+auto Lexer::SkipLineBreak() -> void {
+  m_position += 1;
+  m_source_location.row += 1;
+  m_source_location.column = 1;
+}
+
+auto Lexer::SkipLineComment() -> void {
+  m_position += 2;
+  m_source_location.column += 2;
+
+  while (Peek() != '\n' and Peek() != '\0') {
+    m_position += 1;
+    m_source_location.column += 1;
+  }
+}
+
+auto Lexer::SkipBlockComment() -> void {
+  m_position += 2;
+  m_source_location.column += 2;
+
+  while (Peek() != '*' or Peek<1>() != '/') {
+    if (Peek() == '\0') {
+      break;
+    }
+
+    m_position += 1;
+    if (Peek() != '\n') {
+      m_source_location.column += 1;
+    } else {
       m_source_location.row += 1;
       m_source_location.column = 1;
     }
-    // line comment `// ---`
-    else if (next_character == '/' and Peek<1>() == '/') {
-      m_position += 2;
-      m_source_location.column += 2;
-      // keep advancing till end of line or EOF
-      while (Peek() != '\n' and Peek() != '\0') {
-        m_position += 1;
-        m_source_location.column += 1;
-      }
-    }
-    // block comment `/* --- */`
-    else if (next_character == '/' and Peek<1>() == '*') {
-      m_position += 2;
-      m_source_location.column += 2;
-      // keep advancing till closing `*/` or EOF
-      while (Peek() != '*' or Peek<1>() != '/') {
-        // EOF reached
-        if (Peek() == '\0') {
-          break;
-        }
-
-        m_position += 1;
-        if (Peek() != '\n') {
-          m_source_location.column += 1;
-        } else {
-          m_source_location.row += 1;
-          m_source_location.column = 1;
-        }
-      }
-      // finally consume `*/`
-      m_position += 2;
-      m_source_location.column += 2;
-    }
-    // real content
-    else {
-      break;
-    }
   }
+
+  m_position += 2;
+  m_source_location.column += 2;
 }
 
 Parser::Parser(std::string&& sv_source_code)

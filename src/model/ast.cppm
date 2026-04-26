@@ -8,7 +8,7 @@ namespace svt::model {
 
 enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
 
-enum class PortDirection : std::uint8_t { kInput, kOutput };
+export enum class PortDirection : std::uint8_t { kInput, kOutput };
 
 enum class NetType : std::uint8_t { kWire, kLogic };
 

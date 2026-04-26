@@ -56,7 +56,7 @@ export class Parser final {
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseParameterTokens() -> std::span<::svt::model::Token const>;
   auto ParseParameters() -> std::vector<::svt::model::ParameterDeclaration>;
-  auto ParsePorts() -> ::svt::model::PortDeclaration;
+  auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;
 
   Lexer m_lexer;
   std::span<::svt::model::Token const> m_tokens;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import svt.core.parser;
 import std;
 

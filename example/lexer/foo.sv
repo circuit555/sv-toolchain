@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 
 module foo #(
   parameter int N = 8,

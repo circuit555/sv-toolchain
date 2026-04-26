@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Generate compile_commands.json from a Ninja build graph.
 
 This script queries Ninja's compdb output for all rules, keeps only true

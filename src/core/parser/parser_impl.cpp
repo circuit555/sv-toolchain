@@ -1,4 +1,4 @@
-
+// SPDX-License-Identifier: MIT
 
 module svt.core.parser;
 

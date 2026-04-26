@@ -16,6 +16,15 @@ section for helpful reference material.
 Architecture and implementation notes are maintained in the [docs](docs/)
 directory.
 
+## license
+
+This project is licensed under the MIT License. Source files carry the SPDX
+license identifier:
+
+```text
+SPDX-License-Identifier: MIT
+```
+
 ## build
 
 ### docker based workflow

@@ -1,4 +1,4 @@
-
+// SPDX-License-Identifier: MIT
 
 export module svt.model.ast;
 

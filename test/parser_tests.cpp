@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <catch2/catch_all.hpp>
 
 import svt.model.ast;

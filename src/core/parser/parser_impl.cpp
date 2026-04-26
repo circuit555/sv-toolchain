@@ -581,6 +581,19 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
     module_declaration.ports = ParsePorts();
   }
 
+  if (m_token_iterator->lexeme == ";") {
+    m_token_iterator++;
+  }
+
+  // FIXME: this is a hack to consume the rest of the module body
+  while (m_token_iterator->type != TokenType::kEndOfFile and
+         m_token_iterator->lexeme != "endmodule") {
+    m_token_iterator++;
+  }
+  if (m_token_iterator->lexeme == "endmodule") {
+    m_token_iterator++;
+  }
+
   return module_declaration;
 }
 

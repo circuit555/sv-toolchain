@@ -6,6 +6,7 @@ import svt.core.parser;
 namespace {
 using Parser = svt::core::Parser;
 using ModuleDeclaration = svt::model::ModuleDeclaration;
+using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 }  // namespace
@@ -63,4 +64,70 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
   REQUIRE(implicit_value_parameter.type_specifier.empty());
   REQUIRE(implicit_value_parameter.default_value ==
           std::vector<std::string_view>{"8"});
+}
+
+TEST_CASE("Parse module ports", "[parser]") {
+  std::string src = R"(
+    module foo (
+      input logic clk,
+      output logic [7:0] data,
+      ready
+    )
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.ports.size() == 3);
+
+  auto const& clk_port{module_declaration.ports.at(0)};
+  REQUIRE(clk_port.name == "clk");
+  REQUIRE(clk_port.direction == PortDirection::kInput);
+
+  auto const& data_port{module_declaration.ports.at(1)};
+  REQUIRE(data_port.name == "data");
+  REQUIRE(data_port.direction == PortDirection::kOutput);
+
+  auto const& ready_port{module_declaration.ports.at(2)};
+  REQUIRE(ready_port.name == "ready");
+  REQUIRE(ready_port.direction == PortDirection::kOutput);
+}
+
+TEST_CASE("Parse module parameters followed by ports", "[parser]") {
+  std::string src = R"(
+    module foo #(
+      parameter WIDTH = 8
+    ) (
+      input clk,
+      output [WIDTH-1:0] data
+    )
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.parameters.size() == 1);
+  REQUIRE(module_declaration.ports.size() == 2);
+
+  auto const& width_parameter{
+      std::get<ParameterValueDeclaration>(module_declaration.parameters.at(0))};
+  REQUIRE(width_parameter.name == "WIDTH");
+
+  auto const& clk_port{module_declaration.ports.at(0)};
+  REQUIRE(clk_port.name == "clk");
+  REQUIRE(clk_port.direction == PortDirection::kInput);
+
+  auto const& data_port{module_declaration.ports.at(1)};
+  REQUIRE(data_port.name == "data");
+  REQUIRE(data_port.direction == PortDirection::kOutput);
 }

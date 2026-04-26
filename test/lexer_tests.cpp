@@ -31,14 +31,11 @@ TEST_CASE("Identifier and keyword tokens", "[lexer]") {
   std::string src = "module foo endmodule";
   Lexer lexer{std::move(src)};
 
-  std::array expected{ExpectedToken{.type = TokenType::kKeyword,
-                                    .lexeme = "module"},
-                      ExpectedToken{.type = TokenType::kIdentifier,
-                                    .lexeme = "foo"},
-                      ExpectedToken{.type = TokenType::kKeyword,
-                                    .lexeme = "endmodule"},
-                      ExpectedToken{.type = TokenType::kEndOfFile,
-                                    .lexeme = ""}};
+  std::array expected{
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "module"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "foo"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "endmodule"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);
 }
 
@@ -46,12 +43,10 @@ TEST_CASE("Integer and real literals", "[lexer]") {
   std::string src = "123 45.67";
   Lexer lexer{std::move(src)};
 
-  std::array expected{ExpectedToken{.type = TokenType::kIntegerLiteral,
-                                    .lexeme = "123"},
-                      ExpectedToken{.type = TokenType::kRealLiteral,
-                                    .lexeme = "45.67"},
-                      ExpectedToken{.type = TokenType::kEndOfFile,
-                                    .lexeme = ""}};
+  std::array expected{
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "123"},
+      ExpectedToken{.type = TokenType::kRealLiteral, .lexeme = "45.67"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);
 }
 
@@ -106,10 +101,9 @@ TEST_CASE("Skip whitespace and comments", "[lexer]") {
 comment */ foo)";
   Lexer lexer{std::move(src)};
 
-  std::array expected{ExpectedToken{.type = TokenType::kIdentifier,
-                                    .lexeme = "foo"},
-                      ExpectedToken{.type = TokenType::kEndOfFile,
-                                    .lexeme = ""}};
+  std::array expected{
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "foo"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);
 }
 

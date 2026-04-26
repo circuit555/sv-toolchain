@@ -131,3 +131,22 @@ TEST_CASE("Parse module parameters followed by ports", "[parser]") {
   REQUIRE(data_port.name == "data");
   REQUIRE(data_port.direction == PortDirection::kOutput);
 }
+
+TEST_CASE("Parse complete module declaration with body", "[parser]") {
+  std::string src = R"(
+    module foo #(parameter int N = 8) ();
+      wire [N-1 : 0] bus;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.parameters.size() == 1);
+  REQUIRE(module_declaration.ports.empty());
+}

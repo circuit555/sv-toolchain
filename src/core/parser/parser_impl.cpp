@@ -30,19 +30,18 @@ inline auto IsParameterDeclarationPrefix(std::span<Token const> tokens)
          tokens.front().lexeme == "localparam";
 }
 
-// TODO(): replace with token.type such as LParen, LBracket, LBrace, RParen,
 inline auto IsOpeningDelimiter(Token const& token) -> bool {
-  return token.type == TokenType::kPunctuation and
-         (token.lexeme == "(" or token.lexeme == "[" or token.lexeme == "{");
+  return token.type == TokenType::kLParen or
+         token.type == TokenType::kLBracket or token.type == TokenType::kLBrace;
 }
 
 inline auto IsClosingDelimiter(Token const& token) -> bool {
-  return token.type == TokenType::kPunctuation and
-         (token.lexeme == ")" or token.lexeme == "]" or token.lexeme == "}");
+  return token.type == TokenType::kRParen or
+         token.type == TokenType::kRBracket or token.type == TokenType::kRBrace;
 }
 
 inline auto IsListSeparator(Token const& token) -> bool {
-  return token.type == TokenType::kPunctuation and token.lexeme == ",";
+  return token.type == TokenType::kComma;
 }
 
 auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
@@ -323,12 +322,55 @@ auto Lexer::ScanNext() -> Token {
   m_source_location.column += 1;
 
   // single-character punctuation
-  static std::array<char, 11> constexpr kPunctuationCharacters{
-      '(', ')', '[', ']', '{', '}', ';', ',', '#', ':', '?'};
-  if (rng::contains(kPunctuationCharacters, character)) {
-    return Token{.type = TokenType::kPunctuation,
-                 .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
-                 .location = token_source_location};
+  auto const punctuation_lexeme{
+      m_sv_source_code_view.substr(m_position - 1, 1)};
+  switch (character) {
+    case '(':
+      return Token{.type = TokenType::kLParen,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case ')':
+      return Token{.type = TokenType::kRParen,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '[':
+      return Token{.type = TokenType::kLBracket,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case ']':
+      return Token{.type = TokenType::kRBracket,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '{':
+      return Token{.type = TokenType::kLBrace,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '}':
+      return Token{.type = TokenType::kRBrace,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case ';':
+      return Token{.type = TokenType::kSemicolon,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case ',':
+      return Token{.type = TokenType::kComma,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '#':
+      return Token{.type = TokenType::kHash,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case ':':
+      return Token{.type = TokenType::kColon,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '?':
+      return Token{.type = TokenType::kQuestion,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    default:
+      break;
   }
 
   // if start of string
@@ -634,29 +676,26 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   module_declaration.name = m_token_iterator->lexeme;
   m_token_iterator++;
 
-  if (m_token_iterator->type != TokenType::kPunctuation) [[unlikely]] {
+  if (m_token_iterator->type != TokenType::kHash and
+      m_token_iterator->type != TokenType::kLParen and
+      m_token_iterator->type != TokenType::kSemicolon) [[unlikely]] {
     throw std::runtime_error{fmt::format(
-        "[Parser] expected punctuation token (param/port) at ({}, {})",
-        m_token_iterator->location.row, m_token_iterator->location.column)};
-  }
-  if (m_token_iterator->lexeme != "#" and m_token_iterator->lexeme != "(" and
-      m_token_iterator->lexeme != ";") [[unlikely]] {
-    throw std::runtime_error{fmt::format(
-        "[Parser] unexpected punctuation token at ({}, {})",
+        "[Parser] expected module parameter list, port list, or ';' at ({}, "
+        "{})",
         m_token_iterator->location.row, m_token_iterator->location.column)};
   }
 
-  if (m_token_iterator->lexeme == "#") {
+  if (m_token_iterator->type == TokenType::kHash) {
     m_token_iterator++;
     module_declaration.parameters = ParseParameters();
   }
 
-  if (m_token_iterator->lexeme == "(") {
+  if (m_token_iterator->type == TokenType::kLParen) {
     m_token_iterator++;
     module_declaration.ports = ParsePorts();
   }
 
-  if (m_token_iterator->lexeme == ";") {
+  if (m_token_iterator->type == TokenType::kSemicolon) {
     m_token_iterator++;
   }
 
@@ -674,13 +713,12 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
 
 auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
   auto is_parameter_list_end{[this]() -> bool {
-    return m_token_iterator->type == TokenType::kPunctuation and
-           m_token_iterator->lexeme == ")";
+    return m_token_iterator->type == TokenType::kRParen;
   }};
 
   std::vector<ParameterDeclaration> result{};
 
-  ExpectToken(TokenType::kPunctuation, "(", "parameter list");
+  ExpectToken(TokenType::kLParen, "(", "parameter list");
 
   while (not is_parameter_list_end()) {
     auto const parameter_tokens{ParseParameterTokens()};
@@ -713,8 +751,7 @@ auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
 
     result.push_back(std::move(parameter));
 
-    if (m_token_iterator->type == TokenType::kPunctuation and
-        m_token_iterator->lexeme == ",") {
+    if (m_token_iterator->type == TokenType::kComma) {
       m_token_iterator++;
     } else if (not is_parameter_list_end()) [[unlikely]] {
       throw std::runtime_error{fmt::format(
@@ -724,7 +761,7 @@ auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
     }
   }
 
-  ExpectToken(TokenType::kPunctuation, ")", "parameter list");
+  ExpectToken(TokenType::kRParen, ")", "parameter list");
 
   return result;
 }
@@ -757,8 +794,7 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
   std::vector<PortDeclaration> result{};
 
   auto const is_port_list_end{[this]() -> bool {
-    return m_token_iterator->type == TokenType::kPunctuation and
-           m_token_iterator->lexeme == ")";
+    return m_token_iterator->type == TokenType::kRParen;
   }};
 
   while (not is_port_list_end()) {
@@ -802,7 +838,7 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
     }
   }
 
-  ExpectToken(TokenType::kPunctuation, ")", "port list");
+  ExpectToken(TokenType::kRParen, ")", "port list");
 
   return result;
 }

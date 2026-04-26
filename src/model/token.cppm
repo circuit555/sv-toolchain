@@ -30,8 +30,28 @@ export enum class TokenType : std::uint8_t {
   kKeyword,
   /// Operator token.
   kOperator,
-  /// Punctuation token.
-  kPunctuation,
+  /// `(` token.
+  kLParen,
+  /// `)` token.
+  kRParen,
+  /// `[` token.
+  kLBracket,
+  /// `]` token.
+  kRBracket,
+  /// `{` token.
+  kLBrace,
+  /// `}` token.
+  kRBrace,
+  /// `;` token.
+  kSemicolon,
+  /// `,` token.
+  kComma,
+  /// `#` token.
+  kHash,
+  /// `:` token.
+  kColon,
+  /// `?` token.
+  kQuestion,
   /// Comment token.
   kComment
 };

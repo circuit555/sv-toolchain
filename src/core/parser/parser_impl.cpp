@@ -606,18 +606,15 @@ Parser::Parser(std::string&& sv_source_code)
 }
 
 auto Parser::ExpectToken(TokenType const expected_type,
-                         std::string_view const expected_lexeme,
-                         std::string_view const context) -> Token {
-  if (m_token_iterator->type != expected_type or
-      m_token_iterator->lexeme != expected_lexeme) [[unlikely]] {
-    throw std::runtime_error{
-        fmt::format("[Parser] expected '{}' while parsing {} at ({}, {})",
-                    expected_lexeme, context, m_token_iterator->location.row,
-                    m_token_iterator->location.column)};
+                         std::string_view const context) -> void {
+  if (m_token_iterator->type != expected_type) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] unexpected token '{}' while parsing {} at ({}, {})",
+        m_token_iterator->lexeme, context, m_token_iterator->location.row,
+        m_token_iterator->location.column)};
   }
 
   m_token_iterator++;
-  return *m_token_iterator;
 }
 
 auto Parser::Parse() -> TranslationUnit {
@@ -718,7 +715,7 @@ auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
 
   std::vector<ParameterDeclaration> result{};
 
-  ExpectToken(TokenType::kLParen, "(", "parameter list");
+  ExpectToken(TokenType::kLParen, "parameter list");
 
   while (not is_parameter_list_end()) {
     auto const parameter_tokens{ParseParameterTokens()};
@@ -761,7 +758,7 @@ auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
     }
   }
 
-  ExpectToken(TokenType::kRParen, ")", "parameter list");
+  ExpectToken(TokenType::kRParen, "parameter list");
 
   return result;
 }
@@ -838,7 +835,7 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
     }
   }
 
-  ExpectToken(TokenType::kRParen, ")", "port list");
+  ExpectToken(TokenType::kRParen, "port list");
 
   return result;
 }

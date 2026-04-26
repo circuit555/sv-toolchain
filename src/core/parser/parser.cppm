@@ -50,8 +50,7 @@ export class Parser final {
 
  private:
   auto ExpectToken(::svt::model::TokenType expected_type,
-                   std::string_view expected_lexeme, std::string_view context)
-      -> ::svt::model::Token;
+                   std::string_view context) -> void;
   auto ParseDeclaration() -> ::svt::model::AstNode;
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseParameterTokens() -> std::span<::svt::model::Token const>;

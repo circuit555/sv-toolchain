@@ -38,9 +38,9 @@ export class Lexer final {
 ///
 /// The parser tokenizes input internally and produces an AST translation unit.
 export class Parser final {
+ public:
   using TranslationUnit = std::vector<::svt::model::AstNode>;
 
- public:
   /// @brief Construct a parser over a source-code view.
   /// @param sv_source_code SystemVerilog source to parse.
   explicit Parser(std::string&& sv_source_code);
@@ -62,5 +62,8 @@ export class Parser final {
   std::span<::svt::model::Token const> m_tokens;
   std::span<::svt::model::Token const>::iterator m_token_iterator;
 };
+
+/// @brief Print a parsed translation unit to stdout.
+export auto Print(Parser::TranslationUnit const& translation_unit) -> void;
 
 }  // namespace svt::core

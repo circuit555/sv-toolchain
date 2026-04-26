@@ -232,6 +232,65 @@ auto ParsePortDeclaration(
   return port;
 }
 
+auto JoinLexemes(std::span<std::string_view const> const lexemes)
+    -> std::string {
+  auto result = std::string{};
+  for (auto const lexeme : lexemes) {
+    if (not rng::empty(result)) {
+      result += " ";
+    }
+    result += lexeme;
+  }
+  return result;
+}
+
+auto ToString(PortDirection const direction) -> std::string_view {
+  switch (direction) {
+    case PortDirection::kInput:
+      return "input";
+    case PortDirection::kOutput:
+      return "output";
+  }
+
+  std::unreachable();
+}
+
+auto PrintParameter(ParameterDeclaration const& parameter) -> void {
+  std::visit(
+      [](auto const& resolved_parameter) -> void {
+        if constexpr (std::same_as<
+                          std::remove_cvref_t<decltype(resolved_parameter)>,
+                          ParameterTypeDeclaration>) {
+          fmt::println("    parameter type {} = {}", resolved_parameter.name,
+                       JoinLexemes(resolved_parameter.default_type));
+        } else {
+          fmt::println("    parameter {} {} = {}",
+                       JoinLexemes(resolved_parameter.type_specifier),
+                       resolved_parameter.name,
+                       JoinLexemes(resolved_parameter.default_value));
+        }
+      },
+      parameter);
+}
+
+auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
+  fmt::println("module {}", module_declaration.name);
+
+  if (not rng::empty(module_declaration.parameters)) {
+    fmt::println("  parameters:");
+    for (auto const& parameter : module_declaration.parameters) {
+      PrintParameter(parameter);
+    }
+  }
+
+  if (not rng::empty(module_declaration.ports)) {
+    fmt::println("  ports:");
+    for (auto const& port : module_declaration.ports) {
+      fmt::println("    {} {}", ToString(port.direction), port.name);
+    }
+  }
+}
+
 }  // namespace
 
 Lexer::Lexer(std::string&& sv_source_code)
@@ -525,6 +584,22 @@ auto Parser::Parse() -> TranslationUnit {
     translation_unit.push_back(ParseDeclaration());
   }
   return translation_unit;
+}
+
+auto Print(Parser::TranslationUnit const& translation_unit) -> void {
+  for (auto const& node : translation_unit) {
+    std::visit(
+        [](auto const& resolved_node) -> void {
+          if constexpr (std::same_as<
+                            std::remove_cvref_t<decltype(resolved_node)>,
+                            ModuleDeclaration>) {
+            PrintModule(resolved_node);
+          } else {
+            fmt::println("<unsupported AST node>");
+          }
+        },
+        node);
+  }
 }
 
 auto Parser::ParseDeclaration() -> AstNode {

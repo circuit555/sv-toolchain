@@ -22,4 +22,5 @@ auto main() -> int {
   svt::core::Parser parser{ReadSystemVerilogSourceFile(
       "/stuff/work/sv-toolchain/example/lexer/foo.sv")};
   auto foo = parser.Parse();
+  svt::core::Print(foo);
 }

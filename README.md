@@ -5,11 +5,16 @@ Tools for system-verilog language
 ## features
 
 - Lexer : raw system-verilog code (per source-file) to token-stream
+- Parser : token-stream to AST for module declarations, parameter lists, and
+  ANSI-style port lists
 
 ## resource
 
 Head over to [Wiki](https://github.com/circuit555/sv-toolchain/wiki)
 section for helpful reference material.
+
+Architecture and implementation notes are maintained in the [docs](docs/)
+directory.
 
 ## build
 
@@ -64,3 +69,16 @@ If `build.json` changes (for example, new source files or modules), run:
 $ modi
 $ python3 scripts/generate_compile_commands.py
 ```
+
+## contributing
+
+Before opening a pull request, make sure the unit-tests pass:
+
+```shell
+$ ninja -f build/build.ninja
+$ cd test
+$ ninja -f build/build.ninja
+$ ./build/test_svt
+```
+
+Pull requests with failing unit-tests will not be considered for merging.

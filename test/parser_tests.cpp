@@ -12,6 +12,14 @@ using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 using ContinuousAssign = svt::model::ContinuousAssign;
+
+auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
+  std::vector<std::string_view> result{};
+  for (auto const& token : tokens) {
+    result.push_back(token.lexeme);
+  }
+  return result;
+}
 }  // namespace
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
@@ -36,36 +44,36 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
   auto const& mask_parameter{
       std::get<ParameterValueDeclaration>(module_declaration.parameters.at(0))};
   REQUIRE(mask_parameter.name == "MASK");
-  REQUIRE(mask_parameter.type_specifier ==
+  REQUIRE(Lexemes(mask_parameter.type_specifier) ==
           std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
-  REQUIRE(mask_parameter.default_value ==
+  REQUIRE(Lexemes(mask_parameter.default_value) ==
           std::vector<std::string_view>{"WIDTH", "-", "1"});
 
   auto const& continued_mask_parameter{
       std::get<ParameterValueDeclaration>(module_declaration.parameters.at(1))};
   REQUIRE(continued_mask_parameter.name == "ALT_MASK");
-  REQUIRE(continued_mask_parameter.type_specifier ==
+  REQUIRE(Lexemes(continued_mask_parameter.type_specifier) ==
           std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
-  REQUIRE(continued_mask_parameter.default_value ==
+  REQUIRE(Lexemes(continued_mask_parameter.default_value) ==
           std::vector<std::string_view>{"2"});
 
   auto const& type_parameter{
       std::get<ParameterTypeDeclaration>(module_declaration.parameters.at(2))};
   REQUIRE(type_parameter.name == "T");
-  REQUIRE(type_parameter.default_type ==
+  REQUIRE(Lexemes(type_parameter.default_type) ==
           std::vector<std::string_view>{"logic", "[", "3", ":", "0", "]"});
 
   auto const& continued_type_parameter{
       std::get<ParameterTypeDeclaration>(module_declaration.parameters.at(3))};
   REQUIRE(continued_type_parameter.name == "U");
-  REQUIRE(continued_type_parameter.default_type ==
+  REQUIRE(Lexemes(continued_type_parameter.default_type) ==
           std::vector<std::string_view>{"bit"});
 
   auto const& implicit_value_parameter{
       std::get<ParameterValueDeclaration>(module_declaration.parameters.at(4))};
   REQUIRE(implicit_value_parameter.name == "WIDTH");
   REQUIRE(implicit_value_parameter.type_specifier.empty());
-  REQUIRE(implicit_value_parameter.default_value ==
+  REQUIRE(Lexemes(implicit_value_parameter.default_value) ==
           std::vector<std::string_view>{"8"});
 }
 
@@ -181,12 +189,15 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
 
   auto const& y_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(0))};
-  REQUIRE(y_assign.left_hand_side == std::vector<std::string_view>{"y"});
-  REQUIRE(y_assign.right_hand_side ==
+  REQUIRE(Lexemes(y_assign.left_hand_side) ==
+          std::vector<std::string_view>{"y"});
+  REQUIRE(Lexemes(y_assign.right_hand_side) ==
           std::vector<std::string_view>{"a", "+", "b"});
 
   auto const& z_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(1))};
-  REQUIRE(z_assign.left_hand_side == std::vector<std::string_view>{"z"});
-  REQUIRE(z_assign.right_hand_side == std::vector<std::string_view>{"y"});
+  REQUIRE(Lexemes(z_assign.left_hand_side) ==
+          std::vector<std::string_view>{"z"});
+  REQUIRE(Lexemes(z_assign.right_hand_side) ==
+          std::vector<std::string_view>{"y"});
 }

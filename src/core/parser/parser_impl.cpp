@@ -158,14 +158,9 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
 
       value_parameter.name = parameter_name_riterator->lexeme;
 
-      value_parameter.type_specifier =
-          std::span{rng::cbegin(tokens_slice),
-                    rng::prev(parameter_name_riterator.base(), 1,
-                              rng::cbegin(tokens_slice))} |
-          rng::views::transform([](auto const& token) -> std::string_view {
-            return token.lexeme;
-          }) |
-          rng::to<std::vector>();
+      value_parameter.type_specifier = std::span{
+          rng::cbegin(tokens_slice), rng::prev(parameter_name_riterator.base(),
+                                               1, rng::cbegin(tokens_slice))};
 
       return value_parameter;
     }();
@@ -184,14 +179,9 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
             }
           }();
 
-          default_value =
-              std::span{
-                  rng::next(equals_operator_iterator, 1, rng::cend(tokens)),
-                  rng::cend(tokens)} |
-              rng::views::transform([](auto const& token) -> std::string_view {
-                return token.lexeme;
-              }) |
-              rng::to<std::vector>();
+          default_value = std::span{
+              rng::next(equals_operator_iterator, 1, rng::cend(tokens)),
+              rng::cend(tokens)};
         },
         parameter);
   }
@@ -251,25 +241,15 @@ auto ParsePortDeclaration(
   return port;
 }
 
-auto JoinLexemes(std::span<std::string_view const> const lexemes)
-    -> std::string {
+auto JoinLexemes(std::span<Token const> const tokens) -> std::string {
   auto result = std::string{};
-  for (auto const lexeme : lexemes) {
+  for (auto const& token : tokens) {
     if (not rng::empty(result)) {
       result += " ";
     }
-    result += lexeme;
+    result += token.lexeme;
   }
   return result;
-}
-
-auto TokenLexemes(std::span<Token const> const tokens)
-    -> std::vector<std::string_view> {
-  return tokens |
-         rng::views::transform([](Token const& token) -> std::string_view {
-           return token.lexeme;
-         }) |
-         rng::to<std::vector>();
 }
 
 auto ToString(PortDirection const direction) -> std::string_view {
@@ -843,11 +823,11 @@ auto Parser::ParseContinuousAssign() -> ContinuousAssign {
   }
 
   ContinuousAssign continuous_assign{};
-  continuous_assign.left_hand_side = TokenLexemes(
-      std::span{assignment_begin_iterator, equals_operator_iterator});
-  continuous_assign.right_hand_side = TokenLexemes(
+  continuous_assign.left_hand_side =
+      std::span{assignment_begin_iterator, equals_operator_iterator};
+  continuous_assign.right_hand_side =
       std::span{rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)),
-                assignment_end_iterator});
+                assignment_end_iterator};
 
   m_token_iterator = assignment_end_iterator;
   ExpectToken(TokenType::kSemicolon, "continuous assignment");
@@ -988,7 +968,3 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
 }
 
 }  // namespace svt::core
-
-// TODO(): do we really need std::vector<std::string_view> stuff for holding
-// tokens if they are occurring closeby in token span, why not instead use a
-// subspan for them?

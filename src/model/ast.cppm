@@ -3,6 +3,7 @@
 export module svt.model.ast;
 
 import std;
+import svt.model.token;
 
 namespace svt::model {
 
@@ -25,12 +26,12 @@ export class ContinuousAssign;
 export class ModuleDeclaration;
 
 export struct ParameterTypeDeclaration : Declaration {
-  std::vector<std::string_view> default_type;
+  std::span<Token const> default_type;
 };
 
 export struct ParameterValueDeclaration : Declaration {
-  std::vector<std::string_view> type_specifier;
-  std::vector<std::string_view> default_value;
+  std::span<Token const> type_specifier;
+  std::span<Token const> default_value;
 };
 
 export using ParameterDeclaration =
@@ -68,8 +69,8 @@ struct NetDeclaration : Declaration {
 };
 
 struct ContinuousAssign {
-  std::vector<std::string_view> left_hand_side;
-  std::vector<std::string_view> right_hand_side;
+  std::span<Token const> left_hand_side;
+  std::span<Token const> right_hand_side;
 };
 
 export using ModuleItem = std::variant<ContinuousAssign>;

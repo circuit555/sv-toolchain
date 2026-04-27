@@ -57,6 +57,8 @@ export class Parser final {
                    std::string_view context) -> void;
   auto ParseDeclaration() -> ::svt::model::AstNode;
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
+  auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
+  auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
   auto ParseParameterTokens() -> std::span<::svt::model::Token const>;
   auto ParseParameters() -> std::vector<::svt::model::ParameterDeclaration>;
   auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;

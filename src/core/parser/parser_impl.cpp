@@ -21,6 +21,8 @@ using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
 using PortDeclaration = ::svt::model::PortDeclaration;
 using PortDirection = ::svt::model::PortDirection;
+using ContinuousAssign = ::svt::model::ContinuousAssign;
+using ModuleItem = ::svt::model::ModuleItem;
 
 namespace {
 
@@ -261,6 +263,15 @@ auto JoinLexemes(std::span<std::string_view const> const lexemes)
   return result;
 }
 
+auto TokenLexemes(std::span<Token const> const tokens)
+    -> std::vector<std::string_view> {
+  return tokens |
+         rng::views::transform([](Token const& token) -> std::string_view {
+           return token.lexeme;
+         }) |
+         rng::to<std::vector>();
+}
+
 auto ToString(PortDirection const direction) -> std::string_view {
   switch (direction) {
     case PortDirection::kInput:
@@ -304,6 +315,23 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
     fmt::println("  ports:");
     for (auto const& port : module_declaration.ports) {
       fmt::println("    {} {}", ToString(port.direction), port.name);
+    }
+  }
+
+  if (not rng::empty(module_declaration.items)) {
+    fmt::println("  items:");
+    for (auto const& item : module_declaration.items) {
+      std::visit(
+          [](auto const& resolved_item) -> void {
+            if constexpr (std::same_as<
+                              std::remove_cvref_t<decltype(resolved_item)>,
+                              ContinuousAssign>) {
+              fmt::println("    assign {} = {}",
+                           JoinLexemes(resolved_item.left_hand_side),
+                           JoinLexemes(resolved_item.right_hand_side));
+            }
+          },
+          item);
     }
   }
 }
@@ -729,16 +757,95 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
     m_token_iterator++;
   }
 
-  // FIXME: this is a hack to consume the rest of the module body
+  module_declaration.items = ParseModuleItems();
+
+  return module_declaration;
+}
+
+auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
+  std::vector<ModuleItem> items{};
+
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
-    m_token_iterator++;
+    if (m_token_iterator->type == TokenType::kKeyword and
+        m_token_iterator->lexeme == "assign") {
+      items.emplace_back(std::in_place_type<ContinuousAssign>,
+                         ParseContinuousAssign());
+      continue;
+    }
+
+    while (m_token_iterator->type != TokenType::kEndOfFile and
+           m_token_iterator->type != TokenType::kSemicolon and
+           m_token_iterator->lexeme != "endmodule") {
+      m_token_iterator++;
+    }
+
+    if (m_token_iterator->type == TokenType::kSemicolon) {
+      m_token_iterator++;
+    }
   }
+
   if (m_token_iterator->lexeme == "endmodule") {
     m_token_iterator++;
   }
 
-  return module_declaration;
+  return items;
+}
+
+auto Parser::ParseContinuousAssign() -> ContinuousAssign {
+  ExpectToken(TokenType::kKeyword, "continuous assignment");
+
+  auto const assignment_begin_iterator{m_token_iterator};
+
+  auto const equals_operator_iterator{rng::find_if(
+      std::span{rng::next(m_token_iterator, 1, rng::cend(m_tokens)),
+                rng::cend(m_tokens)},
+      [](Token const& token) -> bool {
+        return token.type == TokenType::kEndOfFile or
+               token.type == TokenType::kSemicolon or token.lexeme == "=";
+      })};
+  if (equals_operator_iterator == rng::cend(m_tokens) or
+      equals_operator_iterator->lexeme != "=") [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected '=' while parsing continuous assignment at ({}, {})",
+        equals_operator_iterator->location.row,
+        equals_operator_iterator->location.column)};
+  }
+  if (assignment_begin_iterator == equals_operator_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected left hand side while parsing continuous assignment "
+        "at ({}, {})",
+        assignment_begin_iterator->location.row,
+        assignment_begin_iterator->location.column)};
+  }
+
+  auto const assignment_end_iterator{rng::find_if(
+      std::span{rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)),
+                rng::cend(m_tokens)},
+      [](Token const& token) -> bool {
+        return token.type == TokenType::kSemicolon or
+               token.type == TokenType::kEndOfFile;
+      })};
+  if (rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)) ==
+      assignment_end_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected right hand side while parsing continuous assignment "
+        "at ({}, {})",
+        equals_operator_iterator->location.row,
+        equals_operator_iterator->location.column)};
+  }
+
+  ContinuousAssign continuous_assign{};
+  continuous_assign.left_hand_side = TokenLexemes(
+      std::span{assignment_begin_iterator, equals_operator_iterator});
+  continuous_assign.right_hand_side = TokenLexemes(
+      std::span{rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)),
+                assignment_end_iterator});
+
+  m_token_iterator = assignment_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "continuous assignment");
+
+  return continuous_assign;
 }
 
 auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
@@ -874,3 +981,9 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
 }
 
 }  // namespace svt::core
+
+// TODO(): make kEquals token
+//
+// TODO(): do we really need std::vector<std::string_view> stuff for holding
+// tokens if they are occurring closeby in token span, why not instead use a
+// subspan for them?

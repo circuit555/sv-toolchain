@@ -21,6 +21,7 @@ class NumberExpression;
 class BinaryExpression;
 export class PortDeclaration;
 class NetDeclaration;
+export class ContinuousAssign;
 export class ModuleDeclaration;
 
 export struct ParameterTypeDeclaration : Declaration {
@@ -66,10 +67,17 @@ struct NetDeclaration : Declaration {
   AstNodePointer lsb;
 };
 
+struct ContinuousAssign {
+  std::vector<std::string_view> left_hand_side;
+  std::vector<std::string_view> right_hand_side;
+};
+
+export using ModuleItem = std::variant<ContinuousAssign>;
+
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;
   std::vector<PortDeclaration> ports;
-  std::vector<AstNodePointer> items;
+  std::vector<ModuleItem> items;
 };
 
 }  // namespace svt::model

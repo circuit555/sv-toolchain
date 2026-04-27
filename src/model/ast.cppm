@@ -3,6 +3,7 @@
 export module svt.model.ast;
 
 import std;
+import svt.model.token;
 
 namespace svt::model {
 
@@ -10,7 +11,7 @@ enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
 
 export enum class PortDirection : std::uint8_t { kInput, kOutput };
 
-enum class NetType : std::uint8_t { kWire, kLogic };
+export enum class NetType : std::uint8_t { kWire, kLogic };
 
 struct Declaration {
   std::string_view name;
@@ -20,16 +21,17 @@ class IdentifierExpression;
 class NumberExpression;
 class BinaryExpression;
 export class PortDeclaration;
-class NetDeclaration;
+export class NetDeclaration;
+export class ContinuousAssign;
 export class ModuleDeclaration;
 
 export struct ParameterTypeDeclaration : Declaration {
-  std::vector<std::string_view> default_type;
+  std::span<Token const> default_type;
 };
 
 export struct ParameterValueDeclaration : Declaration {
-  std::vector<std::string_view> type_specifier;
-  std::vector<std::string_view> default_value;
+  std::span<Token const> type_specifier;
+  std::span<Token const> default_value;
 };
 
 export using ParameterDeclaration =
@@ -62,14 +64,20 @@ struct PortDeclaration : Declaration {
 
 struct NetDeclaration : Declaration {
   NetType type;
-  AstNodePointer msb;
-  AstNodePointer lsb;
+  std::span<Token const> type_specifier;
 };
+
+struct ContinuousAssign {
+  std::span<Token const> left_hand_side;
+  std::span<Token const> right_hand_side;
+};
+
+export using ModuleItem = std::variant<NetDeclaration, ContinuousAssign>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;
   std::vector<PortDeclaration> ports;
-  std::vector<AstNodePointer> items;
+  std::vector<ModuleItem> items;
 };
 
 }  // namespace svt::model

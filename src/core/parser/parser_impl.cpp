@@ -21,6 +21,10 @@ using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
 using PortDeclaration = ::svt::model::PortDeclaration;
 using PortDirection = ::svt::model::PortDirection;
+using NetDeclaration = ::svt::model::NetDeclaration;
+using NetType = ::svt::model::NetType;
+using ContinuousAssign = ::svt::model::ContinuousAssign;
+using ModuleItem = ::svt::model::ModuleItem;
 
 namespace {
 
@@ -96,7 +100,7 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
       std::span{rng::next(parameter_begin_iterator, 1, rng::cend(tokens)),
                 rng::cend(tokens)},
       [](Token const& token) -> bool {
-        return token.type == TokenType::kOperator and token.lexeme == "=";
+        return token.type == TokenType::kEquals;
       })};
 
   auto const tokens_slice{
@@ -156,14 +160,9 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
 
       value_parameter.name = parameter_name_riterator->lexeme;
 
-      value_parameter.type_specifier =
-          std::span{rng::cbegin(tokens_slice),
-                    rng::prev(parameter_name_riterator.base(), 1,
-                              rng::cbegin(tokens_slice))} |
-          rng::views::transform([](auto const& token) -> std::string_view {
-            return token.lexeme;
-          }) |
-          rng::to<std::vector>();
+      value_parameter.type_specifier = std::span{
+          rng::cbegin(tokens_slice), rng::prev(parameter_name_riterator.base(),
+                                               1, rng::cbegin(tokens_slice))};
 
       return value_parameter;
     }();
@@ -182,14 +181,9 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
             }
           }();
 
-          default_value =
-              std::span{
-                  rng::next(equals_operator_iterator, 1, rng::cend(tokens)),
-                  rng::cend(tokens)} |
-              rng::views::transform([](auto const& token) -> std::string_view {
-                return token.lexeme;
-              }) |
-              rng::to<std::vector>();
+          default_value = std::span{
+              rng::next(equals_operator_iterator, 1, rng::cend(tokens)),
+              rng::cend(tokens)};
         },
         parameter);
   }
@@ -249,14 +243,13 @@ auto ParsePortDeclaration(
   return port;
 }
 
-auto JoinLexemes(std::span<std::string_view const> const lexemes)
-    -> std::string {
+auto JoinLexemes(std::span<Token const> const tokens) -> std::string {
   auto result = std::string{};
-  for (auto const lexeme : lexemes) {
+  for (auto const& token : tokens) {
     if (not rng::empty(result)) {
       result += " ";
     }
-    result += lexeme;
+    result += token.lexeme;
   }
   return result;
 }
@@ -267,6 +260,17 @@ auto ToString(PortDirection const direction) -> std::string_view {
       return "input";
     case PortDirection::kOutput:
       return "output";
+  }
+
+  std::unreachable();
+}
+
+auto ToString(NetType const type) -> std::string_view {
+  switch (type) {
+    case NetType::kWire:
+      return "wire";
+    case NetType::kLogic:
+      return "logic";
   }
 
   std::unreachable();
@@ -304,6 +308,35 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
     fmt::println("  ports:");
     for (auto const& port : module_declaration.ports) {
       fmt::println("    {} {}", ToString(port.direction), port.name);
+    }
+  }
+
+  if (not rng::empty(module_declaration.items)) {
+    fmt::println("  items:");
+    for (auto const& item : module_declaration.items) {
+      std::visit(
+          [](auto const& resolved_item) -> void {
+            if constexpr (std::same_as<
+                              std::remove_cvref_t<decltype(resolved_item)>,
+                              NetDeclaration>) {
+              auto const type_specifier{
+                  JoinLexemes(resolved_item.type_specifier)};
+              if (rng::empty(type_specifier)) {
+                fmt::println("    {} {}", ToString(resolved_item.type),
+                             resolved_item.name);
+              } else {
+                fmt::println("    {} {} {}", ToString(resolved_item.type),
+                             type_specifier, resolved_item.name);
+              }
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ContinuousAssign>) {
+              fmt::println("    assign {} = {}",
+                           JoinLexemes(resolved_item.left_hand_side),
+                           JoinLexemes(resolved_item.right_hand_side));
+            }
+          },
+          item);
     }
   }
 }
@@ -408,9 +441,15 @@ auto Lexer::ScanNext() -> Token {
                  .location = token_source_location};
   }
 
+  if (character == '=') {
+    return Token{.type = TokenType::kEquals,
+                 .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
+                 .location = token_source_location};
+  }
+
   // single-char operators
-  static std::array<char, 8> constexpr kSingleCharOperators{'+', '-', '*', '/',
-                                                            '<', '>', '=', '!'};
+  static std::array<char, 7> constexpr kSingleCharOperators{'+', '-', '*', '/',
+                                                            '<', '>', '!'};
   if (rng::contains(kSingleCharOperators, character)) {
     return Token{.type = TokenType::kOperator,
                  .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
@@ -466,9 +505,9 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
-  static std::array<std::string_view, 11> constexpr kKeywords{
-      "module", "endmodule", "parameter", "wire",   "assign", "begin",
-      "end",    "if",        "else",      "always", "initial"};
+  static std::array<std::string_view, 12> constexpr kKeywords{
+      "module", "endmodule", "parameter", "wire", "logic",  "assign",
+      "begin",  "end",       "if",        "else", "always", "initial"};
 
   auto const start_position{m_position - 1};
 
@@ -729,16 +768,176 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
     m_token_iterator++;
   }
 
-  // FIXME: this is a hack to consume the rest of the module body
+  module_declaration.items = ParseModuleItems();
+
+  return module_declaration;
+}
+
+auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
+  std::vector<ModuleItem> items{};
+
+  auto is_net_type{[](Token const& token) -> bool {
+    return token.type == TokenType::kKeyword and
+           (token.lexeme == "wire" or token.lexeme == "logic");
+  }};
+
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
-    m_token_iterator++;
+    if (is_net_type(*m_token_iterator)) {
+      items.emplace_back(std::in_place_type<NetDeclaration>,
+                         ParseNetDeclaration());
+      continue;
+    }
+
+    if (m_token_iterator->type == TokenType::kKeyword and
+        m_token_iterator->lexeme == "assign") {
+      items.emplace_back(std::in_place_type<ContinuousAssign>,
+                         ParseContinuousAssign());
+      continue;
+    }
+
+    while (m_token_iterator->type != TokenType::kEndOfFile and
+           m_token_iterator->type != TokenType::kSemicolon and
+           m_token_iterator->lexeme != "endmodule") {
+      m_token_iterator++;
+    }
+
+    if (m_token_iterator->type == TokenType::kSemicolon) {
+      m_token_iterator++;
+    }
   }
+
   if (m_token_iterator->lexeme == "endmodule") {
     m_token_iterator++;
   }
 
-  return module_declaration;
+  return items;
+}
+
+auto Parser::ParseNetDeclaration() -> NetDeclaration {
+  auto parse_net_type{[](Token const& token) -> NetType {
+    if (token.lexeme == "wire") {
+      return NetType::kWire;
+    }
+
+    if (token.lexeme == "logic") {
+      return NetType::kLogic;
+    }
+
+    throw std::runtime_error{
+        fmt::format("[Parser] expected net type at ({}, {})",
+                    token.location.row, token.location.column)};
+  }};
+
+  auto const net_type{parse_net_type(*m_token_iterator)};
+  m_token_iterator++;
+
+  auto const declaration_begin_iterator{m_token_iterator};
+
+  auto const declaration_end_iterator{
+      rng::find_if(std::span{m_token_iterator, rng::cend(m_tokens)},
+                   [](Token const& token) -> bool {
+                     return token.type == TokenType::kSemicolon or
+                            token.type == TokenType::kEndOfFile;
+                   })};
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected ';' while parsing net declaration at ({}, {})",
+        declaration_begin_iterator->location.row,
+        declaration_begin_iterator->location.column)};
+  }
+  if (declaration_begin_iterator == declaration_end_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected net name while parsing net declaration at ({}, {})",
+        declaration_end_iterator->location.row,
+        declaration_end_iterator->location.column)};
+  }
+
+  auto reversed_declaration{
+      std::span{declaration_begin_iterator, declaration_end_iterator} |
+      rng::views::reverse};
+  auto const name_riterator{
+      rng::find_if(reversed_declaration, [](Token const& token) -> bool {
+        return token.type == TokenType::kIdentifier;
+      })};
+  if (name_riterator == rng::cend(reversed_declaration)) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected net name while parsing net declaration at ({}, {})",
+        declaration_begin_iterator->location.row,
+        declaration_begin_iterator->location.column)};
+  }
+  // NOTE(): we do not use bounded check for rng::prev() in following as we are
+  // assured that `reversed_declaration` is not empty
+  auto const name_iterator{std::prev(name_riterator.base())};
+
+  NetDeclaration net_declaration{};
+  net_declaration.type = net_type;
+  net_declaration.name = name_iterator->lexeme;
+  net_declaration.type_specifier =
+      std::span{declaration_begin_iterator, name_iterator};
+
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "net declaration");
+
+  return net_declaration;
+}
+
+auto Parser::ParseContinuousAssign() -> ContinuousAssign {
+  ExpectToken(TokenType::kKeyword, "continuous assignment");
+
+  auto const assignment_begin_iterator{m_token_iterator};
+
+  auto const equals_operator_iterator{rng::find_if(
+      std::span{rng::next(m_token_iterator, 1, rng::cend(m_tokens)),
+                rng::cend(m_tokens)},
+      [](Token const& token) -> bool {
+        return token.type == TokenType::kEndOfFile or
+               token.type == TokenType::kSemicolon or
+               token.type == TokenType::kEquals;
+      })};
+  if (equals_operator_iterator == rng::cend(m_tokens) or
+      equals_operator_iterator->type != TokenType::kEquals) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected '=' while parsing continuous assignment at ({}, {})",
+        equals_operator_iterator->location.row,
+        equals_operator_iterator->location.column)};
+  }
+  if (assignment_begin_iterator == equals_operator_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected left hand side while parsing continuous assignment "
+        "at ({}, {})",
+        assignment_begin_iterator->location.row,
+        assignment_begin_iterator->location.column)};
+  }
+
+  auto const assignment_end_iterator{rng::find_if(
+      std::span{rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)),
+                rng::cend(m_tokens)},
+      [](Token const& token) -> bool {
+        return token.type == TokenType::kSemicolon or
+               token.type == TokenType::kEndOfFile;
+      })};
+  if (rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)) ==
+      assignment_end_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected right hand side while parsing continuous assignment "
+        "at ({}, {})",
+        equals_operator_iterator->location.row,
+        equals_operator_iterator->location.column)};
+  }
+
+  ContinuousAssign continuous_assign{};
+  continuous_assign.left_hand_side =
+      std::span{assignment_begin_iterator, equals_operator_iterator};
+  continuous_assign.right_hand_side =
+      std::span{rng::next(equals_operator_iterator, 1, rng::cend(m_tokens)),
+                assignment_end_iterator};
+
+  m_token_iterator = assignment_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "continuous assignment");
+
+  return continuous_assign;
 }
 
 auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {

@@ -28,12 +28,13 @@ auto RequireTokens(std::span<Token const> const tokens,
 }  // namespace
 
 TEST_CASE("Identifier and keyword tokens", "[lexer]") {
-  std::string src = "module foo endmodule";
+  std::string src = "module foo logic endmodule";
   Lexer lexer{std::move(src)};
 
   std::array expected{
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "module"},
       ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "foo"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "logic"},
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "endmodule"},
       ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);
@@ -63,7 +64,7 @@ TEST_CASE("String literal", "[lexer]") {
 }
 
 TEST_CASE("Operators and punctuation", "[lexer]") {
-  std::string src = "+ - * / == != && || < <= > >= ( ) ; , [ ] { } # : ?";
+  std::string src = "+ - * / = == != && || < <= > >= ( ) ; , [ ] { } # : ?";
   Lexer lexer{std::move(src)};
 
   std::array expected{
@@ -71,6 +72,7 @@ TEST_CASE("Operators and punctuation", "[lexer]") {
       ExpectedToken{.type = TokenType::kOperator, .lexeme = "-"},
       ExpectedToken{.type = TokenType::kOperator, .lexeme = "*"},
       ExpectedToken{.type = TokenType::kOperator, .lexeme = "/"},
+      ExpectedToken{.type = TokenType::kEquals, .lexeme = "="},
       ExpectedToken{.type = TokenType::kOperator, .lexeme = "=="},
       ExpectedToken{.type = TokenType::kOperator, .lexeme = "!="},
       ExpectedToken{.type = TokenType::kOperator, .lexeme = "&&"},
@@ -131,7 +133,7 @@ TEST_CASE("Lex module declaration with parameter and vector", "[lexer]") {
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "parameter"},
       ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "int"},
       ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "N"},
-      ExpectedToken{.type = TokenType::kOperator, .lexeme = "="},
+      ExpectedToken{.type = TokenType::kEquals, .lexeme = "="},
       ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "8"},
       ExpectedToken{.type = TokenType::kRParen, .lexeme = ")"},
       ExpectedToken{.type = TokenType::kLParen, .lexeme = "("},

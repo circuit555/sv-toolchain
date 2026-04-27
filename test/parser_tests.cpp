@@ -11,6 +11,7 @@ using ModuleDeclaration = svt::model::ModuleDeclaration;
 using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
+using ContinuousAssign = svt::model::ContinuousAssign;
 }  // namespace
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
@@ -151,4 +152,41 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   REQUIRE(module_declaration.name == "foo");
   REQUIRE(module_declaration.parameters.size() == 1);
   REQUIRE(module_declaration.ports.empty());
+  REQUIRE(module_declaration.items.empty());
+}
+
+TEST_CASE("Parse module continuous assignments", "[parser]") {
+  std::string src = R"(
+    module foo (
+      input a,
+      input b,
+      output y,
+      output z
+    );
+      assign y = a + b;
+      wire ignored;
+      assign z = y;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& y_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(0))};
+  REQUIRE(y_assign.left_hand_side == std::vector<std::string_view>{"y"});
+  REQUIRE(y_assign.right_hand_side ==
+          std::vector<std::string_view>{"a", "+", "b"});
+
+  auto const& z_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(1))};
+  REQUIRE(z_assign.left_hand_side == std::vector<std::string_view>{"z"});
+  REQUIRE(z_assign.right_hand_side == std::vector<std::string_view>{"y"});
 }

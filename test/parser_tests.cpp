@@ -12,6 +12,8 @@ using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 using ContinuousAssign = svt::model::ContinuousAssign;
+using NetDeclaration = svt::model::NetDeclaration;
+using NetType = svt::model::NetType;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -147,6 +149,7 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   std::string src = R"(
     module foo #(parameter int N = 8) ();
       wire [N-1 : 0] bus;
+      logic ready;
     endmodule
   )";
   Parser parser{std::move(src)};
@@ -160,7 +163,20 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   REQUIRE(module_declaration.name == "foo");
   REQUIRE(module_declaration.parameters.size() == 1);
   REQUIRE(module_declaration.ports.empty());
-  REQUIRE(module_declaration.items.empty());
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& bus_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(0))};
+  REQUIRE(bus_declaration.name == "bus");
+  REQUIRE(bus_declaration.type == NetType::kWire);
+  REQUIRE(Lexemes(bus_declaration.type_specifier) ==
+          std::vector<std::string_view>{"[", "N", "-", "1", ":", "0", "]"});
+
+  auto const& ready_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(ready_declaration.name == "ready");
+  REQUIRE(ready_declaration.type == NetType::kLogic);
+  REQUIRE(ready_declaration.type_specifier.empty());
 }
 
 TEST_CASE("Parse module continuous assignments", "[parser]") {
@@ -172,7 +188,7 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
       output z
     );
       assign y = a + b;
-      wire ignored;
+      initial ignored;
       assign z = y;
     endmodule
   )";

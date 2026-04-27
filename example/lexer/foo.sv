@@ -11,4 +11,5 @@ module foo #(
   valid
 );
   wire [N-1 : 0] internal_bus;
+  logic ready;
 endmodule

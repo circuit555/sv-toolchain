@@ -11,7 +11,7 @@ enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
 
 export enum class PortDirection : std::uint8_t { kInput, kOutput };
 
-enum class NetType : std::uint8_t { kWire, kLogic };
+export enum class NetType : std::uint8_t { kWire, kLogic };
 
 struct Declaration {
   std::string_view name;
@@ -21,7 +21,7 @@ class IdentifierExpression;
 class NumberExpression;
 class BinaryExpression;
 export class PortDeclaration;
-class NetDeclaration;
+export class NetDeclaration;
 export class ContinuousAssign;
 export class ModuleDeclaration;
 
@@ -64,8 +64,7 @@ struct PortDeclaration : Declaration {
 
 struct NetDeclaration : Declaration {
   NetType type;
-  AstNodePointer msb;
-  AstNodePointer lsb;
+  std::span<Token const> type_specifier;
 };
 
 struct ContinuousAssign {
@@ -73,7 +72,7 @@ struct ContinuousAssign {
   std::span<Token const> right_hand_side;
 };
 
-export using ModuleItem = std::variant<ContinuousAssign>;
+export using ModuleItem = std::variant<NetDeclaration, ContinuousAssign>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

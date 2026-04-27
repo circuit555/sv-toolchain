@@ -21,6 +21,8 @@ using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
 using PortDeclaration = ::svt::model::PortDeclaration;
 using PortDirection = ::svt::model::PortDirection;
+using NetDeclaration = ::svt::model::NetDeclaration;
+using NetType = ::svt::model::NetType;
 using ContinuousAssign = ::svt::model::ContinuousAssign;
 using ModuleItem = ::svt::model::ModuleItem;
 
@@ -263,6 +265,17 @@ auto ToString(PortDirection const direction) -> std::string_view {
   std::unreachable();
 }
 
+auto ToString(NetType const type) -> std::string_view {
+  switch (type) {
+    case NetType::kWire:
+      return "wire";
+    case NetType::kLogic:
+      return "logic";
+  }
+
+  std::unreachable();
+}
+
 auto PrintParameter(ParameterDeclaration const& parameter) -> void {
   std::visit(
       [](auto const& resolved_parameter) -> void {
@@ -305,7 +318,19 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
           [](auto const& resolved_item) -> void {
             if constexpr (std::same_as<
                               std::remove_cvref_t<decltype(resolved_item)>,
-                              ContinuousAssign>) {
+                              NetDeclaration>) {
+              auto const type_specifier{
+                  JoinLexemes(resolved_item.type_specifier)};
+              if (rng::empty(type_specifier)) {
+                fmt::println("    {} {}", ToString(resolved_item.type),
+                             resolved_item.name);
+              } else {
+                fmt::println("    {} {} {}", ToString(resolved_item.type),
+                             type_specifier, resolved_item.name);
+              }
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ContinuousAssign>) {
               fmt::println("    assign {} = {}",
                            JoinLexemes(resolved_item.left_hand_side),
                            JoinLexemes(resolved_item.right_hand_side));
@@ -480,9 +505,9 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
-  static std::array<std::string_view, 11> constexpr kKeywords{
-      "module", "endmodule", "parameter", "wire",   "assign", "begin",
-      "end",    "if",        "else",      "always", "initial"};
+  static std::array<std::string_view, 12> constexpr kKeywords{
+      "module", "endmodule", "parameter", "wire", "logic",  "assign",
+      "begin",  "end",       "if",        "else", "always", "initial"};
 
   auto const start_position{m_position - 1};
 
@@ -751,8 +776,19 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
 auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
   std::vector<ModuleItem> items{};
 
+  auto is_net_type{[](Token const& token) -> bool {
+    return token.type == TokenType::kKeyword and
+           (token.lexeme == "wire" or token.lexeme == "logic");
+  }};
+
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
+    if (is_net_type(*m_token_iterator)) {
+      items.emplace_back(std::in_place_type<NetDeclaration>,
+                         ParseNetDeclaration());
+      continue;
+    }
+
     if (m_token_iterator->type == TokenType::kKeyword and
         m_token_iterator->lexeme == "assign") {
       items.emplace_back(std::in_place_type<ContinuousAssign>,
@@ -776,6 +812,75 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
   }
 
   return items;
+}
+
+auto Parser::ParseNetDeclaration() -> NetDeclaration {
+  auto parse_net_type{[](Token const& token) -> NetType {
+    if (token.lexeme == "wire") {
+      return NetType::kWire;
+    }
+
+    if (token.lexeme == "logic") {
+      return NetType::kLogic;
+    }
+
+    throw std::runtime_error{
+        fmt::format("[Parser] expected net type at ({}, {})",
+                    token.location.row, token.location.column)};
+  }};
+
+  auto const net_type{parse_net_type(*m_token_iterator)};
+  m_token_iterator++;
+
+  auto const declaration_begin_iterator{m_token_iterator};
+
+  auto const declaration_end_iterator{
+      rng::find_if(std::span{m_token_iterator, rng::cend(m_tokens)},
+                   [](Token const& token) -> bool {
+                     return token.type == TokenType::kSemicolon or
+                            token.type == TokenType::kEndOfFile;
+                   })};
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected ';' while parsing net declaration at ({}, {})",
+        declaration_begin_iterator->location.row,
+        declaration_begin_iterator->location.column)};
+  }
+  if (declaration_begin_iterator == declaration_end_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected net name while parsing net declaration at ({}, {})",
+        declaration_end_iterator->location.row,
+        declaration_end_iterator->location.column)};
+  }
+
+  auto reversed_declaration{
+      std::span{declaration_begin_iterator, declaration_end_iterator} |
+      rng::views::reverse};
+  auto const name_riterator{
+      rng::find_if(reversed_declaration, [](Token const& token) -> bool {
+        return token.type == TokenType::kIdentifier;
+      })};
+  if (name_riterator == rng::cend(reversed_declaration)) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected net name while parsing net declaration at ({}, {})",
+        declaration_begin_iterator->location.row,
+        declaration_begin_iterator->location.column)};
+  }
+  // NOTE(): we do not use bounded check for rng::prev() in following as we are
+  // assured that `reversed_declaration` is not empty
+  auto const name_iterator{std::prev(name_riterator.base())};
+
+  NetDeclaration net_declaration{};
+  net_declaration.type = net_type;
+  net_declaration.name = name_iterator->lexeme;
+  net_declaration.type_specifier =
+      std::span{declaration_begin_iterator, name_iterator};
+
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "net declaration");
+
+  return net_declaration;
 }
 
 auto Parser::ParseContinuousAssign() -> ContinuousAssign {

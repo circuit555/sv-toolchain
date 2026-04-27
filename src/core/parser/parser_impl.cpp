@@ -98,7 +98,7 @@ auto ParseParameterDeclaration(std::span<Token const> const tokens)
       std::span{rng::next(parameter_begin_iterator, 1, rng::cend(tokens)),
                 rng::cend(tokens)},
       [](Token const& token) -> bool {
-        return token.type == TokenType::kOperator and token.lexeme == "=";
+        return token.type == TokenType::kEquals;
       })};
 
   auto const tokens_slice{
@@ -436,9 +436,15 @@ auto Lexer::ScanNext() -> Token {
                  .location = token_source_location};
   }
 
+  if (character == '=') {
+    return Token{.type = TokenType::kEquals,
+                 .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
+                 .location = token_source_location};
+  }
+
   // single-char operators
-  static std::array<char, 8> constexpr kSingleCharOperators{'+', '-', '*', '/',
-                                                            '<', '>', '=', '!'};
+  static std::array<char, 7> constexpr kSingleCharOperators{'+', '-', '*', '/',
+                                                            '<', '>', '!'};
   if (rng::contains(kSingleCharOperators, character)) {
     return Token{.type = TokenType::kOperator,
                  .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
@@ -802,10 +808,11 @@ auto Parser::ParseContinuousAssign() -> ContinuousAssign {
                 rng::cend(m_tokens)},
       [](Token const& token) -> bool {
         return token.type == TokenType::kEndOfFile or
-               token.type == TokenType::kSemicolon or token.lexeme == "=";
+               token.type == TokenType::kSemicolon or
+               token.type == TokenType::kEquals;
       })};
   if (equals_operator_iterator == rng::cend(m_tokens) or
-      equals_operator_iterator->lexeme != "=") [[unlikely]] {
+      equals_operator_iterator->type != TokenType::kEquals) [[unlikely]] {
     throw std::runtime_error{fmt::format(
         "[Parser] expected '=' while parsing continuous assignment at ({}, {})",
         equals_operator_iterator->location.row,
@@ -982,8 +989,6 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
 
 }  // namespace svt::core
 
-// TODO(): make kEquals token
-//
 // TODO(): do we really need std::vector<std::string_view> stuff for holding
 // tokens if they are occurring closeby in token span, why not instead use a
 // subspan for them?

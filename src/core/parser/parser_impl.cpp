@@ -24,6 +24,7 @@ using PortDirection = ::svt::model::PortDirection;
 using NetDeclaration = ::svt::model::NetDeclaration;
 using NetType = ::svt::model::NetType;
 using ContinuousAssign = ::svt::model::ContinuousAssign;
+using AlwaysBlock = ::svt::model::AlwaysBlock;
 using ModuleItem = ::svt::model::ModuleItem;
 
 namespace {
@@ -46,6 +47,11 @@ inline auto IsClosingDelimiter(Token const& token) -> bool {
 
 inline auto IsListSeparator(Token const& token) -> bool {
   return token.type == TokenType::kComma;
+}
+
+inline auto IsKeyword(Token const& token, std::string_view const lexeme)
+    -> bool {
+  return token.type == TokenType::kKeyword and token.lexeme == lexeme;
 }
 
 inline auto IsHorizontalWhiteSpace(char const character) -> bool {
@@ -334,6 +340,12 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
               fmt::println("    assign {} = {}",
                            JoinLexemes(resolved_item.left_hand_side),
                            JoinLexemes(resolved_item.right_hand_side));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              AlwaysBlock>) {
+              fmt::println("    always {} {}",
+                           JoinLexemes(resolved_item.event_control),
+                           JoinLexemes(resolved_item.body));
             }
           },
           item);
@@ -418,6 +430,10 @@ auto Lexer::ScanNext() -> Token {
                    .location = token_source_location};
     case '?':
       return Token{.type = TokenType::kQuestion,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '@':
+      return Token{.type = TokenType::kAt,
                    .lexeme = punctuation_lexeme,
                    .location = token_source_location};
     default:
@@ -796,6 +812,17 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
       continue;
     }
 
+    if (m_token_iterator->type == TokenType::kKeyword and
+        m_token_iterator->lexeme == "always") {
+      ExpectToken(TokenType::kKeyword, "always block");
+      items.emplace_back(std::in_place_type<AlwaysBlock>,
+                         ParseAlwaysEventControl(),
+                         IsKeyword(*m_token_iterator, "begin")
+                             ? ParseAlwaysBeginEndBody()
+                             : ParseAlwaysSingleStatementBody());
+      continue;
+    }
+
     while (m_token_iterator->type != TokenType::kEndOfFile and
            m_token_iterator->type != TokenType::kSemicolon and
            m_token_iterator->lexeme != "endmodule") {
@@ -938,6 +965,94 @@ auto Parser::ParseContinuousAssign() -> ContinuousAssign {
   ExpectToken(TokenType::kSemicolon, "continuous assignment");
 
   return continuous_assign;
+}
+
+auto Parser::ParseAlwaysEventControl() -> std::span<Token const> {
+  if (m_token_iterator->type != TokenType::kAt) {
+    return {};
+  }
+
+  auto const event_begin_iterator{m_token_iterator};
+
+  m_token_iterator++;
+  if (m_token_iterator->type == TokenType::kLParen) {
+    auto parenthesis_depth{0UZ};
+    while (m_token_iterator->type != TokenType::kEndOfFile) {
+      if (m_token_iterator->type == TokenType::kLParen) {
+        parenthesis_depth++;
+      } else if (m_token_iterator->type == TokenType::kRParen) {
+        parenthesis_depth--;
+        if (std::cmp_equal(parenthesis_depth, 0UZ)) {
+          m_token_iterator++;
+          break;
+        }
+      }
+
+      m_token_iterator++;
+    }
+
+    if (std::cmp_not_equal(parenthesis_depth, 0UZ)) {
+      throw std::runtime_error{fmt::format(
+          "[Parser] expected ')' while parsing always event control at ({}, "
+          "{})",
+          event_begin_iterator->location.row,
+          event_begin_iterator->location.column)};
+    }
+  } else {
+    m_token_iterator++;
+  }
+
+  return std::span{event_begin_iterator, m_token_iterator};
+}
+
+auto Parser::ParseAlwaysBeginEndBody() -> std::span<Token const> {
+  // consume `begin` token
+  ExpectToken(TokenType::kKeyword, "always block");
+
+  auto const body_begin_iterator{m_token_iterator};
+
+  auto block_depth{1UZ};
+  while (m_token_iterator->type != TokenType::kEndOfFile) {
+    if (IsKeyword(*m_token_iterator, "begin")) {
+      block_depth++;
+    } else if (IsKeyword(*m_token_iterator, "end")) {
+      block_depth--;
+      if (std::cmp_equal(block_depth, 0UZ)) {
+        auto const body{std::span{body_begin_iterator, m_token_iterator}};
+        m_token_iterator++;
+        return body;
+      }
+    }
+
+    m_token_iterator++;
+  }
+
+  throw std::runtime_error{fmt::format(
+      "[Parser] expected 'end' while parsing always block at ({}, {})",
+      body_begin_iterator->location.row, body_begin_iterator->location.column)};
+}
+
+auto Parser::ParseAlwaysSingleStatementBody() -> std::span<Token const> {
+  auto const body_begin_iterator{m_token_iterator};
+  auto const body_end_iterator{
+      rng::find_if(std::span{m_token_iterator, rng::cend(m_tokens)},
+                   [](Token const& token) -> bool {
+                     return token.type == TokenType::kSemicolon or
+                            token.type == TokenType::kEndOfFile;
+                   })};
+
+  if (body_begin_iterator == body_end_iterator) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected statement while parsing always block at ({}, {})",
+        body_begin_iterator->location.row,
+        body_begin_iterator->location.column)};
+  }
+
+  auto const body{std::span{body_begin_iterator, body_end_iterator}};
+  m_token_iterator = body_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "always block");
+
+  return body;
 }
 
 auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {

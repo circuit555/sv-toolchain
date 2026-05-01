@@ -60,6 +60,9 @@ export class Parser final {
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
+  auto ParseAlwaysEventControl() -> std::span<::svt::model::Token const>;
+  auto ParseAlwaysBeginEndBody() -> std::span<::svt::model::Token const>;
+  auto ParseAlwaysSingleStatementBody() -> std::span<::svt::model::Token const>;
   auto ParseParameterTokens() -> std::span<::svt::model::Token const>;
   auto ParseParameters() -> std::vector<::svt::model::ParameterDeclaration>;
   auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;

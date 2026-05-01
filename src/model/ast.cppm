@@ -23,6 +23,7 @@ class BinaryExpression;
 export class PortDeclaration;
 export class NetDeclaration;
 export class ContinuousAssign;
+export class AlwaysBlock;
 export class ModuleDeclaration;
 
 export struct ParameterTypeDeclaration : Declaration {
@@ -72,7 +73,13 @@ struct ContinuousAssign {
   std::span<Token const> right_hand_side;
 };
 
-export using ModuleItem = std::variant<NetDeclaration, ContinuousAssign>;
+struct AlwaysBlock {
+  std::span<Token const> event_control;
+  std::span<Token const> body;
+};
+
+export using ModuleItem =
+    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

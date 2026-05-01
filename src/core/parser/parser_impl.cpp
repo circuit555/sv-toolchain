@@ -951,25 +951,24 @@ auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
 
   while (not is_parameter_list_end()) {
     auto const parameter_tokens{ParseParameterTokens()};
-    auto parameter{ParseParameterDeclaration(parameter_tokens)};
+    result.push_back(ParseParameterDeclaration(parameter_tokens));
 
     if (auto const has_declaration_prefix{
             not rng::empty(parameter_tokens) and
             IsParameterDeclarationPrefix(parameter_tokens)};
         not has_declaration_prefix and
-        not std::holds_alternative<ParameterTypeDeclaration>(parameter) and
-        not rng::empty(result)) {
-      auto& value_parameter{std::get<ParameterValueDeclaration>(parameter)};
-      auto const& previous_parameter{result.back()};
+        not std::holds_alternative<ParameterTypeDeclaration>(result.back()) and
+        rng::size(result) > 1) {
+      auto const& previous_parameter{result.at(result.size() - 2)};
+      auto& value_parameter{std::get<ParameterValueDeclaration>(result.back())};
 
       if (rng::empty(value_parameter.type_specifier)) {
         if (std::holds_alternative<ParameterTypeDeclaration>(
                 previous_parameter)) {
           ParameterTypeDeclaration type_parameter{};
           type_parameter.name = value_parameter.name;
-          type_parameter.default_type =
-              std::move(value_parameter.default_value);
-          parameter = std::move(type_parameter);
+          type_parameter.default_type = value_parameter.default_value;
+          result.back() = type_parameter;
         } else {
           value_parameter.type_specifier =
               std::get<ParameterValueDeclaration>(previous_parameter)
@@ -977,8 +976,6 @@ auto Parser::ParseParameters() -> std::vector<ParameterDeclaration> {
         }
       }
     }
-
-    result.push_back(std::move(parameter));
 
     if (m_token_iterator->type == TokenType::kComma) {
       m_token_iterator++;

@@ -2,6 +2,7 @@
 
 #include <catch2/catch_all.hpp>
 
+import std;
 import svt.model.ast;
 import svt.core.parser;
 
@@ -22,6 +23,19 @@ auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
     result.push_back(token.lexeme);
   }
   return result;
+}
+
+auto ReadExample(std::filesystem::path const& example_path) -> std::string {
+  auto const test_path{std::filesystem::path{__FILE__}.parent_path()};
+  std::ifstream file_stream{test_path / ".." / example_path,
+                            std::ios::binary | std::ios::ate};
+  REQUIRE(file_stream.is_open());
+
+  std::string source{};
+  source.resize(file_stream.tellg());
+  file_stream.seekg(0);
+  file_stream.read(source.data(), static_cast<std::streamsize>(source.size()));
+  return source;
 }
 }  // namespace
 
@@ -263,4 +277,23 @@ TEST_CASE("Parse module always blocks", "[parser]") {
           std::vector<std::string_view>{"q_shadow"});
   REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
           std::vector<std::string_view>{"q"});
+}
+
+TEST_CASE("Parse always block example file", "[parser]") {
+  auto src{ReadExample("example/lexer/always_foo.sv")};
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "always_foo");
+  REQUIRE(module_declaration.items.size() == 3);
+  REQUIRE(
+      std::holds_alternative<NetDeclaration>(module_declaration.items.at(0)));
+  REQUIRE(
+      std::holds_alternative<ContinuousAssign>(module_declaration.items.at(1)));
+  REQUIRE(std::holds_alternative<AlwaysBlock>(module_declaration.items.at(2)));
 }

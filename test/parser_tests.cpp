@@ -12,6 +12,7 @@ using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 using ContinuousAssign = svt::model::ContinuousAssign;
+using AlwaysBlock = svt::model::AlwaysBlock;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 
@@ -216,4 +217,50 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
           std::vector<std::string_view>{"z"});
   REQUIRE(Lexemes(z_assign.right_hand_side) ==
           std::vector<std::string_view>{"y"});
+}
+
+TEST_CASE("Parse module always blocks", "[parser]") {
+  std::string src = R"(
+    module foo (
+      input clk,
+      input rst_n,
+      input d,
+      output q
+    );
+      always @(posedge clk) begin
+        if (!rst_n) begin
+          q <= 0;
+        end else begin
+          q <= d;
+        end
+      end
+      assign q_shadow = q;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& always_block{
+      std::get<AlwaysBlock>(module_declaration.items.at(0))};
+  REQUIRE(Lexemes(always_block.event_control) ==
+          std::vector<std::string_view>{"@", "(", "posedge", "clk", ")"});
+  REQUIRE(Lexemes(always_block.body) ==
+          std::vector<std::string_view>{"if", "(", "!", "rst_n", ")", "begin",
+                                        "q", "<=", "0", ";", "end", "else",
+                                        "begin", "q", "<=", "d", ";", "end"});
+
+  auto const& continuous_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(1))};
+  REQUIRE(Lexemes(continuous_assign.left_hand_side) ==
+          std::vector<std::string_view>{"q_shadow"});
+  REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
+          std::vector<std::string_view>{"q"});
 }

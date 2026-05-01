@@ -64,7 +64,7 @@ TEST_CASE("String literal", "[lexer]") {
 }
 
 TEST_CASE("Operators and punctuation", "[lexer]") {
-  std::string src = "+ - * / = == != && || < <= > >= ( ) ; , [ ] { } # : ?";
+  std::string src = "+ - * / = == != && || < <= > >= ( ) ; , [ ] { } # : ? @";
   Lexer lexer{std::move(src)};
 
   std::array expected{
@@ -92,6 +92,7 @@ TEST_CASE("Operators and punctuation", "[lexer]") {
       ExpectedToken{.type = TokenType::kHash, .lexeme = "#"},
       ExpectedToken{.type = TokenType::kColon, .lexeme = ":"},
       ExpectedToken{.type = TokenType::kQuestion, .lexeme = "?"},
+      ExpectedToken{.type = TokenType::kAt, .lexeme = "@"},
       ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);
 }
@@ -110,7 +111,7 @@ comment */ foo)";
 }
 
 TEST_CASE("Unknown character throws", "[lexer]") {
-  std::string src = "@";
+  std::string src = "$";
 
   REQUIRE_THROWS_AS(Lexer{std::move(src)}, std::runtime_error);
 }

@@ -19,6 +19,7 @@ using GenerateBlock = svt::model::GenerateBlock;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
+using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -95,6 +96,35 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
   REQUIRE(implicit_value_parameter.type_specifier.empty());
   REQUIRE(Lexemes(implicit_value_parameter.default_value) ==
           std::vector<std::string_view>{"8"});
+}
+
+TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
+  std::string src = R"(
+    timeunit 1ns / 1ps;
+
+    package p;
+      parameter int x = 1;
+    endpackage
+
+    class C;
+      int i;
+    endclass
+
+    module foo ();
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 4);
+  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(0)).kind ==
+          "timeunit");
+  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(1)).kind ==
+          "package");
+  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(2)).kind ==
+          "class");
+  REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(3)).name == "foo");
 }
 
 TEST_CASE("Parse module ports", "[parser]") {
@@ -513,4 +543,19 @@ TEST_CASE("Parse module instantiation example file", "[parser]") {
           std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",",
                                         ".", "data", "(", "data", ")", ",",
                                         ".", "q", "(", "q", ")"});
+}
+
+TEST_CASE("Parse all SystemVerilog fixture as compilation unit", "[parser]") {
+  auto src{ReadFixture("all.sv")};
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(not translation_unit.empty());
+  REQUIRE(translation_unit.size() > 10);
+  REQUIRE(std::ranges::any_of(translation_unit, [](auto const& design_element) {
+    auto const* module_declaration{
+        std::get_if<ModuleDeclaration>(&design_element)};
+    return module_declaration != nullptr and module_declaration->name == "m9";
+  }));
 }

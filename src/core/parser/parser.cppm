@@ -16,7 +16,7 @@ export class Lexer final {
 
  private:
   template <std::size_t kOffset = 0>
-  [[nodiscard]] auto Peek() const -> char;
+  [[nodiscard]] auto Peek() const -> unsigned char;
   auto ScanNext() -> ::svt::model::Token;
   auto SkipWhiteSpaceAndComments() -> void;
   auto SkipHorizontalWhiteSpace() -> void;
@@ -26,6 +26,15 @@ export class Lexer final {
   auto ScanString(::svt::model::SourceLocation const& token_source_location)
       -> ::svt::model::Token;
   auto ScanIdentifierOrKeyword(
+      ::svt::model::SourceLocation const& token_source_location)
+      -> ::svt::model::Token;
+  auto ScanSystemIdentifier(
+      ::svt::model::SourceLocation const& token_source_location)
+      -> ::svt::model::Token;
+  auto ScanEscapedIdentifier(
+      ::svt::model::SourceLocation const& token_source_location)
+      -> ::svt::model::Token;
+  auto ScanApostropheToken(
       ::svt::model::SourceLocation const& token_source_location)
       -> ::svt::model::Token;
   auto ScanNumber(::svt::model::SourceLocation const& token_source_location)

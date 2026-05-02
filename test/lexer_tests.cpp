@@ -4,6 +4,7 @@
 
 #include <catch2/catch_all.hpp>
 
+import std;
 import svt.model.token;
 import svt.core.parser;
 
@@ -25,6 +26,19 @@ auto RequireTokens(std::span<Token const> const tokens,
     REQUIRE(tokens.at(i).lexeme == expected.at(i).lexeme);
   }
 }
+
+auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
+  auto const test_path{std::filesystem::path{__FILE__}.parent_path()};
+  std::ifstream file_stream{test_path / fixture_path,
+                            std::ios::binary | std::ios::ate};
+  REQUIRE(file_stream.is_open());
+
+  std::string source{};
+  source.resize(file_stream.tellg());
+  file_stream.seekg(0);
+  file_stream.read(source.data(), static_cast<std::streamsize>(source.size()));
+  return source;
+}
 }  // namespace
 
 TEST_CASE("Identifier and keyword tokens", "[lexer]") {
@@ -41,12 +55,32 @@ TEST_CASE("Identifier and keyword tokens", "[lexer]") {
 }
 
 TEST_CASE("Integer and real literals", "[lexer]") {
-  std::string src = "123 45.67";
+  std::string src = "123 45.67 12'h800 1'b0 2'd3 'x '0 5ns 1step";
   Lexer lexer{std::move(src)};
 
   std::array expected{
       ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "123"},
       ExpectedToken{.type = TokenType::kRealLiteral, .lexeme = "45.67"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "12'h800"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "1'b0"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "2'd3"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "'x"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "'0"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "5ns"},
+      ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "1step"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
+}
+
+TEST_CASE("System and escaped identifiers", "[lexer]") {
+  std::string src = R"($info $bits $ \begin )";
+  Lexer lexer{std::move(src)};
+
+  std::array expected{
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "$info"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "$bits"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "$"},
+      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = R"(\begin)"},
       ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);
 }
@@ -99,6 +133,33 @@ TEST_CASE("Operators and punctuation", "[lexer]") {
   RequireTokens(lexer.Tokens(), expected);
 }
 
+TEST_CASE("SystemVerilog operators", "[lexer]") {
+  std::string src = R"(% ^ ~ & | ** -> <-> => *> ## #-# += <<= >>>= ==? !=? '{)";
+  Lexer lexer{std::move(src)};
+
+  std::array expected{
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "%"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "^"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "~"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "&"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "|"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "**"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "->"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "<->"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "=>"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "*>"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "##"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "#-#"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "+="},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "<<="},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = ">>>="},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "==?"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "!=?"},
+      ExpectedToken{.type = TokenType::kOperator, .lexeme = "'{"},
+      ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
+  RequireTokens(lexer.Tokens(), expected);
+}
+
 TEST_CASE("Skip whitespace and comments", "[lexer]") {
   // Leading spaces, a line comment, a block comment spanning lines, then "foo"
   std::string src = R"(  // comment line
@@ -113,7 +174,7 @@ comment */ foo)";
 }
 
 TEST_CASE("Unknown character throws", "[lexer]") {
-  std::string src = "$";
+  std::string src = "`";
 
   REQUIRE_THROWS_AS(Lexer{std::move(src)}, std::runtime_error);
 }
@@ -186,4 +247,12 @@ c)";
 
   Token const& eof = tokens.at(3);
   REQUIRE(eof.type == TokenType::kEndOfFile);
+}
+
+TEST_CASE("Lex all SystemVerilog fixture", "[lexer]") {
+  auto src{ReadFixture("all.sv")};
+  Lexer lexer{std::move(src)};
+
+  REQUIRE(not lexer.Tokens().empty());
+  REQUIRE(lexer.Tokens().back().type == TokenType::kEndOfFile);
 }

@@ -74,6 +74,19 @@ inline auto StartsBlockComment(char const current_character,
   return current_character == '/' and next_character == '*';
 }
 
+inline auto IsIdentifierBodyCharacter(char const character) -> bool {
+  return std::cmp_not_equal(std::isalnum(static_cast<unsigned char>(character)),
+                            0) or
+         character == '_' or character == '$';
+}
+
+inline auto IsBasedLiteralDigit(char const character) -> bool {
+  return std::cmp_not_equal(std::isalnum(static_cast<unsigned char>(character)),
+                            0) or
+         character == '_' or character == '?' or character == 'x' or
+         character == 'X' or character == 'z' or character == 'Z';
+}
+
 auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
                                  std::size_t const head_begin,
                                  std::size_t const head_end) -> std::size_t {
@@ -388,6 +401,15 @@ auto Lexer::Tokens() const -> std::span<Token const> {
 }
 
 auto Lexer::ScanNext() -> Token {
+  static std::array<char, 12> constexpr kSingleCharOperators{
+      '+', '-', '*', '/', '<', '>', '!', '%', '^', '~', '&', '|'};
+  static std::array<std::string_view, 45> constexpr kOperators{
+      "<<<=", ">>>=", "==?", "!=?", "===", "!==", "<<<", ">>>", "<<=",
+      ">>=",  "<->",  "#-#", "|->", "|=>", "##",  "++",  "--",  "+=",
+      "-=",   "*=",   "/=",  "%=",  "&=",  "|=",  "^=",  "->",  "=>",
+      "*>",   "<=",   ">=",  "==",  "!=",  "&&",  "||",  "**",  "<<",
+      ">>",   "^~",   "~^",  "~&",  "~|",  "::",  ":=",  ":/",  "'{"};
+
   SkipWhiteSpaceAndComments();
   if (m_position >= rng::size(m_sv_source_code_view)) {
     return Token{.type = TokenType::kEndOfFile,
@@ -400,6 +422,24 @@ auto Lexer::ScanNext() -> Token {
   auto const character{Peek()};
   m_position += 1;
   m_source_location.column += 1;
+
+  // multiple-character operators
+  if (auto const* const operator_iterator{
+          rng::find_if(kOperators,
+                       [this](auto const operator_lexeme) -> bool {
+                         return m_sv_source_code_view.substr(m_position - 1)
+                             .starts_with(operator_lexeme);
+                       })};
+      operator_iterator != rng::cend(kOperators)) {
+    auto remaining_source{m_sv_source_code_view.substr(m_position - 1)};
+    auto const operator_size{rng::size(*operator_iterator)};
+    m_position += operator_size - 1;
+    m_source_location.column += operator_size - 1;
+
+    return Token{.type = TokenType::kOperator,
+                 .lexeme = remaining_source.substr(0, operator_size),
+                 .location = token_source_location};
+  }
 
   // single-character punctuation
   auto const punctuation_lexeme{
@@ -466,18 +506,6 @@ auto Lexer::ScanNext() -> Token {
     return ScanString(token_source_location);
   }
 
-  // two-character operators
-  static std::array<std::pair<char, char>, 6> constexpr kTwoCharOperators{
-      {{'=', '='}, {'!', '='}, {'<', '='}, {'>', '='}, {'&', '&'}, {'|', '|'}}};
-  if (rng::contains(kTwoCharOperators,
-                    std::pair<char, char>(character, Peek()))) {
-    m_position += 1;
-    m_source_location.column += 1;
-    return Token{.type = TokenType::kOperator,
-                 .lexeme = m_sv_source_code_view.substr(m_position - 2, 2),
-                 .location = token_source_location};
-  }
-
   if (character == '=') {
     return Token{.type = TokenType::kEquals,
                  .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
@@ -485,16 +513,28 @@ auto Lexer::ScanNext() -> Token {
   }
 
   // single-char operators
-  static std::array<char, 7> constexpr kSingleCharOperators{'+', '-', '*', '/',
-                                                            '<', '>', '!'};
   if (rng::contains(kSingleCharOperators, character)) {
     return Token{.type = TokenType::kOperator,
                  .lexeme = m_sv_source_code_view.substr(m_position - 1, 1),
                  .location = token_source_location};
   }
 
+  if (character == '$') {
+    return ScanSystemIdentifier(token_source_location);
+  }
+
+  if (character == '\\') {
+    return ScanEscapedIdentifier(token_source_location);
+  }
+
+  if (character == '\'') {
+    return ScanApostropheToken(token_source_location);
+  }
+
   // identifier or keyword
-  if (std::isalpha(character) != 0 or character == '_') {
+  if (std::cmp_not_equal(std::isalpha(static_cast<unsigned char>(character)),
+                         0) or
+      character == '_') {
     return ScanIdentifierOrKeyword(token_source_location);
   }
 
@@ -514,16 +554,41 @@ auto Lexer::ScanNext() -> Token {
 auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
   auto const start_position{m_position - 1};
 
-  while (std::isdigit(Peek()) != 0) {
+  while (std::cmp_not_equal(std::isdigit(Peek()), 0) or Peek() == '_') {
     m_position += 1;
     m_source_location.column += 1;
+  }
+
+  if (Peek() == '\'') {
+    m_position += 1;
+    m_source_location.column += 1;
+
+    if (std::tolower(Peek()) == 's') {
+      m_position += 1;
+      m_source_location.column += 1;
+    }
+
+    if (std::cmp_not_equal(std::isalpha(Peek()), 0)) {
+      m_position += 1;
+      m_source_location.column += 1;
+    }
+
+    while (IsBasedLiteralDigit(Peek())) {
+      m_position += 1;
+      m_source_location.column += 1;
+    }
+
+    return Token{.type = TokenType::kIntegerLiteral,
+                 .lexeme = m_sv_source_code_view.substr(
+                     start_position, m_position - start_position),
+                 .location = token_source_location};
   }
 
   if (Peek() == '.') {
     m_position += 1;
     m_source_location.column += 1;
 
-    while (std::isdigit(Peek()) != 0) {
+    while (std::isdigit(Peek()) != 0 or Peek() == '_') {
       m_position += 1;
       m_source_location.column += 1;
     }
@@ -532,6 +597,11 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
                  .lexeme = m_sv_source_code_view.substr(
                      start_position, m_position - start_position),
                  .location = token_source_location};
+  }
+
+  while (std::isalpha(Peek()) != 0) {
+    m_position += 1;
+    m_source_location.column += 1;
   }
 
   return Token{.type = TokenType::kIntegerLiteral,
@@ -549,7 +619,7 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
 
   auto const start_position{m_position - 1};
 
-  while (std::isalnum(Peek()) != 0 or Peek() == '_') {
+  while (IsIdentifierBodyCharacter(Peek())) {
     m_position += 1;
     m_source_location.column += 1;
   }
@@ -562,6 +632,60 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
                     ? TokenType::kKeyword
                     : TokenType::kIdentifier;
   return result;
+}
+
+auto Lexer::ScanSystemIdentifier(SourceLocation const& token_source_location)
+    -> Token {
+  auto const start_position{m_position - 1};
+
+  while (IsIdentifierBodyCharacter(Peek())) {
+    m_position += 1;
+    m_source_location.column += 1;
+  }
+
+  return Token{.type = TokenType::kIdentifier,
+               .lexeme = m_sv_source_code_view.substr(
+                   start_position, m_position - start_position),
+               .location = token_source_location};
+}
+
+auto Lexer::ScanEscapedIdentifier(SourceLocation const& token_source_location)
+    -> Token {
+  auto const start_position{m_position - 1};
+
+  while (Peek() != '\0' and std::cmp_equal(std::isspace(Peek()), 0)) {
+    m_position += 1;
+    m_source_location.column += 1;
+  }
+
+  return Token{.type = TokenType::kIdentifier,
+               .lexeme = m_sv_source_code_view.substr(
+                   start_position, m_position - start_position),
+               .location = token_source_location};
+}
+
+auto Lexer::ScanApostropheToken(SourceLocation const& token_source_location)
+    -> Token {
+  auto const start_position{m_position - 1};
+
+  if (std::tolower(Peek()) == 's') {
+    m_position += 1;
+    m_source_location.column += 1;
+  }
+
+  if (Peek() == '0' or Peek() == '1' or std::tolower(Peek()) == 'x' or
+      std::tolower(Peek()) == 'z') {
+    m_position += 1;
+    m_source_location.column += 1;
+    return Token{.type = TokenType::kIntegerLiteral,
+                 .lexeme = m_sv_source_code_view.substr(
+                     start_position, m_position - start_position),
+                 .location = token_source_location};
+  }
+
+  return Token{.type = TokenType::kOperator,
+               .lexeme = m_sv_source_code_view.substr(start_position, 1),
+               .location = token_source_location};
 }
 
 auto Lexer::ScanString(SourceLocation const& token_source_location) -> Token {
@@ -630,9 +754,10 @@ auto Lexer::ScanString(SourceLocation const& token_source_location) -> Token {
 }
 
 template <std::size_t kOffset>
-auto Lexer::Peek() const -> char {
+auto Lexer::Peek() const -> unsigned char {
   try {
-    return m_sv_source_code_view.at(m_position + kOffset);
+    return static_cast<unsigned char>(
+        m_sv_source_code_view.at(m_position + kOffset));
   } catch (std::out_of_range const& exception) {
     return '\0';
   }

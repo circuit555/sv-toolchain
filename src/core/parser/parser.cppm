@@ -28,6 +28,15 @@ export class Lexer final {
   auto ScanIdentifierOrKeyword(
       ::svt::model::SourceLocation const& token_source_location)
       -> ::svt::model::Token;
+  auto ScanSystemIdentifier(
+      ::svt::model::SourceLocation const& token_source_location)
+      -> ::svt::model::Token;
+  auto ScanEscapedIdentifier(
+      ::svt::model::SourceLocation const& token_source_location)
+      -> ::svt::model::Token;
+  auto ScanApostropheToken(
+      ::svt::model::SourceLocation const& token_source_location)
+      -> ::svt::model::Token;
   auto ScanNumber(::svt::model::SourceLocation const& token_source_location)
       -> ::svt::model::Token;
 

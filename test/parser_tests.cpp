@@ -19,6 +19,7 @@ using GenerateBlock = svt::model::GenerateBlock;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
+using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -263,6 +264,144 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   REQUIRE(ready_declaration.name == "ready");
   REQUIRE(ready_declaration.type == NetType::kLogic);
   REQUIRE(ready_declaration.type_specifier.empty());
+}
+
+TEST_CASE("Parse unsupported module item declarations without losing sync",
+          "[parser]") {
+  std::string src = R"(
+    module foo ();
+      reg [3:0] r;
+      int i[2];
+      event ev;
+      genvar g;
+      time t;
+      shortreal sr;
+      chandle c;
+      realtime rt;
+      wor [1:0] w;
+      typedef logic [3:0] nibble_t;
+      let inc(x) = x + 1;
+      defparam u.WIDTH = 4;
+      assign y = r;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 13);
+
+  auto const expected_kinds{std::vector<std::string_view>{
+      "reg", "int", "event", "genvar", "time", "shortreal", "chandle",
+      "realtime", "wor", "typedef", "let", "defparam"}};
+  for (auto const item_index : std::views::iota(0UZ, expected_kinds.size())) {
+    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
+        module_declaration.items.at(item_index))};
+    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
+    REQUIRE(not unsupported_item.tokens.empty());
+  }
+
+  auto const& continuous_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(12))};
+  REQUIRE(Lexemes(continuous_assign.left_hand_side) ==
+          std::vector<std::string_view>{"y"});
+  REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
+          std::vector<std::string_view>{"r"});
+}
+
+TEST_CASE("Parse unsupported module item blocks without losing sync",
+          "[parser]") {
+  std::string src = R"(
+    module foo ();
+      function int f(input int x);
+        f = x;
+      endfunction : f
+      task t;
+      endtask
+      class C;
+      endclass : C
+      specify
+        specparam tpd = 1;
+      endspecify
+      default clocking cb @(posedge clk);
+      endclocking
+      property p;
+        a |-> b;
+      endproperty
+      sequence s;
+        a ##1 b;
+      endsequence
+      covergroup cg @(posedge clk);
+      endgroup
+      checker ch;
+      endchecker : ch
+      assert property (p) else $error("bad");
+      bind target checker_inst ci();
+      final begin
+        done = 1;
+      end
+      logic done;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 13);
+
+  auto const expected_kinds{std::vector<std::string_view>{
+      "function", "task", "class", "specify", "default", "property", "sequence",
+      "covergroup", "checker", "assert", "bind", "final"}};
+  for (auto const item_index : std::views::iota(0UZ, expected_kinds.size())) {
+    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
+        module_declaration.items.at(item_index))};
+    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
+    REQUIRE(not unsupported_item.tokens.empty());
+  }
+
+  auto const& done_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(12))};
+  REQUIRE(done_declaration.name == "done");
+  REQUIRE(done_declaration.type == NetType::kLogic);
+}
+
+TEST_CASE("Parse unsupported module instances without losing sync",
+          "[parser]") {
+  std::string src = R"(
+    module foo ();
+      m13 instArr[3:1][2:5]();
+      pullup p1(a);
+      logic done;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 3);
+
+  auto const& array_instance{
+      std::get<UnsupportedModuleItem>(module_declaration.items.at(0))};
+  REQUIRE(array_instance.kind == "m13");
+  REQUIRE(Lexemes(array_instance.tokens) ==
+          std::vector<std::string_view>{"m13", "instArr", "[", "3", ":", "1",
+                                        "]", "[", "2", ":", "5", "]", "(", ")",
+                                        ";"});
+
+  auto const& primitive_instance{
+      std::get<ModuleInstantiation>(module_declaration.items.at(1))};
+  REQUIRE(primitive_instance.module_name == "pullup");
+  REQUIRE(primitive_instance.instance_name == "p1");
+
+  auto const& done_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(2))};
+  REQUIRE(done_declaration.name == "done");
 }
 
 TEST_CASE("Parse module continuous assignments", "[parser]") {

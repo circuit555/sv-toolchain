@@ -195,7 +195,7 @@ TEST_CASE("Lex module declaration with parameter and vector", "[lexer]") {
       ExpectedToken{.type = TokenType::kHash, .lexeme = "#"},
       ExpectedToken{.type = TokenType::kLParen, .lexeme = "("},
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "parameter"},
-      ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "int"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "int"},
       ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "N"},
       ExpectedToken{.type = TokenType::kEquals, .lexeme = "="},
       ExpectedToken{.type = TokenType::kIntegerLiteral, .lexeme = "8"},

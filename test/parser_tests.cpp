@@ -16,6 +16,7 @@ using ContinuousAssign = svt::model::ContinuousAssign;
 using AlwaysBlock = svt::model::AlwaysBlock;
 using InitialBlock = svt::model::InitialBlock;
 using GenerateBlock = svt::model::GenerateBlock;
+using ModuleInstantiation = svt::model::ModuleInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 
@@ -365,6 +366,49 @@ TEST_CASE("Parse module generate blocks", "[parser]") {
           std::vector<std::string_view>{"1"});
 }
 
+TEST_CASE("Parse module instantiations", "[parser]") {
+  std::string src = R"(
+    module child #(parameter WIDTH = 8) (
+      input clk,
+      input [WIDTH-1:0] data,
+      output ready
+    );
+    endmodule
+
+    module top (
+      input clk,
+      input [3:0] data,
+      output ready
+    );
+      child #(.WIDTH(4)) u_child (
+        .clk(clk),
+        .data(data),
+        .ready(ready)
+      );
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& top_module{std::get<ModuleDeclaration>(translation_unit.at(1))};
+  REQUIRE(top_module.name == "top");
+  REQUIRE(top_module.items.size() == 1);
+
+  auto const& instantiation{
+      std::get<ModuleInstantiation>(top_module.items.at(0))};
+  REQUIRE(instantiation.module_name == "child");
+  REQUIRE(instantiation.instance_name == "u_child");
+  REQUIRE(Lexemes(instantiation.parameter_overrides) ==
+          std::vector<std::string_view>{".", "WIDTH", "(", "4", ")"});
+  REQUIRE(Lexemes(instantiation.port_connections) ==
+          std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",",
+                                        ".", "data", "(", "data", ")", ",",
+                                        ".", "ready", "(", "ready", ")"});
+}
+
 TEST_CASE("Parse nested module generate blocks", "[parser]") {
   std::string src = R"(
     module foo ();
@@ -437,4 +481,36 @@ TEST_CASE("Parse generate block example file", "[parser]") {
   REQUIRE(std::holds_alternative<GenerateBlock>(module_declaration.items.at(1)));
   REQUIRE(
       std::holds_alternative<ContinuousAssign>(module_declaration.items.at(2)));
+}
+
+TEST_CASE("Parse module instantiation example file", "[parser]") {
+  auto src{ReadExample("example/lexer/module_foo.sv")};
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& leaf_module{std::get<ModuleDeclaration>(translation_unit.at(0))};
+  REQUIRE(leaf_module.name == "module_leaf");
+  REQUIRE(leaf_module.parameters.size() == 1);
+  REQUIRE(leaf_module.ports.size() == 3);
+  REQUIRE(leaf_module.items.size() == 1);
+  REQUIRE(std::holds_alternative<ContinuousAssign>(leaf_module.items.at(0)));
+
+  auto const& top_module{std::get<ModuleDeclaration>(translation_unit.at(1))};
+  REQUIRE(top_module.name == "module_foo");
+  REQUIRE(top_module.ports.size() == 3);
+  REQUIRE(top_module.items.size() == 1);
+
+  auto const& instantiation{
+      std::get<ModuleInstantiation>(top_module.items.at(0))};
+  REQUIRE(instantiation.module_name == "module_leaf");
+  REQUIRE(instantiation.instance_name == "u_leaf");
+  REQUIRE(Lexemes(instantiation.parameter_overrides) ==
+          std::vector<std::string_view>{".", "WIDTH", "(", "4", ")"});
+  REQUIRE(Lexemes(instantiation.port_connections) ==
+          std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",",
+                                        ".", "data", "(", "data", ")", ",",
+                                        ".", "q", "(", "q", ")"});
 }

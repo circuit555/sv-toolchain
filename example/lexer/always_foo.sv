@@ -10,6 +10,10 @@ module always_foo (
 
   assign next_q = data;
 
+  initial begin
+    q = 0;
+  end
+
   always @(posedge clk) begin
     if (!rst_n) begin
       q <= 0;

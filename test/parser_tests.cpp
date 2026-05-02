@@ -14,6 +14,7 @@ using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 using ContinuousAssign = svt::model::ContinuousAssign;
 using AlwaysBlock = svt::model::AlwaysBlock;
+using InitialBlock = svt::model::InitialBlock;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 
@@ -216,7 +217,7 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
   auto const& module_declaration{
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.name == "foo");
-  REQUIRE(module_declaration.items.size() == 2);
+  REQUIRE(module_declaration.items.size() == 3);
 
   auto const& y_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(0))};
@@ -225,8 +226,12 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
   REQUIRE(Lexemes(y_assign.right_hand_side) ==
           std::vector<std::string_view>{"a", "+", "b"});
 
+  auto const& initial_block{
+      std::get<InitialBlock>(module_declaration.items.at(1))};
+  REQUIRE(Lexemes(initial_block) == std::vector<std::string_view>{"ignored"});
+
   auto const& z_assign{
-      std::get<ContinuousAssign>(module_declaration.items.at(1))};
+      std::get<ContinuousAssign>(module_declaration.items.at(2))};
   REQUIRE(Lexemes(z_assign.left_hand_side) ==
           std::vector<std::string_view>{"z"});
   REQUIRE(Lexemes(z_assign.right_hand_side) ==
@@ -279,6 +284,41 @@ TEST_CASE("Parse module always blocks", "[parser]") {
           std::vector<std::string_view>{"q"});
 }
 
+TEST_CASE("Parse module initial blocks", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      initial begin
+        a = 0;
+        begin
+          b = a;
+        end
+      end
+      initial ready = 1;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& begin_end_initial{
+      std::get<InitialBlock>(module_declaration.items.at(0))};
+  REQUIRE(Lexemes(begin_end_initial) ==
+          std::vector<std::string_view>{"a", "=", "0", ";", "begin", "b", "=",
+                                        "a", ";", "end"});
+
+  auto const& single_statement_initial{
+      std::get<InitialBlock>(module_declaration.items.at(1))};
+  REQUIRE(Lexemes(single_statement_initial) ==
+          std::vector<std::string_view>{"ready", "=", "1"});
+}
+
 TEST_CASE("Parse always block example file", "[parser]") {
   auto src{ReadExample("example/lexer/always_foo.sv")};
   Parser parser{std::move(src)};
@@ -290,10 +330,11 @@ TEST_CASE("Parse always block example file", "[parser]") {
   auto const& module_declaration{
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.name == "always_foo");
-  REQUIRE(module_declaration.items.size() == 3);
+  REQUIRE(module_declaration.items.size() == 4);
   REQUIRE(
       std::holds_alternative<NetDeclaration>(module_declaration.items.at(0)));
   REQUIRE(
       std::holds_alternative<ContinuousAssign>(module_declaration.items.at(1)));
-  REQUIRE(std::holds_alternative<AlwaysBlock>(module_declaration.items.at(2)));
+  REQUIRE(std::holds_alternative<InitialBlock>(module_declaration.items.at(2)));
+  REQUIRE(std::holds_alternative<AlwaysBlock>(module_declaration.items.at(3)));
 }

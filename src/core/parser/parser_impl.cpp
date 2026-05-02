@@ -116,7 +116,7 @@ inline auto IsBasedLiteralDigit(unsigned char const character) -> bool {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 auto MatchingTopLevelEndKeyword(std::string_view const keyword)
-    -> std::optional<std::string_view> {
+    -> std::string_view {
   if (keyword == "module" or keyword == "macromodule") {
     return kTopLevelEndKeywords[0];
   }
@@ -148,7 +148,8 @@ auto MatchingTopLevelEndKeyword(std::string_view const keyword)
     return kTopLevelEndKeywords[9];
   }
 
-  return std::nullopt;
+  throw std::runtime_error{fmt::format(
+      "[Parser] unexpected keyword '{}' while parsing module item", keyword)};
 }
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
@@ -326,6 +327,61 @@ auto ParsePortDeclaration(
                        ? parse_port_direction()
                        : previous_direction.value();
   return port;
+}
+
+auto StripLeadingAttributes(tokens_t port_tokens) -> tokens_t {
+  while (not rng::empty(port_tokens) and
+         port_tokens.front().type == TokenType::kLParen and
+         rng::size(port_tokens) > 1 and
+         rng::next(rng::cbegin(port_tokens))->lexeme == "*") {
+    auto token_iterator{
+        rng::next(rng::cbegin(port_tokens), 2, rng::cend(port_tokens))};
+    while (token_iterator != rng::cend(port_tokens)) {
+      auto const next_token_iterator{
+          rng::next(token_iterator, 1, rng::cend(port_tokens))};
+      if (token_iterator->lexeme == "*" and
+          next_token_iterator != rng::cend(port_tokens) and
+          next_token_iterator->type == TokenType::kRParen) {
+        port_tokens =
+            tokens_t{rng::next(next_token_iterator, 1, rng::cend(port_tokens)),
+                     rng::cend(port_tokens)};
+        break;
+      }
+
+      token_iterator++;
+    }
+
+    if (token_iterator == rng::cend(port_tokens)) {
+      return {};
+    }
+  }
+
+  return port_tokens;
+}
+
+auto TryParsePort(tokens_t const port_tokens,
+                  std::optional<PortDirection> const previous_direction)
+    -> std::optional<PortDeclaration> {
+  auto const stripped_port_tokens{StripLeadingAttributes(port_tokens)};
+  if (rng::empty(stripped_port_tokens)) {
+    return std::nullopt;
+  }
+
+  if (stripped_port_tokens.front().type == TokenType::kDot or
+      stripped_port_tokens.front().lexeme == "ref" or
+      stripped_port_tokens.front().lexeme == "inout" or
+      stripped_port_tokens.front().lexeme == "interface") {
+    return std::nullopt;
+  }
+
+  if (auto const has_explicit_direction{
+          stripped_port_tokens.front().lexeme == "input" or
+          stripped_port_tokens.front().lexeme == "output"};
+      not has_explicit_direction and not previous_direction.has_value()) {
+    return std::nullopt;
+  }
+
+  return ParsePortDeclaration(stripped_port_tokens, previous_direction);
 }
 
 auto JoinLexemes(tokens_t const tokens) -> std::string {
@@ -979,17 +1035,18 @@ auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
   auto const element_begin_iterator{m_token_iterator};
   auto const kind{m_token_iterator->lexeme};
 
-  SkipTopLevelAttributes();
+  SkipAttributeInstances();
 
   if (m_token_iterator->type == TokenType::kKeyword) {
-    if (auto const end_keyword{
-            MatchingTopLevelEndKeyword(m_token_iterator->lexeme)};
-        end_keyword.has_value()) {
-      SkipUnsupportedDesignElementToMatchingEnd(m_token_iterator->lexeme,
-                                                end_keyword.value());
+    try {
+      SkipUnsupportedDesignElementToMatchingEnd(
+          m_token_iterator->lexeme,
+          MatchingTopLevelEndKeyword(m_token_iterator->lexeme));
       return UnsupportedDesignElement{
           .kind = kind,
           .tokens = std::span{element_begin_iterator, m_token_iterator}};
+    } catch (std::runtime_error const& exception) {
+      // FIXME: ignoring the unsupported design element for now
     }
   }
 
@@ -1004,7 +1061,7 @@ auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
       .tokens = std::span{element_begin_iterator, m_token_iterator}};
 }
 
-auto Parser::SkipTopLevelAttributes() -> void {
+auto Parser::SkipAttributeInstances() -> void {
   while (m_token_iterator->type == TokenType::kLParen and
          rng::next(m_token_iterator, 1, rng::cend(m_tokens))->lexeme == "*") {
     m_token_iterator += 2;
@@ -1069,6 +1126,11 @@ auto Parser::SkipUnsupportedDesignElementToMatchingEnd(
 }
 
 auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
+  if (IsKeyword(m_token_iterator, "automatic") or
+      IsKeyword(m_token_iterator, "static")) {
+    m_token_iterator++;
+  }
+
   if (m_token_iterator->type != TokenType::kIdentifier) [[unlikely]] {
     throw std::runtime_error{fmt::format(
         "[Parser] expected module name at ({}, {})",
@@ -1078,6 +1140,8 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   ModuleDeclaration module_declaration{};
   module_declaration.name = m_token_iterator->lexeme;
   m_token_iterator++;
+
+  SkipModuleHeaderImports();
 
   if (m_token_iterator->type != TokenType::kHash and
       m_token_iterator->type != TokenType::kLParen and
@@ -1107,14 +1171,22 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   return module_declaration;
 }
 
+auto Parser::SkipModuleHeaderImports() -> void {
+  while (IsKeyword(m_token_iterator, "import")) {
+    SkipUnsupportedDesignElementToSemicolon();
+  }
+}
+
 auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
   std::vector<ModuleItem> items{};
 
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
-    if (auto module_item{ParseModuleItem()}; module_item.has_value()) {
-      items.push_back(module_item.value());
+    try {
+      items.push_back(ParseModuleItem());
       continue;
+    } catch (std::runtime_error const& exception) {
+      // FIXME: ignoring the unsupported module item for now
     }
 
     SkipUnsupportedModuleItem();
@@ -1127,7 +1199,7 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
   return items;
 }
 
-auto Parser::ParseModuleItem() -> std::optional<ModuleItem> {
+auto Parser::ParseModuleItem() -> ModuleItem {
   if (IsNetType(m_token_iterator)) {
     return ModuleItem{std::in_place_type<NetDeclaration>,
                       ParseNetDeclaration()};
@@ -1164,7 +1236,9 @@ auto Parser::ParseModuleItem() -> std::optional<ModuleItem> {
                       ParseModuleInstantiation()};
   }
 
-  return std::nullopt;
+  throw std::runtime_error{
+      fmt::format("[Parser] unexpected token '{}' while parsing module item",
+                  m_token_iterator->lexeme)};
 }
 
 auto Parser::SkipUnsupportedModuleItem() -> void {
@@ -1538,11 +1612,13 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
     AdvanceToTopLevelListBoundary("port list");
 
     auto const port_tokens{tokens_t{port_begin, m_token_iterator}};
-    auto const previous_direction{
-        rng::empty(result)
-            ? std::optional<PortDirection>{}
-            : std::optional<PortDirection>{result.back().direction}};
-    result.push_back(ParsePortDeclaration(port_tokens, previous_direction));
+    auto const previous_direction{rng::empty(result)
+                                      ? std::nullopt
+                                      : std::optional{result.back().direction}};
+    if (auto port{TryParsePort(port_tokens, previous_direction)};
+        port.has_value()) {
+      result.push_back(port.value());
+    }
 
     if (IsListSeparator(m_token_iterator)) {
       m_token_iterator++;

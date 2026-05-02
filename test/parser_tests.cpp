@@ -159,6 +159,44 @@ TEST_CASE("Parse module ports", "[parser]") {
   REQUIRE(ready_port.direction == PortDirection::kOutput);
 }
 
+TEST_CASE("Parse rich module headers", "[parser]") {
+  std::string src = R"(
+    module automatic m1 import p::*, p::x; #(int i = 1)
+      (a, b, , .c({a, b[0]}));
+      input a;
+      output [1:0] b;
+    endmodule
+
+    module m2 #(
+      parameter i = 1,
+      localparam j = i,
+      parameter type x_t = bit
+    )
+      (input int a[], (* bar = "asdf" *) output logic b = 1, ref c,
+       interface.mod d, .e());
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& m1{std::get<ModuleDeclaration>(translation_unit.at(0))};
+  REQUIRE(m1.name == "m1");
+  REQUIRE(m1.parameters.size() == 1);
+  REQUIRE(m1.ports.empty());
+
+  auto const& m2{std::get<ModuleDeclaration>(translation_unit.at(1))};
+  REQUIRE(m2.name == "m2");
+  REQUIRE(m2.parameters.size() == 3);
+  REQUIRE(m2.ports.size() == 2);
+  REQUIRE(m2.ports.at(0).name == "a");
+  REQUIRE(m2.ports.at(0).direction == PortDirection::kInput);
+  REQUIRE(m2.ports.at(1).name == "b");
+  REQUIRE(m2.ports.at(1).direction == PortDirection::kOutput);
+}
+
 TEST_CASE("Parse module parameters followed by ports", "[parser]") {
   std::string src = R"(
     module foo #(
@@ -553,6 +591,18 @@ TEST_CASE("Parse all SystemVerilog fixture as compilation unit", "[parser]") {
 
   REQUIRE(not translation_unit.empty());
   REQUIRE(translation_unit.size() > 10);
+  auto const has_module_named{[&translation_unit](std::string_view const name) {
+    return std::ranges::any_of(
+        translation_unit, [name](auto const& design_element) {
+          auto const* module_declaration{
+              std::get_if<ModuleDeclaration>(&design_element)};
+          return module_declaration != nullptr and
+                 module_declaration->name == name;
+        });
+  }};
+
+  REQUIRE(has_module_named("m1"));
+  REQUIRE(has_module_named("m2"));
   REQUIRE(std::ranges::any_of(translation_unit, [](auto const& design_element) {
     auto const* module_declaration{
         std::get_if<ModuleDeclaration>(&design_element)};

@@ -68,14 +68,15 @@ export class Parser final {
   auto ParseDesignElement() -> ::svt::model::DesignElement;
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
-  auto SkipTopLevelAttributes() -> void;
+  auto SkipModuleHeaderImports() -> void;
+  auto SkipAttributeInstances() -> void;
   auto SkipUnsupportedDesignElementToSemicolon() -> void;
   auto SkipUnsupportedDesignElementToMatchingEnd(std::string_view start_keyword,
                                                  std::string_view end_keyword)
       -> void;
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
-  auto ParseModuleItem() -> std::optional<::svt::model::ModuleItem>;
+  auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto SkipUnsupportedModuleItem() -> void;
   auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;

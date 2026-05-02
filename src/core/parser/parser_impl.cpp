@@ -57,30 +57,31 @@ inline auto IsKeyword(Token const& token, std::string_view const lexeme)
 }
 
 inline auto IsHorizontalWhiteSpace(char const character) -> bool {
+inline auto IsHorizontalWhiteSpace(unsigned char const character) -> bool {
   return character == ' ' or character == '\t' or character == '\r';
 }
 
-inline auto IsLineBreak(char const character) -> bool {
+inline auto IsLineBreak(unsigned char const character) -> bool {
   return character == '\n';
 }
 
-inline auto StartsLineComment(char const current_character,
-                              char const next_character) -> bool {
+inline auto StartsLineComment(unsigned char const current_character,
+                              unsigned char const next_character) -> bool {
   return current_character == '/' and next_character == '/';
 }
 
-inline auto StartsBlockComment(char const current_character,
-                               char const next_character) -> bool {
+inline auto StartsBlockComment(unsigned char const current_character,
+                               unsigned char const next_character) -> bool {
   return current_character == '/' and next_character == '*';
 }
 
-inline auto IsIdentifierBodyCharacter(char const character) -> bool {
+inline auto IsIdentifierBodyCharacter(unsigned char const character) -> bool {
   return std::cmp_not_equal(std::isalnum(static_cast<unsigned char>(character)),
                             0) or
          character == '_' or character == '$';
 }
 
-inline auto IsBasedLiteralDigit(char const character) -> bool {
+inline auto IsBasedLiteralDigit(unsigned char const character) -> bool {
   return std::cmp_not_equal(std::isalnum(static_cast<unsigned char>(character)),
                             0) or
          character == '_' or character == '?' or character == 'x' or

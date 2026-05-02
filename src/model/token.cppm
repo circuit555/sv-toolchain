@@ -30,6 +30,8 @@ export enum class TokenType : std::uint8_t {
   kKeyword,
   /// Operator token.
   kOperator,
+  /// `=` token.
+  kEquals,
   /// `(` token.
   kLParen,
   /// `)` token.
@@ -52,6 +54,10 @@ export enum class TokenType : std::uint8_t {
   kColon,
   /// `?` token.
   kQuestion,
+  /// `@` token.
+  kAt,
+  /// `.` token.
+  kDot,
   /// Comment token.
   kComment
 };

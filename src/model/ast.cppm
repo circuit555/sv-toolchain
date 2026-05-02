@@ -3,73 +3,75 @@
 export module svt.model.ast;
 
 import std;
+import svt.model.token;
 
 namespace svt::model {
 
-enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
-
 export enum class PortDirection : std::uint8_t { kInput, kOutput };
 
-enum class NetType : std::uint8_t { kWire, kLogic };
+export enum class NetType : std::uint8_t { kWire, kLogic };
 
 struct Declaration {
   std::string_view name;
 };
 
-class IdentifierExpression;
-class NumberExpression;
-class BinaryExpression;
-export class PortDeclaration;
-class NetDeclaration;
-export class ModuleDeclaration;
+export struct PortDeclaration : Declaration {
+  PortDirection direction{};
+};
+
+export struct NetDeclaration : Declaration {
+  NetType type;
+  std::span<Token const> type_specifier;
+};
 
 export struct ParameterTypeDeclaration : Declaration {
-  std::vector<std::string_view> default_type;
+  std::span<Token const> default_type;
 };
 
 export struct ParameterValueDeclaration : Declaration {
-  std::vector<std::string_view> type_specifier;
-  std::vector<std::string_view> default_value;
+  std::span<Token const> type_specifier;
+  std::span<Token const> default_value;
 };
 
 export using ParameterDeclaration =
     std::variant<ParameterTypeDeclaration, ParameterValueDeclaration>;
 
-/// @brief Type-erased AST node that stores one concrete node variant.
-export using AstNode =
-    std::variant<IdentifierExpression, NumberExpression, BinaryExpression,
-                 ParameterDeclaration, PortDeclaration, NetDeclaration,
-                 ModuleDeclaration>;
-
-/// @brief Owning pointer to an AST node.
-export using AstNodePointer = AstNode*;
-
-struct IdentifierExpression : Declaration {};
-
-struct NumberExpression {
-  int value;
+export struct ContinuousAssign {
+  std::span<Token const> left_hand_side;
+  std::span<Token const> right_hand_side;
 };
 
-struct BinaryExpression {
-  BinaryOperation operation;
-  AstNodePointer left_operand_ptr;
-  AstNodePointer right_operand_ptr;
+export struct AlwaysBlock {
+  std::span<Token const> event_control;
+  std::span<Token const> body;
 };
 
-struct PortDeclaration : Declaration {
-  PortDirection direction;
+export struct InitialBlock {
+  std::span<Token const> body;
 };
 
-struct NetDeclaration : Declaration {
-  NetType type;
-  AstNodePointer msb;
-  AstNodePointer lsb;
+export struct GenerateBlock {
+  std::span<Token const> body;
 };
+
+export struct ModuleInstantiation {
+  std::string_view module_name;
+  std::string_view instance_name;
+  std::span<Token const> parameter_overrides;
+  std::span<Token const> port_connections;
+};
+
+export using ModuleItem =
+    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
+                 GenerateBlock, ModuleInstantiation>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;
   std::vector<PortDeclaration> ports;
-  std::vector<AstNodePointer> items;
+  std::vector<ModuleItem> items;
 };
+
+/// @brief Top-level SystemVerilog design element.
+export using DesignElement = std::variant<ModuleDeclaration>;
 
 }  // namespace svt::model

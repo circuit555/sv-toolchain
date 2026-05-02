@@ -328,6 +328,61 @@ auto ParsePortDeclaration(
   return port;
 }
 
+auto StripLeadingAttributes(tokens_t port_tokens) -> tokens_t {
+  while (not rng::empty(port_tokens) and
+         port_tokens.front().type == TokenType::kLParen and
+         rng::size(port_tokens) > 1 and
+         rng::next(rng::cbegin(port_tokens))->lexeme == "*") {
+    auto token_iterator{
+        rng::next(rng::cbegin(port_tokens), 2, rng::cend(port_tokens))};
+    while (token_iterator != rng::cend(port_tokens)) {
+      auto const next_token_iterator{
+          rng::next(token_iterator, 1, rng::cend(port_tokens))};
+      if (token_iterator->lexeme == "*" and
+          next_token_iterator != rng::cend(port_tokens) and
+          next_token_iterator->type == TokenType::kRParen) {
+        port_tokens =
+            tokens_t{rng::next(next_token_iterator, 1, rng::cend(port_tokens)),
+                     rng::cend(port_tokens)};
+        break;
+      }
+
+      token_iterator++;
+    }
+
+    if (token_iterator == rng::cend(port_tokens)) {
+      return {};
+    }
+  }
+
+  return port_tokens;
+}
+
+auto TryParsePort(tokens_t const port_tokens,
+                  std::optional<PortDirection> const previous_direction)
+    -> std::optional<PortDeclaration> {
+  auto const stripped_port_tokens{StripLeadingAttributes(port_tokens)};
+  if (rng::empty(stripped_port_tokens)) {
+    return std::nullopt;
+  }
+
+  if (stripped_port_tokens.front().type == TokenType::kDot or
+      stripped_port_tokens.front().lexeme == "ref" or
+      stripped_port_tokens.front().lexeme == "inout" or
+      stripped_port_tokens.front().lexeme == "interface") {
+    return std::nullopt;
+  }
+
+  if (auto const has_explicit_direction{
+          stripped_port_tokens.front().lexeme == "input" or
+          stripped_port_tokens.front().lexeme == "output"};
+      not has_explicit_direction and not previous_direction.has_value()) {
+    return std::nullopt;
+  }
+
+  return ParsePortDeclaration(stripped_port_tokens, previous_direction);
+}
+
 auto JoinLexemes(tokens_t const tokens) -> std::string {
   auto result = std::string{};
   for (auto const& token : tokens) {
@@ -979,7 +1034,7 @@ auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
   auto const element_begin_iterator{m_token_iterator};
   auto const kind{m_token_iterator->lexeme};
 
-  SkipTopLevelAttributes();
+  SkipAttributeInstances();
 
   if (m_token_iterator->type == TokenType::kKeyword) {
     if (auto const end_keyword{
@@ -1004,7 +1059,7 @@ auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
       .tokens = std::span{element_begin_iterator, m_token_iterator}};
 }
 
-auto Parser::SkipTopLevelAttributes() -> void {
+auto Parser::SkipAttributeInstances() -> void {
   while (m_token_iterator->type == TokenType::kLParen and
          rng::next(m_token_iterator, 1, rng::cend(m_tokens))->lexeme == "*") {
     m_token_iterator += 2;
@@ -1069,6 +1124,11 @@ auto Parser::SkipUnsupportedDesignElementToMatchingEnd(
 }
 
 auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
+  if (IsKeyword(m_token_iterator, "automatic") or
+      IsKeyword(m_token_iterator, "static")) {
+    m_token_iterator++;
+  }
+
   if (m_token_iterator->type != TokenType::kIdentifier) [[unlikely]] {
     throw std::runtime_error{fmt::format(
         "[Parser] expected module name at ({}, {})",
@@ -1078,6 +1138,8 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   ModuleDeclaration module_declaration{};
   module_declaration.name = m_token_iterator->lexeme;
   m_token_iterator++;
+
+  SkipModuleHeaderImports();
 
   if (m_token_iterator->type != TokenType::kHash and
       m_token_iterator->type != TokenType::kLParen and
@@ -1105,6 +1167,12 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   module_declaration.items = ParseModuleItems();
 
   return module_declaration;
+}
+
+auto Parser::SkipModuleHeaderImports() -> void {
+  while (IsKeyword(m_token_iterator, "import")) {
+    SkipUnsupportedDesignElementToSemicolon();
+  }
 }
 
 auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
@@ -1538,11 +1606,13 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
     AdvanceToTopLevelListBoundary("port list");
 
     auto const port_tokens{tokens_t{port_begin, m_token_iterator}};
-    auto const previous_direction{
-        rng::empty(result)
-            ? std::optional<PortDirection>{}
-            : std::optional<PortDirection>{result.back().direction}};
-    result.push_back(ParsePortDeclaration(port_tokens, previous_direction));
+    auto const previous_direction{rng::empty(result)
+                                      ? std::nullopt
+                                      : std::optional{result.back().direction}};
+    if (auto port{TryParsePort(port_tokens, previous_direction)};
+        port.has_value()) {
+      result.push_back(port.value());
+    }
 
     if (IsListSeparator(m_token_iterator)) {
       m_token_iterator++;

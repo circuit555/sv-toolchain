@@ -68,7 +68,8 @@ export class Parser final {
   auto ParseDesignElement() -> ::svt::model::DesignElement;
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
-  auto SkipTopLevelAttributes() -> void;
+  auto SkipModuleHeaderImports() -> void;
+  auto SkipAttributeInstances() -> void;
   auto SkipUnsupportedDesignElementToSemicolon() -> void;
   auto SkipUnsupportedDesignElementToMatchingEnd(std::string_view start_keyword,
                                                  std::string_view end_keyword)

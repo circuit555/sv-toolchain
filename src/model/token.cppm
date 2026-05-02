@@ -56,6 +56,8 @@ export enum class TokenType : std::uint8_t {
   kQuestion,
   /// `@` token.
   kAt,
+  /// `.` token.
+  kDot,
   /// Comment token.
   kComment
 };

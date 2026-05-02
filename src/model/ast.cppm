@@ -54,9 +54,16 @@ export struct GenerateBlock {
   std::span<Token const> body;
 };
 
+export struct ModuleInstantiation {
+  std::string_view module_name;
+  std::string_view instance_name;
+  std::span<Token const> parameter_overrides;
+  std::span<Token const> port_connections;
+};
+
 export using ModuleItem =
     std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
-                 GenerateBlock>;
+                 GenerateBlock, ModuleInstantiation>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

@@ -60,6 +60,7 @@ export class Parser final {
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
+  auto ParseModuleInstantiation() -> ::svt::model::ModuleInstantiation;
   auto ParseAlwaysEventControl() -> std::span<::svt::model::Token const>;
   auto ParseGenerateBlock() -> ::svt::model::GenerateBlock;
   auto ParseBeginEndBlockBody(std::string_view context)

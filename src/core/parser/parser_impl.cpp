@@ -26,6 +26,7 @@ using ContinuousAssign = ::svt::model::ContinuousAssign;
 using AlwaysBlock = ::svt::model::AlwaysBlock;
 using InitialBlock = ::svt::model::InitialBlock;
 using GenerateBlock = ::svt::model::GenerateBlock;
+using ModuleInstantiation = ::svt::model::ModuleInstantiation;
 using ModuleItem = ::svt::model::ModuleItem;
 
 namespace {
@@ -355,6 +356,13 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                                                   decltype(resolved_item)>,
                                               GenerateBlock>) {
               fmt::println("    generate {}", JoinLexemes(resolved_item.body));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ModuleInstantiation>) {
+              fmt::println("    {} {} #({}) ({})", resolved_item.module_name,
+                           resolved_item.instance_name,
+                           JoinLexemes(resolved_item.parameter_overrides),
+                           JoinLexemes(resolved_item.port_connections));
             }
           },
           item);
@@ -443,6 +451,10 @@ auto Lexer::ScanNext() -> Token {
                    .location = token_source_location};
     case '@':
       return Token{.type = TokenType::kAt,
+                   .lexeme = punctuation_lexeme,
+                   .location = token_source_location};
+    case '.':
+      return Token{.type = TokenType::kDot,
                    .lexeme = punctuation_lexeme,
                    .location = token_source_location};
     default:
@@ -850,6 +862,12 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
       continue;
     }
 
+    if (m_token_iterator->type == TokenType::kIdentifier) {
+      items.emplace_back(std::in_place_type<ModuleInstantiation>,
+                         ParseModuleInstantiation());
+      continue;
+    }
+
     while (m_token_iterator->type != TokenType::kEndOfFile and
            m_token_iterator->type != TokenType::kSemicolon and
            m_token_iterator->lexeme != "endmodule") {
@@ -992,6 +1010,76 @@ auto Parser::ParseContinuousAssign() -> ContinuousAssign {
   ExpectToken(TokenType::kSemicolon, "continuous assignment");
 
   return continuous_assign;
+}
+
+auto Parser::ParseModuleInstantiation() -> ModuleInstantiation {
+  auto const module_name_token{*m_token_iterator};
+  ExpectToken(TokenType::kIdentifier, "module instantiation");
+
+  std::span<Token const> parameter_overrides{};
+  if (m_token_iterator->type == TokenType::kHash) {
+    m_token_iterator++;
+    ExpectToken(TokenType::kLParen, "module instantiation parameter override");
+
+    auto const parameter_begin_iterator{m_token_iterator};
+    auto parenthesis_depth{1UZ};
+    while (m_token_iterator->type != TokenType::kEndOfFile) {
+      if (m_token_iterator->type == TokenType::kLParen) {
+        parenthesis_depth++;
+      } else if (m_token_iterator->type == TokenType::kRParen) {
+        parenthesis_depth--;
+        if (std::cmp_equal(parenthesis_depth, 0UZ)) {
+          parameter_overrides =
+              std::span{parameter_begin_iterator, m_token_iterator};
+          m_token_iterator++;
+          break;
+        }
+      }
+
+      m_token_iterator++;
+    }
+
+    if (std::cmp_not_equal(parenthesis_depth, 0UZ)) {
+      throw std::runtime_error{fmt::format(
+          "[Parser] expected ')' while parsing module instantiation parameter "
+          "override at ({}, {})",
+          parameter_begin_iterator->location.row,
+          parameter_begin_iterator->location.column)};
+    }
+  }
+
+  auto const instance_name_token{*m_token_iterator};
+  ExpectToken(TokenType::kIdentifier, "module instantiation instance name");
+  ExpectToken(TokenType::kLParen, "module instantiation port connections");
+
+  auto const port_begin_iterator{m_token_iterator};
+  auto parenthesis_depth{1UZ};
+  while (m_token_iterator->type != TokenType::kEndOfFile) {
+    if (m_token_iterator->type == TokenType::kLParen) {
+      parenthesis_depth++;
+    } else if (m_token_iterator->type == TokenType::kRParen) {
+      parenthesis_depth--;
+      if (std::cmp_equal(parenthesis_depth, 0UZ)) {
+        ModuleInstantiation module_instantiation{};
+        module_instantiation.module_name = module_name_token.lexeme;
+        module_instantiation.instance_name = instance_name_token.lexeme;
+        module_instantiation.parameter_overrides = parameter_overrides;
+        module_instantiation.port_connections =
+            std::span{port_begin_iterator, m_token_iterator};
+        m_token_iterator++;
+        ExpectToken(TokenType::kSemicolon, "module instantiation");
+
+        return module_instantiation;
+      }
+    }
+
+    m_token_iterator++;
+  }
+
+  throw std::runtime_error{fmt::format(
+      "[Parser] expected ')' while parsing module instantiation port "
+      "connections at ({}, {})",
+      port_begin_iterator->location.row, port_begin_iterator->location.column)};
 }
 
 auto Parser::ParseAlwaysEventControl() -> std::span<Token const> {

@@ -89,14 +89,12 @@ export class Parser final {
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
   auto ParseModuleInstantiation() -> ::svt::model::ModuleInstantiation;
   auto ParseAlwaysEventControl() -> tokens_t;
-  auto ParseGenerateBlock() -> ::svt::model::GenerateBlock;
   auto ConsumeBalancedDelimitedTokens(::svt::model::TokenType opening_token,
                                       ::svt::model::TokenType closing_token,
                                       std::string_view context) -> tokens_t;
   auto ParseKeywordBlockBody(std::string_view start_keyword,
                              std::string_view end_keyword,
                              std::string_view context) -> tokens_t;
-  auto AdvanceToTopLevelListBoundary(std::string_view context) -> void;
   auto ParseBeginEndBlockBody(std::string_view context) -> tokens_t;
   auto ParseSingleStatementBody(std::string_view context) -> tokens_t;
   auto ParseParameterTokens() -> tokens_t;

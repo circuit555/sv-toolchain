@@ -44,12 +44,14 @@ both through fields such as:
 
 ```cpp
 std::string_view name;
-std::span<Token const> default_value;
-std::span<Token const> left_hand_side;
-std::span<Token const> right_hand_side;
+std::span<Token const> default_type;
+std::span<Token const> type_specifier;
+ExpressionPtr left_hand_side;
+ExpressionPtr right_hand_side;
 ```
 
-These fields are references, not ownership boundaries.
+The spans and expression nodes are references into parser-owned token storage,
+not ownership boundaries.
 
 ## Consequences
 

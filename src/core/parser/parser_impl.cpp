@@ -25,6 +25,7 @@ using NetType = ::svt::model::NetType;
 using ContinuousAssign = ::svt::model::ContinuousAssign;
 using AlwaysBlock = ::svt::model::AlwaysBlock;
 using InitialBlock = ::svt::model::InitialBlock;
+using GenerateBlock = ::svt::model::GenerateBlock;
 using ModuleItem = ::svt::model::ModuleItem;
 
 namespace {
@@ -349,7 +350,11 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               InitialBlock>) {
-              fmt::println("    initial {}", JoinLexemes(resolved_item));
+              fmt::println("    initial {}", JoinLexemes(resolved_item.body));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              GenerateBlock>) {
+              fmt::println("    generate {}", JoinLexemes(resolved_item.body));
             }
           },
           item);
@@ -525,9 +530,10 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
-  static std::array<std::string_view, 12> constexpr kKeywords{
-      "module", "endmodule", "parameter", "wire", "logic",  "assign",
-      "begin",  "end",       "if",        "else", "always", "initial"};
+  static std::array<std::string_view, 16> constexpr kKeywords{
+      "module",   "endmodule",   "parameter", "wire", "logic",  "assign",
+      "begin",    "end",         "if",        "else", "always", "initial",
+      "generate", "endgenerate", "genvar",    "for"};
 
   auto const start_position{m_position - 1};
 
@@ -837,6 +843,13 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
       continue;
     }
 
+    if (m_token_iterator->type == TokenType::kKeyword and
+        m_token_iterator->lexeme == "generate") {
+      items.emplace_back(std::in_place_type<GenerateBlock>,
+                         ParseGenerateBlock());
+      continue;
+    }
+
     while (m_token_iterator->type != TokenType::kEndOfFile and
            m_token_iterator->type != TokenType::kSemicolon and
            m_token_iterator->lexeme != "endmodule") {
@@ -1017,6 +1030,33 @@ auto Parser::ParseAlwaysEventControl() -> std::span<Token const> {
   }
 
   return std::span{event_begin_iterator, m_token_iterator};
+}
+
+auto Parser::ParseGenerateBlock() -> GenerateBlock {
+  ExpectToken(TokenType::kKeyword, "generate block");
+
+  auto const body_begin_iterator{m_token_iterator};
+
+  auto block_depth{1UZ};
+  while (m_token_iterator->type != TokenType::kEndOfFile) {
+    if (IsKeyword(*m_token_iterator, "generate")) {
+      block_depth++;
+    } else if (IsKeyword(*m_token_iterator, "endgenerate")) {
+      block_depth--;
+      if (std::cmp_equal(block_depth, 0UZ)) {
+        auto const body{std::span{body_begin_iterator, m_token_iterator}};
+        m_token_iterator++;
+        return GenerateBlock{.body = body};
+      }
+    }
+
+    m_token_iterator++;
+  }
+
+  throw std::runtime_error{fmt::format(
+      "[Parser] expected 'endgenerate' while parsing generate block at ({}, "
+      "{})",
+      body_begin_iterator->location.row, body_begin_iterator->location.column)};
 }
 
 auto Parser::ParseBeginEndBlockBody(std::string_view const context)

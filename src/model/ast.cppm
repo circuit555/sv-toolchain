@@ -46,10 +46,17 @@ export struct AlwaysBlock {
   std::span<Token const> body;
 };
 
-export using InitialBlock = std::span<Token const>;
+export struct InitialBlock {
+  std::span<Token const> body;
+};
+
+export struct GenerateBlock {
+  std::span<Token const> body;
+};
 
 export using ModuleItem =
-    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock>;
+    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
+                 GenerateBlock>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

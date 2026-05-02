@@ -60,8 +60,8 @@ $ python3 scripts/generate_compile_commands.py
 # build project
 $ ninja -f build/build.ninja
 
-# run tool
-$ build/svt
+# run tool on input systemverilog source file
+$ build/svt <systemverilog source file>
 ```
 
 #### further runs
@@ -75,8 +75,8 @@ $ build/svt <systemverilog source file>
 If `build.json` changes (for example, new source files or modules), run:
 
 ```shell
-$ modi
-$ python3 scripts/generate_compile_commands.py
+modi
+python3 scripts/generate_compile_commands.py
 ```
 
 ## contributing
@@ -84,10 +84,10 @@ $ python3 scripts/generate_compile_commands.py
 Before opening a pull request, make sure the unit-tests pass:
 
 ```shell
-$ ninja -f build/build.ninja
-$ cd test
-$ ninja -f build/build.ninja
-$ ./build/test_svt
+ninja -f build/build.ninja
+cd test
+ninja -f build/build.ninja
+./build/test_svt
 ```
 
 Pull requests with failing unit-tests will not be considered for merging.

@@ -53,6 +53,7 @@ export class Lexer final {
 export class Parser final {
  public:
   using TranslationUnit = std::vector<::svt::model::DesignElement>;
+  using tokens_t = std::span<::svt::model::Token const>;
 
   /// @brief Construct a parser over a source-code view.
   /// @param sv_source_code SystemVerilog source to parse.
@@ -65,24 +66,29 @@ export class Parser final {
   auto ExpectToken(::svt::model::TokenType expected_type,
                    std::string_view context) -> void;
   auto ParseDesignElement() -> ::svt::model::DesignElement;
+  auto ParseUnsupportedDesignElement()
+      -> ::svt::model::UnsupportedDesignElement;
+  auto SkipTopLevelAttributes() -> void;
+  auto SkipUnsupportedDesignElementToSemicolon() -> void;
+  auto SkipUnsupportedDesignElementToMatchingEnd(std::string_view start_keyword,
+                                                 std::string_view end_keyword)
+      -> void;
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
   auto ParseModuleInstantiation() -> ::svt::model::ModuleInstantiation;
-  auto ParseAlwaysEventControl() -> std::span<::svt::model::Token const>;
+  auto ParseAlwaysEventControl() -> tokens_t;
   auto ParseGenerateBlock() -> ::svt::model::GenerateBlock;
-  auto ParseBeginEndBlockBody(std::string_view context)
-      -> std::span<::svt::model::Token const>;
-  auto ParseSingleStatementBody(std::string_view context)
-      -> std::span<::svt::model::Token const>;
-  auto ParseParameterTokens() -> std::span<::svt::model::Token const>;
+  auto ParseBeginEndBlockBody(std::string_view context) -> tokens_t;
+  auto ParseSingleStatementBody(std::string_view context) -> tokens_t;
+  auto ParseParameterTokens() -> tokens_t;
   auto ParseParameters() -> std::vector<::svt::model::ParameterDeclaration>;
   auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;
 
   Lexer m_lexer;
-  std::span<::svt::model::Token const> m_tokens;
-  std::span<::svt::model::Token const>::iterator m_token_iterator;
+  tokens_t m_tokens;
+  tokens_t::iterator m_token_iterator;
 };
 
 /// @brief Print a parsed translation unit to stdout.

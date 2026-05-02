@@ -71,7 +71,13 @@ export struct ModuleDeclaration : Declaration {
   std::vector<ModuleItem> items;
 };
 
+export struct UnsupportedDesignElement {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
 /// @brief Top-level SystemVerilog design element.
-export using DesignElement = std::variant<ModuleDeclaration>;
+export using DesignElement =
+    std::variant<ModuleDeclaration, UnsupportedDesignElement>;
 
 }  // namespace svt::model

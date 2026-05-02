@@ -29,6 +29,7 @@ using InitialBlock = ::svt::model::InitialBlock;
 using GenerateBlock = ::svt::model::GenerateBlock;
 using ModuleInstantiation = ::svt::model::ModuleInstantiation;
 using ModuleItem = ::svt::model::ModuleItem;
+using UnsupportedModuleItem = ::svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = ::svt::model::UnsupportedDesignElement;
 
 namespace {
@@ -38,6 +39,19 @@ std::array<std::string_view, 16> constexpr kTopLevelEndKeywords{
     "endprimitive", "endconfig",   "endchecker",   "endclass",
     "endfunction",  "endtask",     "endspecify",   "endclocking",
     "endproperty",  "endsequence", "endgroup",     "endgenerate"};
+
+std::array<std::string_view, 37> constexpr kUnsupportedModuleItemKeywords{
+    "reg",       "int",        "integer", "shortint", "longint",  "byte",
+    "bit",       "real",       "event",   "genvar",   "time",     "shortreal",
+    "chandle",   "realtime",   "typedef", "let",      "defparam", "bind",
+    "assert",    "assume",     "cover",   "restrict", "deassign", "nettype",
+    "default",   "extern",     "import",  "export",   "alias",    "modport",
+    "parameter", "localparam", "input",   "output",   "inout",    "ref",
+    "final"};
+
+std::array<std::string_view, 14> constexpr kUnsupportedModuleItemNetTypes{
+    "tri",  "tri0", "tri1",    "triand",  "trior", "trireg", "uwire",
+    "wand", "wor",  "supply0", "supply1", "wire",  "logic",  "interconnect"};
 
 inline auto IsParameterDeclarationPrefix(tokens_t const tokens) -> bool {
   return tokens.front().lexeme == "parameter" or
@@ -66,6 +80,65 @@ inline auto IsKeyword(tokens_t::iterator const token_iterator,
                       std::string_view const lexeme) -> bool {
   return token_iterator->type == TokenType::kKeyword and
          token_iterator->lexeme == lexeme;
+}
+
+template <typename ShouldStop, typename IsTopLevelBoundary>
+auto AdvanceToTopLevelBoundary(tokens_t::iterator& token_iterator,
+                               ShouldStop should_stop,
+                               IsTopLevelBoundary is_top_level_boundary,
+                               bool const stop_at_unmatched_closing_delimiter)
+    -> bool {
+  auto delimiter_depth{0UZ};
+  while (token_iterator->type != TokenType::kEndOfFile) {
+    if (should_stop(token_iterator)) {
+      return true;
+    }
+
+    if (IsOpeningDelimiter(token_iterator)) {
+      delimiter_depth++;
+    } else if (IsClosingDelimiter(token_iterator)) {
+      if (std::cmp_equal(delimiter_depth, 0UZ)) {
+        if (stop_at_unmatched_closing_delimiter) {
+          return true;
+        }
+      } else {
+        delimiter_depth--;
+      }
+    } else if (std::cmp_equal(delimiter_depth, 0UZ) and
+               is_top_level_boundary(token_iterator)) {
+      return true;
+    }
+
+    token_iterator++;
+  }
+
+  return false;
+}
+
+template <typename MatchesKeyword>
+auto AdvanceToMatchingEndKeyword(tokens_t::iterator& token_iterator,
+                                 std::string_view const start_keyword,
+                                 std::string_view const end_keyword,
+                                 std::size_t block_depth,
+                                 MatchesKeyword matches_keyword) -> bool {
+  while (token_iterator->type != TokenType::kEndOfFile) {
+    if (matches_keyword(token_iterator, start_keyword)) {
+      block_depth++;
+    } else if (matches_keyword(token_iterator, end_keyword)) {
+      if (std::cmp_equal(block_depth, 0UZ)) {
+        return true;
+      }
+
+      block_depth--;
+      if (std::cmp_equal(block_depth, 0UZ)) {
+        return true;
+      }
+    }
+
+    token_iterator++;
+  }
+
+  return false;
 }
 
 inline auto IsNetType(tokens_t::iterator const token_iterator) -> bool {
@@ -150,6 +223,49 @@ auto MatchingTopLevelEndKeyword(std::string_view const keyword)
 
   throw std::runtime_error{fmt::format(
       "[Parser] unexpected keyword '{}' while parsing module item", keyword)};
+}
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+auto MatchingModuleItemEndKeyword(tokens_t::iterator const token_iterator)
+    -> std::string_view {
+  if (token_iterator->lexeme == "function") {
+    return kTopLevelEndKeywords[8];
+  }
+  if (token_iterator->lexeme == "task") {
+    return kTopLevelEndKeywords[9];
+  }
+  if (token_iterator->lexeme == "class") {
+    return kTopLevelEndKeywords[7];
+  }
+  if (token_iterator->lexeme == "specify") {
+    return kTopLevelEndKeywords[10];
+  }
+  if (token_iterator->lexeme == "clocking") {
+    return kTopLevelEndKeywords[11];
+  }
+  if (token_iterator->lexeme == "property") {
+    return kTopLevelEndKeywords[12];
+  }
+  if (token_iterator->lexeme == "sequence") {
+    return kTopLevelEndKeywords[13];
+  }
+  if (token_iterator->lexeme == "covergroup") {
+    return kTopLevelEndKeywords[14];
+  }
+  if (token_iterator->lexeme == "checker") {
+    return kTopLevelEndKeywords[6];
+  }
+  if (token_iterator->lexeme == "default" and
+      rng::next(token_iterator, 1)->lexeme == "clocking") {
+    return kTopLevelEndKeywords[11];
+  }
+  if (token_iterator->lexeme == "global" and
+      rng::next(token_iterator, 1)->lexeme == "clocking") {
+    return kTopLevelEndKeywords[11];
+  }
+
+  return {};
 }
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
@@ -496,6 +612,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                            resolved_item.instance_name,
                            JoinLexemes(resolved_item.parameter_overrides),
                            JoinLexemes(resolved_item.port_connections));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              UnsupportedModuleItem>) {
+              fmt::println("    {} <unsupported>", resolved_item.kind);
             }
           },
           item);
@@ -733,23 +853,28 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
   static constexpr auto kKeywords{std::to_array<std::string_view>({
-      "alias",        "always",       "always_comb",  "always_ff",
-      "always_latch", "assign",       "assume",       "automatic",
-      "begin",        "bind",         "bit",          "case",
-      "checker",      "class",        "clocking",     "config",
-      "constraint",   "cover",        "default",      "defparam",
-      "disable",      "else",         "end",          "endchecker",
-      "endclass",     "endclocking",  "endconfig",    "endfunction",
-      "endgenerate",  "endgroup",     "endinterface", "endmodule",
-      "endpackage",   "endprimitive", "endprogram",   "endproperty",
-      "endsequence",  "endtask",      "event",        "export",
-      "extern",       "final",        "for",          "function",
-      "generate",     "genvar",       "if",           "import",
-      "initial",      "input",        "interface",    "inout",
-      "localparam",   "logic",        "macromodule",  "module",
-      "nettype",      "output",       "package",      "parameter",
-      "primitive",    "program",      "ref",          "reg",
-      "task",         "wire",
+      "alias",        "always",      "always_comb", "always_ff",
+      "always_latch", "assign",      "assume",      "automatic",
+      "begin",        "bind",        "bit",         "case",
+      "chandle",      "checker",     "class",       "clocking",
+      "config",       "constraint",  "cover",       "covergroup",
+      "default",      "defparam",    "disable",     "else",
+      "end",          "endchecker",  "endclass",    "endclocking",
+      "endconfig",    "endfunction", "endgenerate", "endgroup",
+      "endinterface", "endmodule",   "endpackage",  "endprimitive",
+      "endprogram",   "endproperty", "endsequence", "endspecify",
+      "endtask",      "event",       "export",      "extern",
+      "final",        "for",         "function",    "generate",
+      "genvar",       "global",      "if",          "import",
+      "initial",      "input",       "int",         "integer",
+      "interface",    "inout",       "let",         "localparam",
+      "logic",        "longint",     "macromodule", "module",
+      "nettype",      "output",      "package",     "parameter",
+      "primitive",    "program",     "property",    "real",
+      "realtime",     "ref",         "reg",         "restrict",
+      "sequence",     "shortint",    "shortreal",   "specify",
+      "task",         "time",        "typedef",     "wand",
+      "wire",         "wor",
   })};
 
   auto const start_position{m_position - 1};
@@ -1033,31 +1158,30 @@ auto Parser::ParseDesignElement() -> DesignElement {
 
 auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
   auto const element_begin_iterator{m_token_iterator};
-  auto const kind{m_token_iterator->lexeme};
 
   SkipAttributeInstances();
 
   if (m_token_iterator->type == TokenType::kKeyword) {
     try {
-      SkipUnsupportedDesignElementToMatchingEnd(
+      SkipUnsupportedElementToMatchingEnd(
           m_token_iterator->lexeme,
-          MatchingTopLevelEndKeyword(m_token_iterator->lexeme));
+          MatchingTopLevelEndKeyword(m_token_iterator->lexeme), {});
       return UnsupportedDesignElement{
-          .kind = kind,
+          .kind = element_begin_iterator->lexeme,
           .tokens = std::span{element_begin_iterator, m_token_iterator}};
     } catch (std::runtime_error const& exception) {
       // FIXME: ignoring the unsupported design element for now
     }
   }
 
-  SkipUnsupportedDesignElementToSemicolon();
+  SkipUnsupportedElementToSemicolon();
   if (element_begin_iterator == m_token_iterator and
       m_token_iterator->type != TokenType::kEndOfFile) {
     m_token_iterator++;
   }
 
   return UnsupportedDesignElement{
-      .kind = kind,
+      .kind = element_begin_iterator->lexeme,
       .tokens = std::span{element_begin_iterator, m_token_iterator}};
 }
 
@@ -1078,50 +1202,56 @@ auto Parser::SkipAttributeInstances() -> void {
   }
 }
 
-auto Parser::SkipUnsupportedDesignElementToSemicolon() -> void {
-  auto delimiter_depth{0UZ};
-  while (m_token_iterator->type != TokenType::kEndOfFile) {
-    if (IsOpeningDelimiter(m_token_iterator)) {
-      delimiter_depth++;
-    } else if (IsClosingDelimiter(m_token_iterator)) {
-      if (std::cmp_not_equal(delimiter_depth, 0UZ)) {
-        delimiter_depth--;
-      }
-    } else if (m_token_iterator->type == TokenType::kSemicolon and
-               std::cmp_equal(delimiter_depth, 0UZ)) {
-      m_token_iterator++;
-      return;
-    }
+auto Parser::SkipUnsupportedElementToSemicolon(
+    std::string_view const stop_keyword) -> void {
+  AdvanceToTopLevelBoundary(
+      m_token_iterator,
+      [stop_keyword](tokens_t::iterator const token_iterator) -> bool {
+        return not rng::empty(stop_keyword) and
+               token_iterator->lexeme == stop_keyword;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      false);
 
+  if (m_token_iterator->type == TokenType::kSemicolon) {
     m_token_iterator++;
   }
 }
 
-auto Parser::SkipUnsupportedDesignElementToMatchingEnd(
-    std::string_view const start_keyword, std::string_view const end_keyword)
-    -> void {
-  auto block_depth{0UZ};
-  while (m_token_iterator->type != TokenType::kEndOfFile) {
-    if (IsKeyword(m_token_iterator, start_keyword)) {
-      block_depth++;
-    } else if (IsKeyword(m_token_iterator, end_keyword)) {
-      if (std::cmp_not_equal(block_depth, 0UZ)) {
-        block_depth--;
-      }
-
-      if (std::cmp_equal(block_depth, 0UZ)) {
-        m_token_iterator++;
-        if (m_token_iterator->type == TokenType::kColon) {
-          m_token_iterator++;
-          if (m_token_iterator->type == TokenType::kIdentifier) {
-            m_token_iterator++;
-          }
-        }
-        return;
-      }
+auto Parser::SkipUnsupportedElementToMatchingEnd(
+    std::string_view const start_keyword, std::string_view const end_keyword,
+    UnsupportedElementEndOptions const& options) -> void {
+  auto matches_keyword{[&options](tokens_t::iterator const token_iterator,
+                                  std::string_view const keyword) -> bool {
+    if (options.match_keyword_tokens_only) {
+      return IsKeyword(token_iterator, keyword);
     }
 
+    return token_iterator->lexeme == keyword;
+  }};
+
+  if (AdvanceToMatchingEndKeyword(m_token_iterator, start_keyword, end_keyword,
+                                  0UZ, matches_keyword)) {
     m_token_iterator++;
+    if (m_token_iterator->type == TokenType::kColon) {
+      m_token_iterator++;
+      if ((options.trailing_label_must_be_identifier and
+           m_token_iterator->type == TokenType::kIdentifier) or
+          (not options.trailing_label_must_be_identifier and
+           m_token_iterator->type != TokenType::kEndOfFile and
+           m_token_iterator->type != TokenType::kSemicolon)) {
+        m_token_iterator++;
+      }
+    }
+    return;
+  }
+
+  if (options.require_end_keyword) {
+    throw std::runtime_error{
+        fmt::format("[Parser] expected '{}' while parsing {}", end_keyword,
+                    options.context)};
   }
 }
 
@@ -1141,7 +1271,9 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   module_declaration.name = m_token_iterator->lexeme;
   m_token_iterator++;
 
-  SkipModuleHeaderImports();
+  while (IsKeyword(m_token_iterator, "import")) {
+    SkipUnsupportedElementToSemicolon();
+  }
 
   if (m_token_iterator->type != TokenType::kHash and
       m_token_iterator->type != TokenType::kLParen and
@@ -1171,25 +1303,19 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   return module_declaration;
 }
 
-auto Parser::SkipModuleHeaderImports() -> void {
-  while (IsKeyword(m_token_iterator, "import")) {
-    SkipUnsupportedDesignElementToSemicolon();
-  }
-}
-
 auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
   std::vector<ModuleItem> items{};
 
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
+    auto const module_item_begin_iterator{m_token_iterator};
     try {
       items.push_back(ParseModuleItem());
-      continue;
     } catch (std::runtime_error const& exception) {
-      // FIXME: ignoring the unsupported module item for now
+      m_token_iterator = module_item_begin_iterator;
+      items.emplace_back(std::in_place_type<UnsupportedModuleItem>,
+                         ParseUnsupportedModuleItem());
     }
-
-    SkipUnsupportedModuleItem();
   }
 
   if (m_token_iterator->lexeme == "endmodule") {
@@ -1210,7 +1336,10 @@ auto Parser::ParseModuleItem() -> ModuleItem {
                       ParseContinuousAssign()};
   }
 
-  if (IsKeyword(m_token_iterator, "always")) {
+  if (IsKeyword(m_token_iterator, "always") or
+      IsKeyword(m_token_iterator, "always_ff") or
+      IsKeyword(m_token_iterator, "always_comb") or
+      IsKeyword(m_token_iterator, "always_latch")) {
     ExpectToken(TokenType::kKeyword, "always block");
     return ModuleItem{std::in_place_type<AlwaysBlock>,
                       ParseAlwaysEventControl(),
@@ -1231,6 +1360,13 @@ auto Parser::ParseModuleItem() -> ModuleItem {
     return ModuleItem{std::in_place_type<GenerateBlock>, ParseGenerateBlock()};
   }
 
+  if (not rng::empty(MatchingModuleItemEndKeyword(m_token_iterator)) or
+      rng::contains(kUnsupportedModuleItemKeywords, m_token_iterator->lexeme) or
+      rng::contains(kUnsupportedModuleItemNetTypes, m_token_iterator->lexeme)) {
+    return ModuleItem{std::in_place_type<UnsupportedModuleItem>,
+                      ParseUnsupportedModuleItem()};
+  }
+
   if (m_token_iterator->type == TokenType::kIdentifier) {
     return ModuleItem{std::in_place_type<ModuleInstantiation>,
                       ParseModuleInstantiation()};
@@ -1241,16 +1377,31 @@ auto Parser::ParseModuleItem() -> ModuleItem {
                   m_token_iterator->lexeme)};
 }
 
-auto Parser::SkipUnsupportedModuleItem() -> void {
-  while (m_token_iterator->type != TokenType::kEndOfFile and
-         m_token_iterator->type != TokenType::kSemicolon and
-         m_token_iterator->lexeme != "endmodule") {
+auto Parser::ParseUnsupportedModuleItem() -> UnsupportedModuleItem {
+  auto const module_item_begin_iterator{m_token_iterator};
+
+  if (auto const end_keyword{MatchingModuleItemEndKeyword(m_token_iterator)};
+      not rng::empty(end_keyword)) {
+    SkipUnsupportedElementToMatchingEnd(
+        m_token_iterator->lexeme, end_keyword,
+        {.match_keyword_tokens_only = false,
+         .require_end_keyword = true,
+         .trailing_label_must_be_identifier = false,
+         .context = "unsupported module item"});
+  } else if (m_token_iterator->lexeme == "final") {
     m_token_iterator++;
+    if (m_token_iterator->lexeme == "begin") {
+      ParseBeginEndBlockBody("final block");
+    } else {
+      ParseSingleStatementBody("final block");
+    }
+  } else {
+    SkipUnsupportedElementToSemicolon("endmodule");
   }
 
-  if (m_token_iterator->type == TokenType::kSemicolon) {
-    m_token_iterator++;
-  }
+  return UnsupportedModuleItem{
+      .kind = module_item_begin_iterator->lexeme,
+      .tokens = std::span{module_item_begin_iterator, m_token_iterator}};
 }
 
 auto Parser::ParseNetDeclaration() -> NetDeclaration {
@@ -1415,20 +1566,11 @@ auto Parser::ParseKeywordBlockBody(std::string_view const start_keyword,
   ExpectToken(TokenType::kKeyword, context);
 
   auto const body_begin_iterator{m_token_iterator};
-  auto block_depth{1UZ};
-  while (m_token_iterator->type != TokenType::kEndOfFile) {
-    if (IsKeyword(m_token_iterator, start_keyword)) {
-      block_depth++;
-    } else if (IsKeyword(m_token_iterator, end_keyword)) {
-      block_depth--;
-      if (std::cmp_equal(block_depth, 0UZ)) {
-        auto const body{tokens_t{body_begin_iterator, m_token_iterator}};
-        m_token_iterator++;
-        return body;
-      }
-    }
-
+  if (AdvanceToMatchingEndKeyword(m_token_iterator, start_keyword, end_keyword,
+                                  1UZ, IsKeyword)) {
+    auto const body{tokens_t{body_begin_iterator, m_token_iterator}};
     m_token_iterator++;
+    return body;
   }
 
   throw std::runtime_error{
@@ -1439,22 +1581,11 @@ auto Parser::ParseKeywordBlockBody(std::string_view const start_keyword,
 
 auto Parser::AdvanceToTopLevelListBoundary(std::string_view const context)
     -> void {
-  auto delimiter_depth{0UZ};
-  while (m_token_iterator->type != TokenType::kEndOfFile) {
-    if (IsOpeningDelimiter(m_token_iterator)) {
-      delimiter_depth++;
-    } else if (IsClosingDelimiter(m_token_iterator)) {
-      if (std::cmp_equal(delimiter_depth, 0UZ)) {
-        return;
-      }
-
-      delimiter_depth--;
-    } else if (IsListSeparator(m_token_iterator) and
-               std::cmp_equal(delimiter_depth, 0UZ)) {
-      return;
-    }
-
-    m_token_iterator++;
+  if (AdvanceToTopLevelBoundary(
+          m_token_iterator,
+          [](tokens_t::iterator const) -> bool { return false; },
+          IsListSeparator, true)) {
+    return;
   }
 
   throw std::runtime_error{fmt::format(

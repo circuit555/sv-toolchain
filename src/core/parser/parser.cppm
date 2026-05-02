@@ -63,21 +63,28 @@ export class Parser final {
   [[nodiscard]] auto Parse() -> TranslationUnit;
 
  private:
+  struct UnsupportedElementEndOptions {
+    bool match_keyword_tokens_only{true};
+    bool require_end_keyword{false};
+    bool trailing_label_must_be_identifier{true};
+    std::string_view context;
+  };
+
   auto ExpectToken(::svt::model::TokenType expected_type,
                    std::string_view context) -> void;
   auto ParseDesignElement() -> ::svt::model::DesignElement;
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
-  auto SkipModuleHeaderImports() -> void;
   auto SkipAttributeInstances() -> void;
-  auto SkipUnsupportedDesignElementToSemicolon() -> void;
-  auto SkipUnsupportedDesignElementToMatchingEnd(std::string_view start_keyword,
-                                                 std::string_view end_keyword)
+  auto SkipUnsupportedElementToSemicolon(std::string_view stop_keyword = {})
       -> void;
+  auto SkipUnsupportedElementToMatchingEnd(
+      std::string_view start_keyword, std::string_view end_keyword,
+      UnsupportedElementEndOptions const& options) -> void;
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
-  auto SkipUnsupportedModuleItem() -> void;
+  auto ParseUnsupportedModuleItem() -> ::svt::model::UnsupportedModuleItem;
   auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
   auto ParseModuleInstantiation() -> ::svt::model::ModuleInstantiation;

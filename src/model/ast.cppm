@@ -61,9 +61,14 @@ export struct ModuleInstantiation {
   std::span<Token const> port_connections;
 };
 
+export struct UnsupportedModuleItem {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
 export using ModuleItem =
     std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
-                 GenerateBlock, ModuleInstantiation>;
+                 GenerateBlock, ModuleInstantiation, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

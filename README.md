@@ -69,7 +69,7 @@ $ build/svt
 ```shell
 # source code modified ...
 $ ninja -f build/build.ninja
-$ build/svt
+$ build/svt <systemverilog source file>
 ```
 
 If `build.json` changes (for example, new source files or modules), run:

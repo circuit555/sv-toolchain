@@ -15,6 +15,7 @@ using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 using ContinuousAssign = svt::model::ContinuousAssign;
 using AlwaysBlock = svt::model::AlwaysBlock;
 using InitialBlock = svt::model::InitialBlock;
+using GenerateBlock = svt::model::GenerateBlock;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 
@@ -228,7 +229,8 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
 
   auto const& initial_block{
       std::get<InitialBlock>(module_declaration.items.at(1))};
-  REQUIRE(Lexemes(initial_block) == std::vector<std::string_view>{"ignored"});
+  REQUIRE(Lexemes(initial_block.body) ==
+          std::vector<std::string_view>{"ignored"});
 
   auto const& z_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(2))};
@@ -309,14 +311,91 @@ TEST_CASE("Parse module initial blocks", "[parser]") {
 
   auto const& begin_end_initial{
       std::get<InitialBlock>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(begin_end_initial) ==
+  REQUIRE(Lexemes(begin_end_initial.body) ==
           std::vector<std::string_view>{"a", "=", "0", ";", "begin", "b", "=",
                                         "a", ";", "end"});
 
   auto const& single_statement_initial{
       std::get<InitialBlock>(module_declaration.items.at(1))};
-  REQUIRE(Lexemes(single_statement_initial) ==
+  REQUIRE(Lexemes(single_statement_initial.body) ==
           std::vector<std::string_view>{"ready", "=", "1"});
+}
+
+TEST_CASE("Parse module generate blocks", "[parser]") {
+  std::string src = R"(
+    module foo #(parameter WIDTH = 4) (
+      input [WIDTH-1:0] data,
+      output [WIDTH-1:0] q
+    );
+      generate
+        genvar i;
+        for (i = 0; i < WIDTH; i = i + 1) begin : gen_q
+          assign q[i] = data[i];
+        end
+      endgenerate
+      assign done = 1;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& generate_block{
+      std::get<GenerateBlock>(module_declaration.items.at(0))};
+  REQUIRE(Lexemes(generate_block.body) ==
+          std::vector<std::string_view>{"genvar", "i", ";", "for", "(",
+                                        "i", "=", "0", ";", "i", "<",
+                                        "WIDTH", ";", "i", "=", "i", "+",
+                                        "1", ")", "begin", ":", "gen_q",
+                                        "assign", "q", "[", "i", "]", "=",
+                                        "data", "[", "i", "]", ";", "end"});
+
+  auto const& continuous_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(1))};
+  REQUIRE(Lexemes(continuous_assign.left_hand_side) ==
+          std::vector<std::string_view>{"done"});
+  REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
+          std::vector<std::string_view>{"1"});
+}
+
+TEST_CASE("Parse nested module generate blocks", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      generate
+        generate
+          assign a = b;
+        endgenerate
+      endgenerate
+      logic done;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "foo");
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& generate_block{
+      std::get<GenerateBlock>(module_declaration.items.at(0))};
+  REQUIRE(Lexemes(generate_block.body) ==
+          std::vector<std::string_view>{"generate", "assign", "a", "=", "b",
+                                        ";", "endgenerate"});
+
+  auto const& net_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(net_declaration.name == "done");
 }
 
 TEST_CASE("Parse always block example file", "[parser]") {
@@ -337,4 +416,25 @@ TEST_CASE("Parse always block example file", "[parser]") {
       std::holds_alternative<ContinuousAssign>(module_declaration.items.at(1)));
   REQUIRE(std::holds_alternative<InitialBlock>(module_declaration.items.at(2)));
   REQUIRE(std::holds_alternative<AlwaysBlock>(module_declaration.items.at(3)));
+}
+
+TEST_CASE("Parse generate block example file", "[parser]") {
+  auto src{ReadExample("example/lexer/generate_foo.sv")};
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.name == "generate_foo");
+  REQUIRE(module_declaration.parameters.size() == 1);
+  REQUIRE(module_declaration.ports.size() == 3);
+  REQUIRE(module_declaration.items.size() == 3);
+  REQUIRE(
+      std::holds_alternative<NetDeclaration>(module_declaration.items.at(0)));
+  REQUIRE(std::holds_alternative<GenerateBlock>(module_declaration.items.at(1)));
+  REQUIRE(
+      std::holds_alternative<ContinuousAssign>(module_declaration.items.at(2)));
 }

@@ -20,13 +20,16 @@ auto ReadSystemVerilogSourceFile(const char* sv_source_code_path)
 }
 
 auto main(int const argc, char const* const* argv) -> int {
+  std::span<char const* const> const arguments{argv,
+                                               static_cast<std::size_t>(argc)};
+
   if (argc != 2) {
-    std::println(std::cerr, "usage: {} <source.sv>", argv[0]);
+    std::println(std::cerr, "usage: {} <source.sv>", arguments.front());
     return 1;
   }
 
   try {
-    svt::core::Parser parser{ReadSystemVerilogSourceFile(argv[1])};
+    svt::core::Parser parser{ReadSystemVerilogSourceFile(arguments.at(1))};
     auto translation_unit = parser.Parse();
     svt::core::Print(translation_unit);
   } catch (std::exception const& exception) {

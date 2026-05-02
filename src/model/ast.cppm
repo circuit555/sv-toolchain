@@ -5,12 +5,7 @@ export module svt.model.ast;
 import std;
 import svt.model.token;
 
-// TODO(): minor cleanup needed for struct definitions e.g. do we really need
-// AstNodePoiinter anymore?
-
 namespace svt::model {
-
-enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
 
 export enum class PortDirection : std::uint8_t { kInput, kOutput };
 
@@ -20,14 +15,14 @@ struct Declaration {
   std::string_view name;
 };
 
-class IdentifierExpression;
-class NumberExpression;
-class BinaryExpression;
-export class PortDeclaration;
-export class NetDeclaration;
-export class ContinuousAssign;
-export class AlwaysBlock;
-export class ModuleDeclaration;
+export struct PortDeclaration : Declaration {
+  PortDirection direction{};
+};
+
+export struct NetDeclaration : Declaration {
+  NetType type;
+  std::span<Token const> type_specifier;
+};
 
 export struct ParameterTypeDeclaration : Declaration {
   std::span<Token const> default_type;
@@ -41,42 +36,12 @@ export struct ParameterValueDeclaration : Declaration {
 export using ParameterDeclaration =
     std::variant<ParameterTypeDeclaration, ParameterValueDeclaration>;
 
-/// @brief Type-erased AST node that stores one concrete node variant.
-export using AstNode =
-    std::variant<IdentifierExpression, NumberExpression, BinaryExpression,
-                 ParameterDeclaration, PortDeclaration, NetDeclaration,
-                 ModuleDeclaration>;
-
-/// @brief Owning pointer to an AST node.
-export using AstNodePointer = AstNode*;
-
-struct IdentifierExpression : Declaration {};
-
-struct NumberExpression {
-  int value;
-};
-
-struct BinaryExpression {
-  BinaryOperation operation;
-  AstNodePointer left_operand_ptr;
-  AstNodePointer right_operand_ptr;
-};
-
-struct PortDeclaration : Declaration {
-  PortDirection direction;
-};
-
-struct NetDeclaration : Declaration {
-  NetType type;
-  std::span<Token const> type_specifier;
-};
-
-struct ContinuousAssign {
+export struct ContinuousAssign {
   std::span<Token const> left_hand_side;
   std::span<Token const> right_hand_side;
 };
 
-struct AlwaysBlock {
+export struct AlwaysBlock {
   std::span<Token const> event_control;
   std::span<Token const> body;
 };
@@ -91,5 +56,8 @@ export struct ModuleDeclaration : Declaration {
   std::vector<PortDeclaration> ports;
   std::vector<ModuleItem> items;
 };
+
+/// @brief Top-level SystemVerilog design element.
+export using DesignElement = std::variant<ModuleDeclaration>;
 
 }  // namespace svt::model

@@ -13,8 +13,7 @@ using TokenType = ::svt::model::TokenType;
 using Token = ::svt::model::Token;
 using token_stream_t = ::svt::model::token_stream_t;
 using SourceLocation = ::svt::model::SourceLocation;
-using AstNode = ::svt::model::AstNode;
-using AstNodePointer = ::svt::model::AstNodePointer;
+using DesignElement = ::svt::model::DesignElement;
 using ModuleDeclaration = ::svt::model::ModuleDeclaration;
 using ParameterDeclaration = ::svt::model::ParameterDeclaration;
 using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
@@ -713,13 +712,13 @@ auto Parser::ExpectToken(TokenType const expected_type,
 auto Parser::Parse() -> TranslationUnit {
   TranslationUnit translation_unit{};
   while (m_token_iterator->type != TokenType::kEndOfFile) {
-    translation_unit.push_back(ParseDeclaration());
+    translation_unit.push_back(ParseDesignElement());
   }
   return translation_unit;
 }
 
 auto Print(Parser::TranslationUnit const& translation_unit) -> void {
-  for (auto const& node : translation_unit) {
+  for (auto const& design_element : translation_unit) {
     std::visit(
         [](auto const& resolved_node) -> void {
           if constexpr (std::same_as<
@@ -730,11 +729,11 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             fmt::println("<unsupported AST node>");
           }
         },
-        node);
+        design_element);
   }
 }
 
-auto Parser::ParseDeclaration() -> AstNode {
+auto Parser::ParseDesignElement() -> DesignElement {
   switch (m_token_iterator->type) {
     case TokenType::kKeyword: {
       if (m_token_iterator->lexeme == "module") {

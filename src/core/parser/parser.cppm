@@ -16,7 +16,7 @@ export class Lexer final {
 
  private:
   template <std::size_t kOffset = 0>
-  [[nodiscard]] auto Peek() const -> char;
+  [[nodiscard]] auto Peek() const -> unsigned char;
   auto ScanNext() -> ::svt::model::Token;
   auto SkipWhiteSpaceAndComments() -> void;
   auto SkipHorizontalWhiteSpace() -> void;

@@ -554,9 +554,7 @@ auto Lexer::ScanNext() -> Token {
 auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
   auto const start_position{m_position - 1};
 
-  while (
-      std::cmp_not_equal(std::isdigit(static_cast<unsigned char>(Peek())), 0) or
-      Peek() == '_') {
+  while (std::cmp_not_equal(std::isdigit(Peek()), 0) or Peek() == '_') {
     m_position += 1;
     m_source_location.column += 1;
   }
@@ -570,8 +568,7 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
       m_source_location.column += 1;
     }
 
-    if (std::cmp_not_equal(std::isalpha(static_cast<unsigned char>(Peek())),
-                           0)) {
+    if (std::cmp_not_equal(std::isalpha(Peek()), 0)) {
       m_position += 1;
       m_source_location.column += 1;
     }
@@ -591,8 +588,7 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
     m_position += 1;
     m_source_location.column += 1;
 
-    while (std::isdigit(static_cast<unsigned char>(Peek())) != 0 or
-           Peek() == '_') {
+    while (std::isdigit(Peek()) != 0 or Peek() == '_') {
       m_position += 1;
       m_source_location.column += 1;
     }
@@ -603,7 +599,7 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
                  .location = token_source_location};
   }
 
-  while (std::isalpha(static_cast<unsigned char>(Peek())) != 0) {
+  while (std::isalpha(Peek()) != 0) {
     m_position += 1;
     m_source_location.column += 1;
   }
@@ -657,8 +653,7 @@ auto Lexer::ScanEscapedIdentifier(SourceLocation const& token_source_location)
     -> Token {
   auto const start_position{m_position - 1};
 
-  while (Peek() != '\0' and
-         std::cmp_equal(std::isspace(static_cast<unsigned char>(Peek())), 0)) {
+  while (Peek() != '\0' and std::cmp_equal(std::isspace(Peek()), 0)) {
     m_position += 1;
     m_source_location.column += 1;
   }
@@ -759,9 +754,10 @@ auto Lexer::ScanString(SourceLocation const& token_source_location) -> Token {
 }
 
 template <std::size_t kOffset>
-auto Lexer::Peek() const -> char {
+auto Lexer::Peek() const -> unsigned char {
   try {
-    return m_sv_source_code_view.at(m_position + kOffset);
+    return static_cast<unsigned char>(
+        m_sv_source_code_view.at(m_position + kOffset));
   } catch (std::out_of_range const& exception) {
     return '\0';
   }

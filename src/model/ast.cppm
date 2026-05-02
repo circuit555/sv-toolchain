@@ -5,6 +5,9 @@ export module svt.model.ast;
 import std;
 import svt.model.token;
 
+// TODO(): minor cleanup needed for struct definitions e.g. do we really need
+// AstNodePoiinter anymore?
+
 namespace svt::model {
 
 enum class BinaryOperation : std::uint8_t { kPlus, kMinus, kMultiply, kDivide };
@@ -78,8 +81,10 @@ struct AlwaysBlock {
   std::span<Token const> body;
 };
 
+export using InitialBlock = std::span<Token const>;
+
 export using ModuleItem =
-    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock>;
+    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

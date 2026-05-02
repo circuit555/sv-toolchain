@@ -25,6 +25,7 @@ using NetDeclaration = ::svt::model::NetDeclaration;
 using NetType = ::svt::model::NetType;
 using ContinuousAssign = ::svt::model::ContinuousAssign;
 using AlwaysBlock = ::svt::model::AlwaysBlock;
+using InitialBlock = ::svt::model::InitialBlock;
 using ModuleItem = ::svt::model::ModuleItem;
 
 namespace {
@@ -346,6 +347,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
               fmt::println("    always {} {}",
                            JoinLexemes(resolved_item.event_control),
                            JoinLexemes(resolved_item.body));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              InitialBlock>) {
+              fmt::println("    initial {}", JoinLexemes(resolved_item));
             }
           },
           item);
@@ -818,8 +823,18 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
       items.emplace_back(std::in_place_type<AlwaysBlock>,
                          ParseAlwaysEventControl(),
                          IsKeyword(*m_token_iterator, "begin")
-                             ? ParseAlwaysBeginEndBody()
-                             : ParseAlwaysSingleStatementBody());
+                             ? ParseBeginEndBlockBody("always block")
+                             : ParseSingleStatementBody("always block"));
+      continue;
+    }
+
+    if (m_token_iterator->type == TokenType::kKeyword and
+        m_token_iterator->lexeme == "initial") {
+      ExpectToken(TokenType::kKeyword, "initial block");
+      items.emplace_back(std::in_place_type<InitialBlock>,
+                         IsKeyword(*m_token_iterator, "begin")
+                             ? ParseBeginEndBlockBody("initial block")
+                             : ParseSingleStatementBody("initial block"));
       continue;
     }
 
@@ -1005,9 +1020,10 @@ auto Parser::ParseAlwaysEventControl() -> std::span<Token const> {
   return std::span{event_begin_iterator, m_token_iterator};
 }
 
-auto Parser::ParseAlwaysBeginEndBody() -> std::span<Token const> {
+auto Parser::ParseBeginEndBlockBody(std::string_view const context)
+    -> std::span<Token const> {
   // consume `begin` token
-  ExpectToken(TokenType::kKeyword, "always block");
+  ExpectToken(TokenType::kKeyword, context);
 
   auto const body_begin_iterator{m_token_iterator};
 
@@ -1028,11 +1044,12 @@ auto Parser::ParseAlwaysBeginEndBody() -> std::span<Token const> {
   }
 
   throw std::runtime_error{fmt::format(
-      "[Parser] expected 'end' while parsing always block at ({}, {})",
+      "[Parser] expected 'end' while parsing {} at ({}, {})", context,
       body_begin_iterator->location.row, body_begin_iterator->location.column)};
 }
 
-auto Parser::ParseAlwaysSingleStatementBody() -> std::span<Token const> {
+auto Parser::ParseSingleStatementBody(std::string_view const context)
+    -> std::span<Token const> {
   auto const body_begin_iterator{m_token_iterator};
   auto const body_end_iterator{
       rng::find_if(std::span{m_token_iterator, rng::cend(m_tokens)},
@@ -1042,15 +1059,15 @@ auto Parser::ParseAlwaysSingleStatementBody() -> std::span<Token const> {
                    })};
 
   if (body_begin_iterator == body_end_iterator) [[unlikely]] {
-    throw std::runtime_error{fmt::format(
-        "[Parser] expected statement while parsing always block at ({}, {})",
-        body_begin_iterator->location.row,
-        body_begin_iterator->location.column)};
+    throw std::runtime_error{
+        fmt::format("[Parser] expected statement while parsing {} at ({}, {})",
+                    context, body_begin_iterator->location.row,
+                    body_begin_iterator->location.column)};
   }
 
   auto const body{std::span{body_begin_iterator, body_end_iterator}};
   m_token_iterator = body_end_iterator;
-  ExpectToken(TokenType::kSemicolon, "always block");
+  ExpectToken(TokenType::kSemicolon, context);
 
   return body;
 }

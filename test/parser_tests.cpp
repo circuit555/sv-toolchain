@@ -28,9 +28,9 @@ auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   return result;
 }
 
-auto ReadExample(std::filesystem::path const& example_path) -> std::string {
+auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
   auto const test_path{std::filesystem::path{__FILE__}.parent_path()};
-  std::ifstream file_stream{test_path / ".." / example_path,
+  std::ifstream file_stream{test_path / fixture_path,
                             std::ios::binary | std::ios::ate};
   REQUIRE(file_stream.is_open());
 
@@ -443,7 +443,7 @@ TEST_CASE("Parse nested module generate blocks", "[parser]") {
 }
 
 TEST_CASE("Parse always block example file", "[parser]") {
-  auto src{ReadExample("example/lexer/always_foo.sv")};
+  auto src{ReadFixture("always.sv")};
   Parser parser{std::move(src)};
 
   auto translation_unit = parser.Parse();
@@ -463,7 +463,7 @@ TEST_CASE("Parse always block example file", "[parser]") {
 }
 
 TEST_CASE("Parse generate block example file", "[parser]") {
-  auto src{ReadExample("example/lexer/generate_foo.sv")};
+  auto src{ReadFixture("generate.sv")};
   Parser parser{std::move(src)};
 
   auto translation_unit = parser.Parse();
@@ -484,7 +484,7 @@ TEST_CASE("Parse generate block example file", "[parser]") {
 }
 
 TEST_CASE("Parse module instantiation example file", "[parser]") {
-  auto src{ReadExample("example/lexer/module_foo.sv")};
+  auto src{ReadFixture("module.sv")};
   Parser parser{std::move(src)};
 
   auto translation_unit = parser.Parse();

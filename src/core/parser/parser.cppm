@@ -76,7 +76,7 @@ export class Parser final {
       -> void;
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
-  auto ParseModuleItem() -> std::optional<::svt::model::ModuleItem>;
+  auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto SkipUnsupportedModuleItem() -> void;
   auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
   auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;

@@ -116,7 +116,7 @@ inline auto IsBasedLiteralDigit(unsigned char const character) -> bool {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 auto MatchingTopLevelEndKeyword(std::string_view const keyword)
-    -> std::optional<std::string_view> {
+    -> std::string_view {
   if (keyword == "module" or keyword == "macromodule") {
     return kTopLevelEndKeywords[0];
   }
@@ -148,7 +148,8 @@ auto MatchingTopLevelEndKeyword(std::string_view const keyword)
     return kTopLevelEndKeywords[9];
   }
 
-  return std::nullopt;
+  throw std::runtime_error{fmt::format(
+      "[Parser] unexpected keyword '{}' while parsing module item", keyword)};
 }
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
@@ -1037,14 +1038,15 @@ auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
   SkipAttributeInstances();
 
   if (m_token_iterator->type == TokenType::kKeyword) {
-    if (auto const end_keyword{
-            MatchingTopLevelEndKeyword(m_token_iterator->lexeme)};
-        end_keyword.has_value()) {
-      SkipUnsupportedDesignElementToMatchingEnd(m_token_iterator->lexeme,
-                                                end_keyword.value());
+    try {
+      SkipUnsupportedDesignElementToMatchingEnd(
+          m_token_iterator->lexeme,
+          MatchingTopLevelEndKeyword(m_token_iterator->lexeme));
       return UnsupportedDesignElement{
           .kind = kind,
           .tokens = std::span{element_begin_iterator, m_token_iterator}};
+    } catch (std::runtime_error const& exception) {
+      // FIXME: ignoring the unsupported design element for now
     }
   }
 
@@ -1180,9 +1182,11 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
 
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
-    if (auto module_item{ParseModuleItem()}; module_item.has_value()) {
-      items.push_back(module_item.value());
+    try {
+      items.push_back(ParseModuleItem());
       continue;
+    } catch (std::runtime_error const& exception) {
+      // FIXME: ignoring the unsupported module item for now
     }
 
     SkipUnsupportedModuleItem();
@@ -1195,7 +1199,7 @@ auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
   return items;
 }
 
-auto Parser::ParseModuleItem() -> std::optional<ModuleItem> {
+auto Parser::ParseModuleItem() -> ModuleItem {
   if (IsNetType(m_token_iterator)) {
     return ModuleItem{std::in_place_type<NetDeclaration>,
                       ParseNetDeclaration()};
@@ -1232,7 +1236,9 @@ auto Parser::ParseModuleItem() -> std::optional<ModuleItem> {
                       ParseModuleInstantiation()};
   }
 
-  return std::nullopt;
+  throw std::runtime_error{
+      fmt::format("[Parser] unexpected token '{}' while parsing module item",
+                  m_token_iterator->lexeme)};
 }
 
 auto Parser::SkipUnsupportedModuleItem() -> void {

@@ -21,6 +21,16 @@ using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
+using Expression = svt::model::Expression;
+using IdentifierExpression = svt::model::IdentifierExpression;
+using LiteralExpression = svt::model::LiteralExpression;
+using BinaryExpression = svt::model::BinaryExpression;
+using IndexExpression = svt::model::IndexExpression;
+using RangeSelectExpression = svt::model::RangeSelectExpression;
+using ConcatenationExpression = svt::model::ConcatenationExpression;
+using PackedRangeDimension = svt::model::PackedRangeDimension;
+using PackedSizeDimension = svt::model::PackedSizeDimension;
+using GenerateForExpression = svt::model::GenerateForExpression;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -28,6 +38,11 @@ auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
     result.push_back(token.lexeme);
   }
   return result;
+}
+
+template <typename T>
+auto ExprAs(Expression const& expression) -> T const& {
+  return std::get<T>(expression.node);
 }
 
 auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
@@ -68,15 +83,20 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
   REQUIRE(mask_parameter.name == "MASK");
   REQUIRE(Lexemes(mask_parameter.type_specifier) ==
           std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
-  REQUIRE(Lexemes(mask_parameter.default_value) ==
+  REQUIRE(Lexemes(mask_parameter.default_value->tokens) ==
           std::vector<std::string_view>{"WIDTH", "-", "1"});
+  auto const& mask_default{
+      ExprAs<BinaryExpression>(*mask_parameter.default_value)};
+  REQUIRE(mask_default.operator_lexeme == "-");
+  REQUIRE(ExprAs<IdentifierExpression>(*mask_default.left).name == "WIDTH");
+  REQUIRE(ExprAs<LiteralExpression>(*mask_default.right).value == "1");
 
   auto const& continued_mask_parameter{
       std::get<ParameterValueDeclaration>(module_declaration.parameters.at(1))};
   REQUIRE(continued_mask_parameter.name == "ALT_MASK");
   REQUIRE(Lexemes(continued_mask_parameter.type_specifier) ==
           std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
-  REQUIRE(Lexemes(continued_mask_parameter.default_value) ==
+  REQUIRE(Lexemes(continued_mask_parameter.default_value->tokens) ==
           std::vector<std::string_view>{"2"});
 
   auto const& type_parameter{
@@ -95,7 +115,7 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
       std::get<ParameterValueDeclaration>(module_declaration.parameters.at(4))};
   REQUIRE(implicit_value_parameter.name == "WIDTH");
   REQUIRE(implicit_value_parameter.type_specifier.empty());
-  REQUIRE(Lexemes(implicit_value_parameter.default_value) ==
+  REQUIRE(Lexemes(implicit_value_parameter.default_value->tokens) ==
           std::vector<std::string_view>{"8"});
 }
 
@@ -236,6 +256,7 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   std::string src = R"(
     module foo #(parameter int N = 8) ();
       wire [N-1 : 0] bus;
+      wire [8] word;
       logic ready;
     endmodule
   )";
@@ -250,7 +271,7 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   REQUIRE(module_declaration.name == "foo");
   REQUIRE(module_declaration.parameters.size() == 1);
   REQUIRE(module_declaration.ports.empty());
-  REQUIRE(module_declaration.items.size() == 2);
+  REQUIRE(module_declaration.items.size() == 3);
 
   auto const& bus_declaration{
       std::get<NetDeclaration>(module_declaration.items.at(0))};
@@ -258,12 +279,29 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   REQUIRE(bus_declaration.type == NetType::kWire);
   REQUIRE(Lexemes(bus_declaration.type_specifier) ==
           std::vector<std::string_view>{"[", "N", "-", "1", ":", "0", "]"});
+  REQUIRE(bus_declaration.packed_dimensions.size() == 1);
+  auto const& bus_dimension{std::get<PackedRangeDimension>(
+      bus_declaration.packed_dimensions.front())};
+  auto const& dimension_left{ExprAs<BinaryExpression>(*bus_dimension.left)};
+  REQUIRE(dimension_left.operator_lexeme == "-");
+  REQUIRE(ExprAs<IdentifierExpression>(*dimension_left.left).name == "N");
+  REQUIRE(ExprAs<LiteralExpression>(*bus_dimension.right).value == "0");
 
   auto const& ready_declaration{
-      std::get<NetDeclaration>(module_declaration.items.at(1))};
+      std::get<NetDeclaration>(module_declaration.items.at(2))};
   REQUIRE(ready_declaration.name == "ready");
   REQUIRE(ready_declaration.type == NetType::kLogic);
   REQUIRE(ready_declaration.type_specifier.empty());
+
+  auto const& word_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(word_declaration.name == "word");
+  REQUIRE(Lexemes(word_declaration.type_specifier) ==
+          std::vector<std::string_view>{"[", "8", "]"});
+  REQUIRE(word_declaration.packed_dimensions.size() == 1);
+  auto const& word_dimension{std::get<PackedSizeDimension>(
+      word_declaration.packed_dimensions.front())};
+  REQUIRE(ExprAs<LiteralExpression>(*word_dimension.size).value == "8");
 }
 
 TEST_CASE("Parse unsupported module item declarations without losing sync",
@@ -305,9 +343,9 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(12))};
-  REQUIRE(Lexemes(continuous_assign.left_hand_side) ==
+  REQUIRE(Lexemes(continuous_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"y"});
-  REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
+  REQUIRE(Lexemes(continuous_assign.right_hand_side->tokens) ==
           std::vector<std::string_view>{"r"});
 }
 
@@ -430,10 +468,15 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
 
   auto const& y_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(y_assign.left_hand_side) ==
+  REQUIRE(Lexemes(y_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"y"});
-  REQUIRE(Lexemes(y_assign.right_hand_side) ==
+  REQUIRE(Lexemes(y_assign.right_hand_side->tokens) ==
           std::vector<std::string_view>{"a", "+", "b"});
+  REQUIRE(ExprAs<IdentifierExpression>(*y_assign.left_hand_side).name == "y");
+  auto const& y_rhs{ExprAs<BinaryExpression>(*y_assign.right_hand_side)};
+  REQUIRE(y_rhs.operator_lexeme == "+");
+  REQUIRE(ExprAs<IdentifierExpression>(*y_rhs.left).name == "a");
+  REQUIRE(ExprAs<IdentifierExpression>(*y_rhs.right).name == "b");
 
   auto const& initial_block{
       std::get<InitialBlock>(module_declaration.items.at(1))};
@@ -442,10 +485,55 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
 
   auto const& z_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(2))};
-  REQUIRE(Lexemes(z_assign.left_hand_side) ==
+  REQUIRE(Lexemes(z_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"z"});
-  REQUIRE(Lexemes(z_assign.right_hand_side) ==
+  REQUIRE(Lexemes(z_assign.right_hand_side->tokens) ==
           std::vector<std::string_view>{"y"});
+}
+
+TEST_CASE("Parse expression AST for selects and concatenations", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      assign x = data[i];
+      assign y = {a, b[0]};
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 2);
+
+  auto const& x_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(0))};
+  auto const& data_index{ExprAs<IndexExpression>(*x_assign.right_hand_side)};
+  REQUIRE(ExprAs<IdentifierExpression>(*data_index.base).name == "data");
+  REQUIRE(ExprAs<IdentifierExpression>(*data_index.index).name == "i");
+
+  auto const& y_assign{
+      std::get<ContinuousAssign>(module_declaration.items.at(1))};
+  auto const& concat{
+      ExprAs<ConcatenationExpression>(*y_assign.right_hand_side)};
+  REQUIRE(concat.expressions.size() == 2);
+  REQUIRE(ExprAs<IdentifierExpression>(*concat.expressions.at(0)).name == "a");
+  auto const& b_index{ExprAs<IndexExpression>(*concat.expressions.at(1))};
+  REQUIRE(ExprAs<IdentifierExpression>(*b_index.base).name == "b");
+  REQUIRE(ExprAs<LiteralExpression>(*b_index.index).value == "0");
+}
+
+TEST_CASE("Reject incomplete continuous assignment expressions", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      assign y = a + ;
+      logic should_not_parse;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  REQUIRE_THROWS_WITH(parser.Parse(), Catch::Matchers::ContainsSubstring(
+                                          "[Parser] expected expression"));
 }
 
 TEST_CASE("Parse module always blocks", "[parser]") {
@@ -488,9 +576,9 @@ TEST_CASE("Parse module always blocks", "[parser]") {
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(1))};
-  REQUIRE(Lexemes(continuous_assign.left_hand_side) ==
+  REQUIRE(Lexemes(continuous_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"q_shadow"});
-  REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
+  REQUIRE(Lexemes(continuous_assign.right_hand_side->tokens) ==
           std::vector<std::string_view>{"q"});
 }
 
@@ -558,19 +646,53 @@ TEST_CASE("Parse module generate blocks", "[parser]") {
   auto const& generate_block{
       std::get<GenerateBlock>(module_declaration.items.at(0))};
   REQUIRE(Lexemes(generate_block.body) ==
-          std::vector<std::string_view>{"genvar", "i", ";", "for", "(",
-                                        "i", "=", "0", ";", "i", "<",
-                                        "WIDTH", ";", "i", "=", "i", "+",
-                                        "1", ")", "begin", ":", "gen_q",
-                                        "assign", "q", "[", "i", "]", "=",
-                                        "data", "[", "i", "]", ";", "end"});
+          std::vector<std::string_view>{
+              "genvar", "i",      ";", "for", "(",     "i",     "=",
+              "0",      ";",      "i", "<",   "WIDTH", ";",     "i",
+              "=",      "i",      "+", "1",   ")",     "begin", ":",
+              "gen_q",  "assign", "q", "[",   "i",     "]",     "=",
+              "data",   "[",      "i", "]",   ";",     "end"});
+  REQUIRE(generate_block.expressions.size() == 1);
+  auto const& generate_for{
+      std::get<GenerateForExpression>(generate_block.expressions.front())};
+  auto const& initialization{
+      ExprAs<BinaryExpression>(*generate_for.initialization)};
+  REQUIRE(initialization.operator_lexeme == "=");
+  auto const& condition{ExprAs<BinaryExpression>(*generate_for.condition)};
+  REQUIRE(condition.operator_lexeme == "<");
+  REQUIRE(ExprAs<IdentifierExpression>(*condition.right).name == "WIDTH");
+  auto const& step{ExprAs<BinaryExpression>(*generate_for.step)};
+  REQUIRE(step.operator_lexeme == "=");
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(1))};
-  REQUIRE(Lexemes(continuous_assign.left_hand_side) ==
+  REQUIRE(Lexemes(continuous_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"done"});
-  REQUIRE(Lexemes(continuous_assign.right_hand_side) ==
+  REQUIRE(Lexemes(continuous_assign.right_hand_side->tokens) ==
           std::vector<std::string_view>{"1"});
+}
+
+TEST_CASE("Reject generate expressions with unmatched parentheses",
+          "[parser]") {
+  std::string src = R"(
+    module foo #(parameter WIDTH = 4) (
+      input [WIDTH-1:0] data,
+      output [WIDTH-1:0] q
+    );
+      generate
+        genvar i;
+        for (i = 0; i < WIDTH; i = i + 1 begin
+          assign y = a;
+        end
+      endgenerate
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  REQUIRE_THROWS_WITH(
+      parser.Parse(),
+      Catch::Matchers::ContainsSubstring(
+          "[Parser] expected ')' while parsing generate for expression"));
 }
 
 TEST_CASE("Parse module instantiations", "[parser]") {
@@ -611,9 +733,9 @@ TEST_CASE("Parse module instantiations", "[parser]") {
   REQUIRE(Lexemes(instantiation.parameter_overrides) ==
           std::vector<std::string_view>{".", "WIDTH", "(", "4", ")"});
   REQUIRE(Lexemes(instantiation.port_connections) ==
-          std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",",
-                                        ".", "data", "(", "data", ")", ",",
-                                        ".", "ready", "(", "ready", ")"});
+          std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",", ".",
+                                        "data", "(", "data", ")", ",", ".",
+                                        "ready", "(", "ready", ")"});
 }
 
 TEST_CASE("Parse nested module generate blocks", "[parser]") {
@@ -685,7 +807,8 @@ TEST_CASE("Parse generate block example file", "[parser]") {
   REQUIRE(module_declaration.items.size() == 3);
   REQUIRE(
       std::holds_alternative<NetDeclaration>(module_declaration.items.at(0)));
-  REQUIRE(std::holds_alternative<GenerateBlock>(module_declaration.items.at(1)));
+  REQUIRE(
+      std::holds_alternative<GenerateBlock>(module_declaration.items.at(1)));
   REQUIRE(
       std::holds_alternative<ContinuousAssign>(module_declaration.items.at(2)));
 }
@@ -717,9 +840,9 @@ TEST_CASE("Parse module instantiation example file", "[parser]") {
   REQUIRE(Lexemes(instantiation.parameter_overrides) ==
           std::vector<std::string_view>{".", "WIDTH", "(", "4", ")"});
   REQUIRE(Lexemes(instantiation.port_connections) ==
-          std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",",
-                                        ".", "data", "(", "data", ")", ",",
-                                        ".", "q", "(", "q", ")"});
+          std::vector<std::string_view>{".", "clk", "(", "clk", ")", ",", ".",
+                                        "data", "(", "data", ")", ",", ".", "q",
+                                        "(", "q", ")"});
 }
 
 TEST_CASE("Parse all SystemVerilog fixture as compilation unit", "[parser]") {

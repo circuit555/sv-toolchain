@@ -11,6 +11,7 @@ Checks: >-
   portability-*, 
   cppcoreguidelines-*,
   -readability-identifier-length,
-  -misc-use-internal-linkage
+  -misc-use-internal-linkage,
+  -misc-no-recursion
 FormatStyle: file
 CheckOptions: []

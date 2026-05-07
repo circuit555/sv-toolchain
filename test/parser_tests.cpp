@@ -15,6 +15,7 @@ using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
 using ContinuousAssign = svt::model::ContinuousAssign;
 using AlwaysBlock = svt::model::AlwaysBlock;
 using InitialBlock = svt::model::InitialBlock;
+using FinalBlock = svt::model::FinalBlock;
 using GenerateBlock = svt::model::GenerateBlock;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
@@ -31,6 +32,27 @@ using ConcatenationExpression = svt::model::ConcatenationExpression;
 using PackedRangeDimension = svt::model::PackedRangeDimension;
 using PackedSizeDimension = svt::model::PackedSizeDimension;
 using GenerateForExpression = svt::model::GenerateForExpression;
+using Statement = svt::model::Statement;
+using BeginEndBlockStatement = svt::model::BeginEndBlockStatement;
+using AssignmentStatement = svt::model::AssignmentStatement;
+using IfElseStatement = svt::model::IfElseStatement;
+using CaseStatement = svt::model::CaseStatement;
+using LoopStatement = svt::model::LoopStatement;
+using TimingControlStatement = svt::model::TimingControlStatement;
+using WaitStatement = svt::model::WaitStatement;
+using ForkJoinStatement = svt::model::ForkJoinStatement;
+using ProceduralContinuousAssignStatement =
+    svt::model::ProceduralContinuousAssignStatement;
+using SystemTaskCallStatement = svt::model::SystemTaskCallStatement;
+using ProceduralBlockKind = svt::model::ProceduralBlockKind;
+using AssignmentKind = svt::model::AssignmentKind;
+using CaseKind = svt::model::CaseKind;
+using LoopKind = svt::model::LoopKind;
+using TimingControlKind = svt::model::TimingControlKind;
+using WaitKind = svt::model::WaitKind;
+using ForkJoinKind = svt::model::ForkJoinKind;
+using ProceduralContinuousAssignKind =
+    svt::model::ProceduralContinuousAssignKind;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -43,6 +65,11 @@ auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
 template <typename T>
 auto ExprAs(Expression const& expression) -> T const& {
   return std::get<T>(expression.node);
+}
+
+template <typename T>
+auto StmtAs(Statement const& statement) -> T const& {
+  return std::get<T>(statement.node);
 }
 
 auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
@@ -393,13 +420,15 @@ TEST_CASE("Parse unsupported module item blocks without losing sync",
 
   auto const expected_kinds{std::vector<std::string_view>{
       "function", "task", "class", "specify", "default", "property", "sequence",
-      "covergroup", "checker", "assert", "bind", "final"}};
+      "covergroup", "checker", "assert", "bind"}};
   for (auto const item_index : std::views::iota(0UZ, expected_kinds.size())) {
     auto const& unsupported_item{std::get<UnsupportedModuleItem>(
         module_declaration.items.at(item_index))};
     REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
     REQUIRE(not unsupported_item.tokens.empty());
   }
+
+  REQUIRE(std::holds_alternative<FinalBlock>(module_declaration.items.at(11)));
 
   auto const& done_declaration{
       std::get<NetDeclaration>(module_declaration.items.at(12))};
@@ -480,8 +509,8 @@ TEST_CASE("Parse module continuous assignments", "[parser]") {
 
   auto const& initial_block{
       std::get<InitialBlock>(module_declaration.items.at(1))};
-  REQUIRE(Lexemes(initial_block.body) ==
-          std::vector<std::string_view>{"ignored"});
+  REQUIRE(Lexemes(initial_block.statement->tokens) ==
+          std::vector<std::string_view>{"ignored", ";"});
 
   auto const& z_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(2))};
@@ -567,12 +596,13 @@ TEST_CASE("Parse module always blocks", "[parser]") {
 
   auto const& always_block{
       std::get<AlwaysBlock>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(always_block.event_control) ==
-          std::vector<std::string_view>{"@", "(", "posedge", "clk", ")"});
-  REQUIRE(Lexemes(always_block.body) ==
-          std::vector<std::string_view>{"if", "(", "!", "rst_n", ")", "begin",
-                                        "q", "<=", "0", ";", "end", "else",
-                                        "begin", "q", "<=", "d", ";", "end"});
+  REQUIRE(Lexemes(always_block.statement->tokens) ==
+          std::vector<std::string_view>{
+              "@",     "(",     "posedge", "clk", ")",     "begin",
+              "if",    "(",     "!",       "rst_n", ")",   "begin",
+              "q",     "<=",    "0",       ";",   "end",   "else",
+              "begin", "q",     "<=",      "d",   ";",     "end",
+              "end"});
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(1))};
@@ -607,14 +637,228 @@ TEST_CASE("Parse module initial blocks", "[parser]") {
 
   auto const& begin_end_initial{
       std::get<InitialBlock>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(begin_end_initial.body) ==
-          std::vector<std::string_view>{"a", "=", "0", ";", "begin", "b", "=",
-                                        "a", ";", "end"});
+  REQUIRE(Lexemes(begin_end_initial.statement->tokens) ==
+          std::vector<std::string_view>{"begin", "a", "=", "0", ";", "begin",
+                                        "b", "=", "a", ";", "end", "end"});
 
   auto const& single_statement_initial{
       std::get<InitialBlock>(module_declaration.items.at(1))};
-  REQUIRE(Lexemes(single_statement_initial.body) ==
-          std::vector<std::string_view>{"ready", "=", "1"});
+  REQUIRE(Lexemes(single_statement_initial.statement->tokens) ==
+          std::vector<std::string_view>{"ready", "=", "1", ";"});
+}
+
+TEST_CASE("Reject unterminated begin-end statement blocks", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      initial if (enable) begin
+        ready = 1;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  REQUIRE_THROWS_WITH(
+      parser.Parse(),
+      Catch::Matchers::ContainsSubstring(
+          "[Parser] expected 'end' while parsing begin-end block"));
+}
+
+TEST_CASE("Parse procedural statement ASTs", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      initial begin
+        begin
+          a = 0;
+          b <= c;
+        end
+        if (a) b = 1; else b <= 2;
+        case (sel)
+          0: y = 0;
+          default: y = 1;
+        endcase
+        casex (sel) default: y = 2; endcase
+        casez (sel) default: y = 3; endcase
+        for (i = 0; i < 3; i = i + 1) y = i;
+        while (ready) y = 4;
+        repeat (2) y = 5;
+        foreach (arr[i]) y = arr[i];
+        forever y = 6;
+        @(posedge clk) y = 7;
+        #5 y = 8;
+        wait (ready) y = 9;
+        wait_order (a, b) y = 10;
+        wait fork;
+        fork
+          y = 11;
+        join
+        fork
+          y = 12;
+        join_any
+        fork
+          y = 13;
+        join_none
+        assign y = a;
+        deassign y;
+        force y = b;
+        release y;
+        $display(y);
+      end
+      always_ff @(posedge clk) q <= d;
+      always_comb y = a;
+      always_latch if (en) q <= d;
+      final $finish;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 5);
+
+  auto const& initial_block{
+      std::get<InitialBlock>(module_declaration.items.at(0))};
+  auto const& root_block{
+      StmtAs<BeginEndBlockStatement>(*initial_block.statement)};
+  REQUIRE(root_block.statements.size() == 23);
+
+  auto const& nested_block{
+      StmtAs<BeginEndBlockStatement>(*root_block.statements.at(0))};
+  REQUIRE(nested_block.statements.size() == 2);
+  auto const& blocking_assignment{
+      StmtAs<AssignmentStatement>(*nested_block.statements.at(0))};
+  REQUIRE(blocking_assignment.kind == AssignmentKind::kBlocking);
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*blocking_assignment.left_hand_side).name ==
+      "a");
+  REQUIRE(
+      ExprAs<LiteralExpression>(*blocking_assignment.right_hand_side).value ==
+      "0");
+
+  auto const& nonblocking_assignment{
+      StmtAs<AssignmentStatement>(*nested_block.statements.at(1))};
+  REQUIRE(nonblocking_assignment.kind == AssignmentKind::kNonblocking);
+  REQUIRE(ExprAs<IdentifierExpression>(*nonblocking_assignment.left_hand_side)
+              .name == "b");
+  REQUIRE(ExprAs<IdentifierExpression>(*nonblocking_assignment.right_hand_side)
+              .name == "c");
+
+  auto const& if_else{StmtAs<IfElseStatement>(*root_block.statements.at(1))};
+  REQUIRE(if_else.condition != nullptr);
+  REQUIRE(ExprAs<IdentifierExpression>(*if_else.condition).name == "a");
+  REQUIRE(if_else.else_statement != nullptr);
+  REQUIRE(StmtAs<AssignmentStatement>(*if_else.then_statement).kind ==
+          AssignmentKind::kBlocking);
+  REQUIRE(StmtAs<AssignmentStatement>(*if_else.else_statement).kind ==
+          AssignmentKind::kNonblocking);
+
+  auto const& case_statement{
+      StmtAs<CaseStatement>(*root_block.statements.at(2))};
+  REQUIRE(case_statement.kind == CaseKind::kCase);
+  REQUIRE(case_statement.expression != nullptr);
+  REQUIRE(ExprAs<IdentifierExpression>(*case_statement.expression).name ==
+          "sel");
+  REQUIRE(StmtAs<CaseStatement>(*root_block.statements.at(3)).kind ==
+          CaseKind::kCaseX);
+  REQUIRE(StmtAs<CaseStatement>(*root_block.statements.at(4)).kind ==
+          CaseKind::kCaseZ);
+
+  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(5)).kind ==
+          LoopKind::kFor);
+  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(6)).kind ==
+          LoopKind::kWhile);
+  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(7)).kind ==
+          LoopKind::kRepeat);
+  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(8)).kind ==
+          LoopKind::kForeach);
+  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(9)).kind ==
+          LoopKind::kForever);
+
+  REQUIRE(StmtAs<TimingControlStatement>(*root_block.statements.at(10)).kind ==
+          TimingControlKind::kEvent);
+  REQUIRE(StmtAs<TimingControlStatement>(*root_block.statements.at(11)).kind ==
+          TimingControlKind::kDelay);
+
+  REQUIRE(StmtAs<WaitStatement>(*root_block.statements.at(12)).kind ==
+          WaitKind::kWait);
+  REQUIRE(StmtAs<WaitStatement>(*root_block.statements.at(13)).kind ==
+          WaitKind::kWaitOrder);
+  REQUIRE(StmtAs<WaitStatement>(*root_block.statements.at(14)).kind ==
+          WaitKind::kWaitFork);
+
+  REQUIRE(StmtAs<ForkJoinStatement>(*root_block.statements.at(15)).kind ==
+          ForkJoinKind::kJoin);
+  REQUIRE(StmtAs<ForkJoinStatement>(*root_block.statements.at(16)).kind ==
+          ForkJoinKind::kJoinAny);
+  REQUIRE(StmtAs<ForkJoinStatement>(*root_block.statements.at(17)).kind ==
+          ForkJoinKind::kJoinNone);
+
+  auto const& procedural_assign{StmtAs<ProceduralContinuousAssignStatement>(
+      *root_block.statements.at(18))};
+  REQUIRE(procedural_assign.kind == ProceduralContinuousAssignKind::kAssign);
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*procedural_assign.left_hand_side).name ==
+      "y");
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*procedural_assign.right_hand_side).name ==
+      "a");
+
+  auto const& procedural_deassign{StmtAs<ProceduralContinuousAssignStatement>(
+      *root_block.statements.at(19))};
+  REQUIRE(procedural_deassign.kind ==
+          ProceduralContinuousAssignKind::kDeassign);
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*procedural_deassign.left_hand_side).name ==
+      "y");
+  REQUIRE(procedural_deassign.right_hand_side == nullptr);
+
+  auto const& procedural_force{StmtAs<ProceduralContinuousAssignStatement>(
+      *root_block.statements.at(20))};
+  REQUIRE(procedural_force.kind == ProceduralContinuousAssignKind::kForce);
+  REQUIRE(ExprAs<IdentifierExpression>(*procedural_force.left_hand_side).name ==
+          "y");
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*procedural_force.right_hand_side).name ==
+      "b");
+
+  auto const& procedural_release{StmtAs<ProceduralContinuousAssignStatement>(
+      *root_block.statements.at(21))};
+  REQUIRE(procedural_release.kind == ProceduralContinuousAssignKind::kRelease);
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*procedural_release.left_hand_side).name ==
+      "y");
+  REQUIRE(procedural_release.right_hand_side == nullptr);
+
+  auto const& display_call{
+      StmtAs<SystemTaskCallStatement>(*root_block.statements.at(22))};
+  REQUIRE(display_call.name == "$display");
+  REQUIRE(display_call.arguments.size() == 1);
+  REQUIRE(ExprAs<IdentifierExpression>(*display_call.arguments.at(0)).name ==
+          "y");
+
+  auto const& always_ff_block{
+      std::get<AlwaysBlock>(module_declaration.items.at(1))};
+  REQUIRE(always_ff_block.kind == ProceduralBlockKind::kAlwaysFf);
+  REQUIRE(std::holds_alternative<TimingControlStatement>(
+      always_ff_block.statement->node));
+
+  auto const& always_comb_block{
+      std::get<AlwaysBlock>(module_declaration.items.at(2))};
+  REQUIRE(always_comb_block.kind == ProceduralBlockKind::kAlwaysComb);
+  REQUIRE(std::holds_alternative<AssignmentStatement>(
+      always_comb_block.statement->node));
+
+  auto const& always_latch_block{
+      std::get<AlwaysBlock>(module_declaration.items.at(3))};
+  REQUIRE(always_latch_block.kind == ProceduralBlockKind::kAlwaysLatch);
+  REQUIRE(std::holds_alternative<IfElseStatement>(
+      always_latch_block.statement->node));
+
+  auto const& final_block{std::get<FinalBlock>(module_declaration.items.at(4))};
+  auto const& finish_call{
+      StmtAs<SystemTaskCallStatement>(*final_block.statement)};
+  REQUIRE(finish_call.name == "$finish");
+  REQUIRE(finish_call.arguments.empty());
 }
 
 TEST_CASE("Parse module generate blocks", "[parser]") {

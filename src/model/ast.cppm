@@ -99,6 +99,115 @@ export struct Expression {
   std::span<Token const> tokens;
 };
 
+export struct Statement;
+export using StatementPtr = std::unique_ptr<Statement>;
+
+export enum class ProceduralBlockKind : std::uint8_t {
+  kInitial,
+  kAlways,
+  kAlwaysFf,
+  kAlwaysComb,
+  kAlwaysLatch,
+  kFinal
+};
+
+export enum class AssignmentKind : std::uint8_t { kBlocking, kNonblocking };
+
+export enum class CaseKind : std::uint8_t { kCase, kCaseX, kCaseZ };
+
+export enum class LoopKind : std::uint8_t {
+  kFor,
+  kWhile,
+  kRepeat,
+  kForeach,
+  kForever
+};
+
+export enum class TimingControlKind : std::uint8_t { kEvent, kDelay };
+
+export enum class WaitKind : std::uint8_t { kWait, kWaitOrder, kWaitFork };
+
+export enum class ForkJoinKind : std::uint8_t { kJoin, kJoinAny, kJoinNone };
+
+export enum class ProceduralContinuousAssignKind : std::uint8_t {
+  kAssign,
+  kDeassign,
+  kForce,
+  kRelease
+};
+
+export struct BeginEndBlockStatement {
+  std::vector<StatementPtr> statements;
+};
+
+export struct AssignmentStatement {
+  AssignmentKind kind{};
+  ExpressionPtr left_hand_side;
+  ExpressionPtr right_hand_side;
+};
+
+export struct IfElseStatement {
+  ExpressionPtr condition;
+  StatementPtr then_statement;
+  StatementPtr else_statement;
+};
+
+export struct CaseStatement {
+  CaseKind kind{};
+  ExpressionPtr expression;
+  std::span<Token const> items;
+};
+
+export struct LoopStatement {
+  LoopKind kind{};
+  std::span<Token const> control;
+  StatementPtr body;
+};
+
+export struct TimingControlStatement {
+  TimingControlKind kind{};
+  std::span<Token const> control;
+  StatementPtr statement;
+};
+
+export struct WaitStatement {
+  WaitKind kind{};
+  std::span<Token const> control;
+  StatementPtr statement;
+};
+
+export struct ForkJoinStatement {
+  ForkJoinKind kind{};
+  std::vector<StatementPtr> statements;
+};
+
+export struct ProceduralContinuousAssignStatement {
+  ProceduralContinuousAssignKind kind{};
+  ExpressionPtr left_hand_side;
+  ExpressionPtr right_hand_side;
+};
+
+export struct SystemTaskCallStatement {
+  std::string_view name;
+  std::vector<ExpressionPtr> arguments;
+};
+
+export struct UnsupportedStatement {
+  std::span<Token const> tokens;
+};
+
+export using StatementNode =
+    std::variant<std::monostate, BeginEndBlockStatement, AssignmentStatement,
+                 IfElseStatement, CaseStatement, LoopStatement,
+                 TimingControlStatement, WaitStatement, ForkJoinStatement,
+                 ProceduralContinuousAssignStatement, SystemTaskCallStatement,
+                 UnsupportedStatement>;
+
+export struct Statement {
+  StatementNode node;
+  std::span<Token const> tokens;
+};
+
 export struct PackedRangeDimension {
   ExpressionPtr left;
   ExpressionPtr right;
@@ -141,12 +250,16 @@ export struct ContinuousAssign {
 };
 
 export struct AlwaysBlock {
-  std::span<Token const> event_control;
-  std::span<Token const> body;
+  ProceduralBlockKind kind{ProceduralBlockKind::kAlways};
+  StatementPtr statement;
 };
 
 export struct InitialBlock {
-  std::span<Token const> body;
+  StatementPtr statement;
+};
+
+export struct FinalBlock {
+  StatementPtr statement;
 };
 
 export struct GenerateIfExpression {
@@ -183,7 +296,8 @@ export struct UnsupportedModuleItem {
 
 export using ModuleItem =
     std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
-                 GenerateBlock, ModuleInstantiation, UnsupportedModuleItem>;
+                 FinalBlock, GenerateBlock, ModuleInstantiation,
+                 UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;

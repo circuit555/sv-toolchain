@@ -8,6 +8,28 @@ import svt.model.ast;
 
 namespace svt::core {
 
+class TokenParserBase {
+ protected:
+  using tokens_t = std::span<::svt::model::Token const>;
+
+  TokenParserBase() = default;
+  explicit TokenParserBase(tokens_t tokens, bool allow_empty = false);
+
+  [[nodiscard]] auto AtEnd() const -> bool;
+  [[nodiscard]] auto CurrentTokenIterator() const -> tokens_t::iterator;
+  auto MatchToken(::svt::model::TokenType token_type) -> bool;
+  auto MatchKeyword(std::string_view keyword) -> bool;
+  auto ExpectToken(::svt::model::TokenType expected_type,
+                   std::string_view context) -> void;
+  auto ExpectKeyword(std::string_view lexeme, std::string_view context) -> void;
+  auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
+  auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
+  auto ParseModuleInstantiation() -> ::svt::model::ModuleInstantiation;
+
+  tokens_t m_tokens;
+  tokens_t::iterator m_token_iterator;
+};
+
 /// @brief Lexical analyzer for SystemVerilog source text.
 export class Lexer final {
  public:
@@ -50,7 +72,7 @@ export class Lexer final {
 /// @brief Recursive-descent parser for SystemVerilog source text.
 ///
 /// The parser tokenizes input internally and produces an AST translation unit.
-export class Parser final {
+export class Parser final : private TokenParserBase {
  public:
   using TranslationUnit = std::vector<::svt::model::DesignElement>;
   using tokens_t = std::span<::svt::model::Token const>;
@@ -70,8 +92,6 @@ export class Parser final {
     std::string_view context;
   };
 
-  auto ExpectToken(::svt::model::TokenType expected_type,
-                   std::string_view context) -> void;
   auto ParseDesignElement() -> ::svt::model::DesignElement;
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
@@ -85,9 +105,6 @@ export class Parser final {
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseUnsupportedModuleItem() -> ::svt::model::UnsupportedModuleItem;
-  auto ParseNetDeclaration() -> ::svt::model::NetDeclaration;
-  auto ParseContinuousAssign() -> ::svt::model::ContinuousAssign;
-  auto ParseModuleInstantiation() -> ::svt::model::ModuleInstantiation;
   auto ParseAlwaysEventControl() -> void;
   auto ParseKeywordBlockBody(std::string_view start_keyword,
                              std::string_view end_keyword,
@@ -98,8 +115,6 @@ export class Parser final {
   auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;
 
   Lexer m_lexer;
-  tokens_t m_tokens;
-  tokens_t::iterator m_token_iterator;
 };
 
 /// @brief Print a parsed translation unit to stdout.

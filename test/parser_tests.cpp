@@ -16,7 +16,12 @@ using ContinuousAssign = svt::model::ContinuousAssign;
 using AlwaysBlock = svt::model::AlwaysBlock;
 using InitialBlock = svt::model::InitialBlock;
 using FinalBlock = svt::model::FinalBlock;
-using GenerateBlock = svt::model::GenerateBlock;
+using GenvarDeclaration = svt::model::GenvarDeclaration;
+using GenerateFor = svt::model::GenerateFor;
+using GenerateIf = svt::model::GenerateIf;
+using GenerateCase = svt::model::GenerateCase;
+using GenerateRegion = svt::model::GenerateRegion;
+using GenerateItem = svt::model::GenerateItem;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
@@ -31,7 +36,6 @@ using RangeSelectExpression = svt::model::RangeSelectExpression;
 using ConcatenationExpression = svt::model::ConcatenationExpression;
 using PackedRangeDimension = svt::model::PackedRangeDimension;
 using PackedSizeDimension = svt::model::PackedSizeDimension;
-using GenerateForExpression = svt::model::GenerateForExpression;
 using Statement = svt::model::Statement;
 using BeginEndBlockStatement = svt::model::BeginEndBlockStatement;
 using AssignmentStatement = svt::model::AssignmentStatement;
@@ -70,6 +74,19 @@ auto ExprAs(Expression const& expression) -> T const& {
 template <typename T>
 auto StmtAs(Statement const& statement) -> T const& {
   return std::get<T>(statement.node);
+}
+
+template <typename T>
+auto GenItemAs(svt::model::GenerateItem const& item) -> T const& {
+  return std::get<T>(item.node);
+}
+
+auto GenerateRegionBodyTokens(GenerateItem const& item)
+    -> decltype(item.tokens) {
+  if (item.tokens.size() < 2UZ) {
+    return decltype(item.tokens){};
+  }
+  return {std::next(item.tokens.begin()), std::prev(item.tokens.end())};
 }
 
 auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
@@ -359,12 +376,22 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
   REQUIRE(module_declaration.items.size() == 13);
 
   auto const expected_kinds{std::vector<std::string_view>{
-      "reg", "int", "event", "genvar", "time", "shortreal", "chandle",
-      "realtime", "wor", "typedef", "let", "defparam"}};
-  for (auto const item_index : std::views::iota(0UZ, expected_kinds.size())) {
+      "reg", "int", "event", "time", "shortreal", "chandle", "realtime", "wor",
+      "typedef", "let", "defparam"}};
+  for (auto const item_index : std::views::iota(0UZ, 3UZ)) {
     auto const& unsupported_item{std::get<UnsupportedModuleItem>(
         module_declaration.items.at(item_index))};
     REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
+    REQUIRE(not unsupported_item.tokens.empty());
+  }
+  auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
+      std::get<GenerateItem>(module_declaration.items.at(3)))};
+  REQUIRE(genvar_declaration.identifiers.size() == 1);
+  REQUIRE(genvar_declaration.identifiers.front().name == "g");
+  for (auto const item_index : std::views::iota(4UZ, 12UZ)) {
+    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
+        module_declaration.items.at(item_index))};
+    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index - 1));
     REQUIRE(not unsupported_item.tokens.empty());
   }
 
@@ -596,13 +623,12 @@ TEST_CASE("Parse module always blocks", "[parser]") {
 
   auto const& always_block{
       std::get<AlwaysBlock>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(always_block.statement->tokens) ==
-          std::vector<std::string_view>{
-              "@",     "(",     "posedge", "clk", ")",     "begin",
-              "if",    "(",     "!",       "rst_n", ")",   "begin",
-              "q",     "<=",    "0",       ";",   "end",   "else",
-              "begin", "q",     "<=",      "d",   ";",     "end",
-              "end"});
+  REQUIRE(
+      Lexemes(always_block.statement->tokens) ==
+      std::vector<std::string_view>{
+          "@",     "(", "posedge", "clk", ")",  "begin", "if", "(",   "!",
+          "rst_n", ")", "begin",   "q",   "<=", "0",     ";",  "end", "else",
+          "begin", "q", "<=",      "d",   ";",  "end",   "end"});
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(1))};
@@ -887,26 +913,36 @@ TEST_CASE("Parse module generate blocks", "[parser]") {
   REQUIRE(module_declaration.name == "foo");
   REQUIRE(module_declaration.items.size() == 2);
 
-  auto const& generate_block{
-      std::get<GenerateBlock>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(generate_block.body) ==
+  auto const& generate_item{
+      std::get<GenerateItem>(module_declaration.items.at(0))};
+  auto const& generate_block{GenItemAs<GenerateRegion>(generate_item)};
+  REQUIRE(Lexemes(GenerateRegionBodyTokens(generate_item)) ==
           std::vector<std::string_view>{
               "genvar", "i",      ";", "for", "(",     "i",     "=",
               "0",      ";",      "i", "<",   "WIDTH", ";",     "i",
               "=",      "i",      "+", "1",   ")",     "begin", ":",
               "gen_q",  "assign", "q", "[",   "i",     "]",     "=",
               "data",   "[",      "i", "]",   ";",     "end"});
-  REQUIRE(generate_block.expressions.size() == 1);
-  auto const& generate_for{
-      std::get<GenerateForExpression>(generate_block.expressions.front())};
+  REQUIRE(generate_block.items.size() == 2);
+  auto const& genvar_declaration{
+      GenItemAs<GenvarDeclaration>(*generate_block.items.at(0))};
+  REQUIRE(genvar_declaration.identifiers.size() == 1);
+  REQUIRE(genvar_declaration.identifiers.front().name == "i");
+  auto const& structured_for{
+      GenItemAs<GenerateFor>(*generate_block.items.at(1))};
   auto const& initialization{
-      ExprAs<BinaryExpression>(*generate_for.initialization)};
+      ExprAs<BinaryExpression>(*structured_for.initialization)};
   REQUIRE(initialization.operator_lexeme == "=");
-  auto const& condition{ExprAs<BinaryExpression>(*generate_for.condition)};
+  auto const& condition{ExprAs<BinaryExpression>(*structured_for.condition)};
   REQUIRE(condition.operator_lexeme == "<");
   REQUIRE(ExprAs<IdentifierExpression>(*condition.right).name == "WIDTH");
-  auto const& step{ExprAs<BinaryExpression>(*generate_for.step)};
+  auto const& step{ExprAs<BinaryExpression>(*structured_for.step)};
   REQUIRE(step.operator_lexeme == "=");
+  REQUIRE(structured_for.loop_variable == "i");
+  REQUIRE(structured_for.block_name == "gen_q");
+  REQUIRE(structured_for.body.size() == 1);
+  REQUIRE(std::holds_alternative<ContinuousAssign>(
+      structured_for.body.front()->node));
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(1))};
@@ -937,6 +973,117 @@ TEST_CASE("Reject generate expressions with unmatched parentheses",
       parser.Parse(),
       Catch::Matchers::ContainsSubstring(
           "[Parser] expected ')' while parsing generate for expression"));
+}
+
+TEST_CASE("Reject genvar declaration without an identifier", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      genvar = 0;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  REQUIRE_THROWS_WITH(
+      parser.Parse(),
+      Catch::Matchers::ContainsSubstring(
+          "[Parser] expected identifier while parsing genvar declaration"));
+}
+
+TEST_CASE("Reject genvar declaration without a semicolon", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      genvar i
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  REQUIRE_THROWS_WITH(parser.Parse(),
+                      Catch::Matchers::ContainsSubstring(
+                          "[Parser] unexpected end-of-file while parsing "
+                          "genvar declaration"));
+}
+
+TEST_CASE("Parse module-scope generate constructs", "[parser]") {
+  std::string src = R"(
+    module foo #(parameter WIDTH = 4) ();
+      genvar j;
+      for (genvar i = 0; i < WIDTH; i += 1)
+        if (i == 2) begin : gen_hit
+          assign hit = j;
+        end
+
+      case (WIDTH)
+        1, 2: begin : small
+          assign small_width = 1;
+        end
+        default: begin : wide
+          assign small_width = 0;
+        end
+      endcase
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 3);
+
+  auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
+      std::get<GenerateItem>(module_declaration.items.at(0)))};
+  REQUIRE(genvar_declaration.identifiers.size() == 1);
+  REQUIRE(genvar_declaration.identifiers.front().name == "j");
+
+  auto const& generate_for{GenItemAs<GenerateFor>(
+      std::get<GenerateItem>(module_declaration.items.at(1)))};
+  REQUIRE(generate_for.loop_variable == "i");
+  REQUIRE(Lexemes(generate_for.initialization->tokens) ==
+          std::vector<std::string_view>{"i", "=", "0"});
+  REQUIRE(Lexemes(generate_for.condition->tokens) ==
+          std::vector<std::string_view>{"i", "<", "WIDTH"});
+  REQUIRE(generate_for.body.size() == 1);
+  auto const& generate_if{GenItemAs<GenerateIf>(*generate_for.body.front())};
+  REQUIRE(Lexemes(generate_if.condition->tokens) ==
+          std::vector<std::string_view>{"i", "==", "2"});
+  REQUIRE(generate_if.then_block_name == "gen_hit");
+  REQUIRE(generate_if.then_body.size() == 1);
+  REQUIRE(std::holds_alternative<ContinuousAssign>(
+      generate_if.then_body.front()->node));
+
+  auto const& generate_case{GenItemAs<GenerateCase>(
+      std::get<GenerateItem>(module_declaration.items.at(2)))};
+  REQUIRE(Lexemes(generate_case.expression->tokens) ==
+          std::vector<std::string_view>{"WIDTH"});
+  REQUIRE(generate_case.items.size() == 2);
+  REQUIRE(generate_case.items.at(0).expressions.size() == 2);
+  REQUIRE_FALSE(generate_case.items.at(0).is_default);
+  REQUIRE(generate_case.items.at(0).body.size() == 1);
+  REQUIRE(generate_case.items.at(1).is_default);
+  REQUIRE(generate_case.items.at(1).body.size() == 1);
+}
+
+TEST_CASE("Treat bare begin-end blocks in module body as unsupported",
+          "[parser]") {
+  std::string src = R"(
+    module foo ();
+      begin : gen_scope
+        assign y = a;
+      end
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 1);
+
+  auto const& unsupported_item{
+      std::get<UnsupportedModuleItem>(module_declaration.items.front())};
+  REQUIRE(unsupported_item.kind == "begin");
+  REQUIRE(not unsupported_item.tokens.empty());
 }
 
 TEST_CASE("Parse module instantiations", "[parser]") {
@@ -1004,11 +1151,18 @@ TEST_CASE("Parse nested module generate blocks", "[parser]") {
   REQUIRE(module_declaration.name == "foo");
   REQUIRE(module_declaration.items.size() == 2);
 
-  auto const& generate_block{
-      std::get<GenerateBlock>(module_declaration.items.at(0))};
-  REQUIRE(Lexemes(generate_block.body) ==
+  auto const& generate_item{
+      std::get<GenerateItem>(module_declaration.items.at(0))};
+  auto const& generate_block{GenItemAs<GenerateRegion>(generate_item)};
+  REQUIRE(Lexemes(GenerateRegionBodyTokens(generate_item)) ==
           std::vector<std::string_view>{"generate", "assign", "a", "=", "b",
                                         ";", "endgenerate"});
+  REQUIRE(generate_block.items.size() == 1);
+  auto const& nested_item{*generate_block.items.front()};
+  auto const& nested_region{GenItemAs<GenerateRegion>(nested_item)};
+  REQUIRE(Lexemes(GenerateRegionBodyTokens(nested_item)) ==
+          std::vector<std::string_view>{"assign", "a", "=", "b", ";"});
+  REQUIRE(nested_region.items.size() == 1);
 
   auto const& net_declaration{
       std::get<NetDeclaration>(module_declaration.items.at(1))};
@@ -1051,8 +1205,7 @@ TEST_CASE("Parse generate block example file", "[parser]") {
   REQUIRE(module_declaration.items.size() == 3);
   REQUIRE(
       std::holds_alternative<NetDeclaration>(module_declaration.items.at(0)));
-  REQUIRE(
-      std::holds_alternative<GenerateBlock>(module_declaration.items.at(1)));
+  REQUIRE(std::holds_alternative<GenerateItem>(module_declaration.items.at(1)));
   REQUIRE(
       std::holds_alternative<ContinuousAssign>(module_declaration.items.at(2)));
 }

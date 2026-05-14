@@ -249,6 +249,13 @@ export struct ContinuousAssign {
   ExpressionPtr right_hand_side;
 };
 
+export struct ModuleInstantiation {
+  std::string_view module_name;
+  std::string_view instance_name;
+  std::span<Token const> parameter_overrides;
+  std::span<Token const> port_connections;
+};
+
 export struct AlwaysBlock {
   ProceduralBlockKind kind{ProceduralBlockKind::kAlways};
   StatementPtr statement;
@@ -262,31 +269,64 @@ export struct FinalBlock {
   StatementPtr statement;
 };
 
-export struct GenerateIfExpression {
-  ExpressionPtr condition;
+export struct GenerateItem;
+export using GenerateItemPtr = std::unique_ptr<GenerateItem>;
+
+export struct GenvarIdentifier {
+  std::string_view name;
+  ExpressionPtr initializer;
   std::span<Token const> tokens;
 };
 
-export struct GenerateForExpression {
+export struct GenvarDeclaration {
+  std::vector<GenvarIdentifier> identifiers;
+};
+
+export struct GenerateFor {
+  std::string_view loop_variable;
   ExpressionPtr initialization;
   ExpressionPtr condition;
   ExpressionPtr step;
+  std::vector<GenerateItemPtr> body;
+  std::string_view block_name;
+};
+
+export struct GenerateIf {
+  ExpressionPtr condition;
+  std::vector<GenerateItemPtr> then_body;
+  std::vector<GenerateItemPtr> else_body;
+  std::string_view then_block_name;
+  std::string_view else_block_name;
+};
+
+export struct GenerateCaseItem {
+  std::vector<ExpressionPtr> expressions;
+  bool is_default{false};
+  std::vector<GenerateItemPtr> body;
   std::span<Token const> tokens;
 };
 
-export using GenerateExpression =
-    std::variant<GenerateIfExpression, GenerateForExpression>;
-
-export struct GenerateBlock {
-  std::span<Token const> body;
-  std::vector<GenerateExpression> expressions;
+export struct GenerateCase {
+  ExpressionPtr expression;
+  std::vector<GenerateCaseItem> items;
 };
 
-export struct ModuleInstantiation {
-  std::string_view module_name;
-  std::string_view instance_name;
-  std::span<Token const> parameter_overrides;
-  std::span<Token const> port_connections;
+export struct GenerateRegion {
+  std::vector<GenerateItemPtr> items;
+};
+
+export struct UnsupportedGenerateItem {
+  std::string_view kind;
+};
+
+export using GenerateItemNode =
+    std::variant<GenvarDeclaration, GenerateFor, GenerateIf, GenerateCase,
+                 GenerateRegion, ContinuousAssign, NetDeclaration,
+                 ModuleInstantiation, UnsupportedGenerateItem>;
+
+export struct GenerateItem {
+  GenerateItemNode node;
+  std::span<Token const> tokens;
 };
 
 export struct UnsupportedModuleItem {
@@ -296,7 +336,7 @@ export struct UnsupportedModuleItem {
 
 export using ModuleItem =
     std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
-                 FinalBlock, GenerateBlock, ModuleInstantiation,
+                 FinalBlock, GenerateItem, ModuleInstantiation,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {

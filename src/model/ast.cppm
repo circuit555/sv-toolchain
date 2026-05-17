@@ -152,27 +152,77 @@ export struct IfElseStatement {
   StatementPtr else_statement;
 };
 
+export struct CaseItem {
+  std::vector<ExpressionPtr> labels;
+  StatementPtr statement;
+  bool is_default{};
+};
+
 export struct CaseStatement {
   CaseKind kind{};
   ExpressionPtr expression;
-  std::span<Token const> items;
+  std::vector<CaseItem> items;
 };
+
+export struct WhileLoopControl {
+  ExpressionPtr condition;
+};
+
+export struct RepeatLoopControl {
+  ExpressionPtr count;
+};
+
+export struct ForLoopControl {
+  ExpressionPtr initializer;
+  ExpressionPtr condition;
+  ExpressionPtr step;
+};
+
+export struct ForeachLoopControl {
+  ExpressionPtr array_expression;
+  std::vector<std::string_view> loop_variables;
+};
+
+export using LoopControl =
+    std::variant<std::monostate, WhileLoopControl, RepeatLoopControl,
+                 ForLoopControl, ForeachLoopControl>;
 
 export struct LoopStatement {
   LoopKind kind{};
-  std::span<Token const> control;
+  LoopControl control;
   StatementPtr body;
 };
 
+export struct DelayControl {
+  ExpressionPtr expression;
+};
+
+export struct EventControl {
+  std::vector<ExpressionPtr> events;
+};
+
+export using TimingControl = std::variant<DelayControl, EventControl>;
+
 export struct TimingControlStatement {
   TimingControlKind kind{};
-  std::span<Token const> control;
+  TimingControl control;
   StatementPtr statement;
 };
 
+export struct WaitExpressionControl {
+  ExpressionPtr expression;
+};
+
+export struct WaitOrderControl {
+  std::vector<ExpressionPtr> events;
+};
+
+export using WaitControl =
+    std::variant<std::monostate, WaitExpressionControl, WaitOrderControl>;
+
 export struct WaitStatement {
   WaitKind kind{};
-  std::span<Token const> control;
+  WaitControl control;
   StatementPtr statement;
 };
 

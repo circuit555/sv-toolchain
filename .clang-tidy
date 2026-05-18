@@ -1,7 +1,6 @@
 
 
 
-# NOTE: somehow clangd-v20.1.2 does not like bugprone-* checks. Would be nice to enable them back again!
 Checks: >-
   modernize-*, 
   performance-*, 
@@ -10,12 +9,9 @@ Checks: >-
   misc-*, 
   portability-*, 
   cppcoreguidelines-*,
-  -readability-identifier-length,
-  -misc-non-private-member-variables-in-classes,
-  -cppcoreguidelines-non-private-member-variables-in-classes,
-  -misc-include-cleaner,
-  -misc-use-internal-linkage,
-  -misc-no-recursion
+
+  -misc-no-recursion,
+
 FormatStyle: file
 CheckOptions:
   - key: readability-function-cognitive-complexity.Threshold

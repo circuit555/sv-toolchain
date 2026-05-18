@@ -34,6 +34,7 @@ using BinaryExpression = svt::model::BinaryExpression;
 using IndexExpression = svt::model::IndexExpression;
 using RangeSelectExpression = svt::model::RangeSelectExpression;
 using ConcatenationExpression = svt::model::ConcatenationExpression;
+using UnsupportedExpression = svt::model::UnsupportedExpression;
 using PackedRangeDimension = svt::model::PackedRangeDimension;
 using PackedSizeDimension = svt::model::PackedSizeDimension;
 using Statement = svt::model::Statement;
@@ -41,8 +42,16 @@ using BeginEndBlockStatement = svt::model::BeginEndBlockStatement;
 using AssignmentStatement = svt::model::AssignmentStatement;
 using IfElseStatement = svt::model::IfElseStatement;
 using CaseStatement = svt::model::CaseStatement;
+using WhileLoopControl = svt::model::WhileLoopControl;
+using RepeatLoopControl = svt::model::RepeatLoopControl;
+using ForLoopControl = svt::model::ForLoopControl;
+using ForeachLoopControl = svt::model::ForeachLoopControl;
 using LoopStatement = svt::model::LoopStatement;
+using DelayControl = svt::model::DelayControl;
+using EventControl = svt::model::EventControl;
 using TimingControlStatement = svt::model::TimingControlStatement;
+using WaitExpressionControl = svt::model::WaitExpressionControl;
+using WaitOrderControl = svt::model::WaitOrderControl;
 using WaitStatement = svt::model::WaitStatement;
 using ForkJoinStatement = svt::model::ForkJoinStatement;
 using ProceduralContinuousAssignStatement =
@@ -688,6 +697,74 @@ TEST_CASE("Reject unterminated begin-end statement blocks", "[parser]") {
           "[Parser] expected 'end' while parsing begin-end block"));
 }
 
+TEST_CASE("Reject malformed procedural case statements", "[parser]") {
+  SECTION("missing case item colon") {
+    std::string src = R"(
+      module foo ();
+        initial begin
+          case (sel)
+            0 y = 0;
+          endcase
+        end
+      endmodule
+    )";
+    Parser parser{std::move(src)};
+
+    REQUIRE_THROWS_WITH(parser.Parse(),
+                        Catch::Matchers::ContainsSubstring(
+                            "[Parser] expected ':' while parsing case item"));
+  }
+
+  SECTION("missing endcase") {
+    std::string src = R"(
+      module foo ();
+        initial begin
+          case (sel)
+            0: y = 0;
+        end
+      endmodule
+    )";
+    Parser parser{std::move(src)};
+
+    REQUIRE_THROWS_WITH(
+        parser.Parse(),
+        Catch::Matchers::ContainsSubstring(
+            "[Parser] expected 'endcase' while parsing case statement"));
+  }
+}
+
+TEST_CASE("Reject missing procedural timing controls", "[parser]") {
+  SECTION("delay control") {
+    std::string src = R"(
+      module foo ();
+        initial #;
+      endmodule
+    )";
+    Parser parser{std::move(src)};
+
+    REQUIRE_THROWS_WITH(
+        parser.Parse(),
+        Catch::Matchers::ContainsSubstring(
+            "[Parser] expected timing control while parsing timing control "
+            "statement"));
+  }
+
+  SECTION("event control") {
+    std::string src = R"(
+      module foo ();
+        initial @;
+      endmodule
+    )";
+    Parser parser{std::move(src)};
+
+    REQUIRE_THROWS_WITH(
+        parser.Parse(),
+        Catch::Matchers::ContainsSubstring(
+            "[Parser] expected timing control while parsing timing control "
+            "statement"));
+  }
+}
+
 TEST_CASE("Parse procedural statement ASTs", "[parser]") {
   std::string src = R"(
     module foo ();
@@ -698,7 +775,7 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
         end
         if (a) b = 1; else b <= 2;
         case (sel)
-          0: y = 0;
+          0, 1: y = 0;
           default: y = 1;
         endcase
         casex (sel) default: y = 2; endcase
@@ -726,7 +803,7 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
         deassign y;
         force y = b;
         release y;
-        $display(y);
+        $display("value=%0d", y);
       end
       always_ff @(posedge clk) q <= d;
       always_comb y = a;
@@ -784,33 +861,97 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
   REQUIRE(case_statement.expression != nullptr);
   REQUIRE(ExprAs<IdentifierExpression>(*case_statement.expression).name ==
           "sel");
+  REQUIRE(case_statement.items.size() == 2);
+  REQUIRE(case_statement.items.at(0).labels.size() == 2);
+  REQUIRE(ExprAs<LiteralExpression>(*case_statement.items.at(0).labels.at(0))
+              .value == "0");
+  REQUIRE(ExprAs<LiteralExpression>(*case_statement.items.at(0).labels.at(1))
+              .value == "1");
+  REQUIRE_FALSE(case_statement.items.at(0).is_default);
+  REQUIRE(StmtAs<AssignmentStatement>(*case_statement.items.at(0).statement)
+              .kind == AssignmentKind::kBlocking);
+  REQUIRE(case_statement.items.at(1).labels.empty());
+  REQUIRE(case_statement.items.at(1).is_default);
+  REQUIRE(StmtAs<AssignmentStatement>(*case_statement.items.at(1).statement)
+              .kind == AssignmentKind::kBlocking);
   REQUIRE(StmtAs<CaseStatement>(*root_block.statements.at(3)).kind ==
           CaseKind::kCaseX);
   REQUIRE(StmtAs<CaseStatement>(*root_block.statements.at(4)).kind ==
           CaseKind::kCaseZ);
 
-  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(5)).kind ==
-          LoopKind::kFor);
-  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(6)).kind ==
-          LoopKind::kWhile);
-  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(7)).kind ==
-          LoopKind::kRepeat);
-  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(8)).kind ==
-          LoopKind::kForeach);
-  REQUIRE(StmtAs<LoopStatement>(*root_block.statements.at(9)).kind ==
-          LoopKind::kForever);
+  auto const& for_loop{StmtAs<LoopStatement>(*root_block.statements.at(5))};
+  REQUIRE(for_loop.kind == LoopKind::kFor);
+  auto const& for_control{std::get<ForLoopControl>(for_loop.control)};
+  REQUIRE(ExprAs<BinaryExpression>(*for_control.initializer).operator_lexeme ==
+          "=");
+  REQUIRE(ExprAs<BinaryExpression>(*for_control.condition).operator_lexeme ==
+          "<");
+  REQUIRE(ExprAs<BinaryExpression>(*for_control.step).operator_lexeme == "=");
 
-  REQUIRE(StmtAs<TimingControlStatement>(*root_block.statements.at(10)).kind ==
-          TimingControlKind::kEvent);
-  REQUIRE(StmtAs<TimingControlStatement>(*root_block.statements.at(11)).kind ==
-          TimingControlKind::kDelay);
+  auto const& while_loop{StmtAs<LoopStatement>(*root_block.statements.at(6))};
+  REQUIRE(while_loop.kind == LoopKind::kWhile);
+  REQUIRE(ExprAs<IdentifierExpression>(
+              *std::get<WhileLoopControl>(while_loop.control).condition)
+              .name == "ready");
 
-  REQUIRE(StmtAs<WaitStatement>(*root_block.statements.at(12)).kind ==
-          WaitKind::kWait);
-  REQUIRE(StmtAs<WaitStatement>(*root_block.statements.at(13)).kind ==
-          WaitKind::kWaitOrder);
-  REQUIRE(StmtAs<WaitStatement>(*root_block.statements.at(14)).kind ==
-          WaitKind::kWaitFork);
+  auto const& repeat_loop{StmtAs<LoopStatement>(*root_block.statements.at(7))};
+  REQUIRE(repeat_loop.kind == LoopKind::kRepeat);
+  REQUIRE(ExprAs<LiteralExpression>(
+              *std::get<RepeatLoopControl>(repeat_loop.control).count)
+              .value == "2");
+
+  auto const& foreach_loop{
+      StmtAs<LoopStatement>(*root_block.statements.at(8))};
+  REQUIRE(foreach_loop.kind == LoopKind::kForeach);
+  auto const& foreach_control{
+      std::get<ForeachLoopControl>(foreach_loop.control)};
+  REQUIRE(ExprAs<IdentifierExpression>(*foreach_control.array_expression)
+              .name == "arr");
+  REQUIRE(foreach_control.loop_variables == std::vector<std::string_view>{"i"});
+
+  auto const& forever_loop{StmtAs<LoopStatement>(*root_block.statements.at(9))};
+  REQUIRE(forever_loop.kind == LoopKind::kForever);
+  REQUIRE(std::holds_alternative<std::monostate>(forever_loop.control));
+
+  auto const& event_timing{
+      StmtAs<TimingControlStatement>(*root_block.statements.at(10))};
+  REQUIRE(event_timing.kind == TimingControlKind::kEvent);
+  auto const& event_control{std::get<EventControl>(event_timing.control)};
+  REQUIRE(event_control.events.size() == 1);
+  REQUIRE(std::holds_alternative<UnsupportedExpression>(
+      event_control.events.at(0)->node));
+
+  auto const& delay_timing{
+      StmtAs<TimingControlStatement>(*root_block.statements.at(11))};
+  REQUIRE(delay_timing.kind == TimingControlKind::kDelay);
+  REQUIRE(ExprAs<LiteralExpression>(
+              *std::get<DelayControl>(delay_timing.control).expression)
+              .value == "5");
+
+  auto const& wait_statement{
+      StmtAs<WaitStatement>(*root_block.statements.at(12))};
+  REQUIRE(wait_statement.kind == WaitKind::kWait);
+  REQUIRE(ExprAs<IdentifierExpression>(
+              *std::get<WaitExpressionControl>(wait_statement.control)
+                   .expression)
+              .name == "ready");
+
+  auto const& wait_order_statement{
+      StmtAs<WaitStatement>(*root_block.statements.at(13))};
+  REQUIRE(wait_order_statement.kind == WaitKind::kWaitOrder);
+  auto const& wait_order_control{
+      std::get<WaitOrderControl>(wait_order_statement.control)};
+  REQUIRE(wait_order_control.events.size() == 2);
+  REQUIRE(ExprAs<IdentifierExpression>(*wait_order_control.events.at(0)).name ==
+          "a");
+  REQUIRE(ExprAs<IdentifierExpression>(*wait_order_control.events.at(1)).name ==
+          "b");
+
+  auto const& wait_fork_statement{
+      StmtAs<WaitStatement>(*root_block.statements.at(14))};
+  REQUIRE(wait_fork_statement.kind == WaitKind::kWaitFork);
+  REQUIRE(std::holds_alternative<std::monostate>(
+      wait_fork_statement.control));
 
   REQUIRE(StmtAs<ForkJoinStatement>(*root_block.statements.at(15)).kind ==
           ForkJoinKind::kJoin);
@@ -858,8 +999,10 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
   auto const& display_call{
       StmtAs<SystemTaskCallStatement>(*root_block.statements.at(22))};
   REQUIRE(display_call.name == "$display");
-  REQUIRE(display_call.arguments.size() == 1);
-  REQUIRE(ExprAs<IdentifierExpression>(*display_call.arguments.at(0)).name ==
+  REQUIRE(display_call.arguments.size() == 2);
+  REQUIRE(ExprAs<LiteralExpression>(*display_call.arguments.at(0)).value ==
+          "value=%0d");
+  REQUIRE(ExprAs<IdentifierExpression>(*display_call.arguments.at(1)).name ==
           "y");
 
   auto const& always_ff_block{

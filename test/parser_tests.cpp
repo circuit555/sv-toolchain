@@ -27,6 +27,8 @@ using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
+using TimeDeclaration = svt::model::TimeDeclaration;
+using TimeDeclarationKind = svt::model::TimeDeclarationKind;
 using Expression = svt::model::Expression;
 using IdentifierExpression = svt::model::IdentifierExpression;
 using LiteralExpression = svt::model::LiteralExpression;
@@ -172,6 +174,80 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
           std::vector<std::string_view>{"8"});
 }
 
+TEST_CASE("Parse top-level time declarations", "[parser]") {
+  std::string src = R"(
+    timeunit 1ns / 1ps;
+    timeprecision 1ps;
+
+    module foo ();
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 3);
+
+  auto const& timeunit_declaration{
+      std::get<TimeDeclaration>(translation_unit.at(0))};
+  REQUIRE(timeunit_declaration.kind == TimeDeclarationKind::kTimeUnit);
+  REQUIRE(Lexemes(timeunit_declaration.time_value) ==
+          std::vector<std::string_view>{"1ns"});
+  REQUIRE(Lexemes(timeunit_declaration.precision_value) ==
+          std::vector<std::string_view>{"1ps"});
+  REQUIRE(Lexemes(timeunit_declaration.tokens) ==
+          std::vector<std::string_view>{"timeunit", "1ns", "/", "1ps", ";"});
+
+  auto const& timeprecision_declaration{
+      std::get<TimeDeclaration>(translation_unit.at(1))};
+  REQUIRE(timeprecision_declaration.kind ==
+          TimeDeclarationKind::kTimePrecision);
+  REQUIRE(Lexemes(timeprecision_declaration.time_value) ==
+          std::vector<std::string_view>{"1ps"});
+  REQUIRE(timeprecision_declaration.precision_value.empty());
+  REQUIRE(Lexemes(timeprecision_declaration.tokens) ==
+          std::vector<std::string_view>{"timeprecision", "1ps", ";"});
+
+  REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(2)).name == "foo");
+}
+
+TEST_CASE("Parse module time declarations", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      timeunit 1ns / 1ps;
+      timeprecision 1ps;
+      logic done;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 3);
+
+  auto const& timeunit_declaration{
+      std::get<TimeDeclaration>(module_declaration.items.at(0))};
+  REQUIRE(timeunit_declaration.kind == TimeDeclarationKind::kTimeUnit);
+  REQUIRE(Lexemes(timeunit_declaration.time_value) ==
+          std::vector<std::string_view>{"1ns"});
+  REQUIRE(Lexemes(timeunit_declaration.precision_value) ==
+          std::vector<std::string_view>{"1ps"});
+
+  auto const& timeprecision_declaration{
+      std::get<TimeDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(timeprecision_declaration.kind ==
+          TimeDeclarationKind::kTimePrecision);
+  REQUIRE(Lexemes(timeprecision_declaration.time_value) ==
+          std::vector<std::string_view>{"1ps"});
+  REQUIRE(timeprecision_declaration.precision_value.empty());
+
+  auto const& done_declaration{
+      std::get<NetDeclaration>(module_declaration.items.at(2))};
+  REQUIRE(done_declaration.name == "done");
+}
+
 TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
   std::string src = R"(
     timeunit 1ns / 1ps;
@@ -192,8 +268,8 @@ TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
   auto translation_unit = parser.Parse();
 
   REQUIRE(translation_unit.size() == 4);
-  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(0)).kind ==
-          "timeunit");
+  REQUIRE(std::get<TimeDeclaration>(translation_unit.at(0)).kind ==
+          TimeDeclarationKind::kTimeUnit);
   REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(1)).kind ==
           "package");
   REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(2)).kind ==
@@ -868,12 +944,14 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
   REQUIRE(ExprAs<LiteralExpression>(*case_statement.items.at(0).labels.at(1))
               .value == "1");
   REQUIRE_FALSE(case_statement.items.at(0).is_default);
-  REQUIRE(StmtAs<AssignmentStatement>(*case_statement.items.at(0).statement)
-              .kind == AssignmentKind::kBlocking);
+  REQUIRE(
+      StmtAs<AssignmentStatement>(*case_statement.items.at(0).statement).kind ==
+      AssignmentKind::kBlocking);
   REQUIRE(case_statement.items.at(1).labels.empty());
   REQUIRE(case_statement.items.at(1).is_default);
-  REQUIRE(StmtAs<AssignmentStatement>(*case_statement.items.at(1).statement)
-              .kind == AssignmentKind::kBlocking);
+  REQUIRE(
+      StmtAs<AssignmentStatement>(*case_statement.items.at(1).statement).kind ==
+      AssignmentKind::kBlocking);
   REQUIRE(StmtAs<CaseStatement>(*root_block.statements.at(3)).kind ==
           CaseKind::kCaseX);
   REQUIRE(StmtAs<CaseStatement>(*root_block.statements.at(4)).kind ==
@@ -900,13 +978,13 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
               *std::get<RepeatLoopControl>(repeat_loop.control).count)
               .value == "2");
 
-  auto const& foreach_loop{
-      StmtAs<LoopStatement>(*root_block.statements.at(8))};
+  auto const& foreach_loop{StmtAs<LoopStatement>(*root_block.statements.at(8))};
   REQUIRE(foreach_loop.kind == LoopKind::kForeach);
   auto const& foreach_control{
       std::get<ForeachLoopControl>(foreach_loop.control)};
-  REQUIRE(ExprAs<IdentifierExpression>(*foreach_control.array_expression)
-              .name == "arr");
+  REQUIRE(
+      ExprAs<IdentifierExpression>(*foreach_control.array_expression).name ==
+      "arr");
   REQUIRE(foreach_control.loop_variables == std::vector<std::string_view>{"i"});
 
   auto const& forever_loop{StmtAs<LoopStatement>(*root_block.statements.at(9))};
@@ -931,10 +1009,10 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
   auto const& wait_statement{
       StmtAs<WaitStatement>(*root_block.statements.at(12))};
   REQUIRE(wait_statement.kind == WaitKind::kWait);
-  REQUIRE(ExprAs<IdentifierExpression>(
-              *std::get<WaitExpressionControl>(wait_statement.control)
-                   .expression)
-              .name == "ready");
+  REQUIRE(
+      ExprAs<IdentifierExpression>(
+          *std::get<WaitExpressionControl>(wait_statement.control).expression)
+          .name == "ready");
 
   auto const& wait_order_statement{
       StmtAs<WaitStatement>(*root_block.statements.at(13))};
@@ -950,8 +1028,7 @@ TEST_CASE("Parse procedural statement ASTs", "[parser]") {
   auto const& wait_fork_statement{
       StmtAs<WaitStatement>(*root_block.statements.at(14))};
   REQUIRE(wait_fork_statement.kind == WaitKind::kWaitFork);
-  REQUIRE(std::holds_alternative<std::monostate>(
-      wait_fork_statement.control));
+  REQUIRE(std::holds_alternative<std::monostate>(wait_fork_statement.control));
 
   REQUIRE(StmtAs<ForkJoinStatement>(*root_block.statements.at(15)).kind ==
           ForkJoinKind::kJoin);

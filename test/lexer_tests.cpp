@@ -42,13 +42,15 @@ auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
 }  // namespace
 
 TEST_CASE("Identifier and keyword tokens", "[lexer]") {
-  std::string src = "module foo logic endmodule";
+  std::string src = "module foo logic timeunit timeprecision endmodule";
   Lexer lexer{std::move(src)};
 
   std::array expected{
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "module"},
       ExpectedToken{.type = TokenType::kIdentifier, .lexeme = "foo"},
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "logic"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "timeunit"},
+      ExpectedToken{.type = TokenType::kKeyword, .lexeme = "timeprecision"},
       ExpectedToken{.type = TokenType::kKeyword, .lexeme = "endmodule"},
       ExpectedToken{.type = TokenType::kEndOfFile, .lexeme = ""}};
   RequireTokens(lexer.Tokens(), expected);

@@ -110,6 +110,22 @@ using PackedRangeDimension = ::svt::model::PackedRangeDimension;
 using PackedSizeDimension = ::svt::model::PackedSizeDimension;
 using TokenParserBase = ::svt::core::TokenParserBase;
 
+enum class BoundaryEndBehavior : std::uint8_t {
+  kStopAtEnd,
+  kThrow,
+};
+
+struct KeywordEndPair {
+  std::string_view keyword;
+  std::string_view end_keyword;
+  bool top_level_start;
+};
+
+struct BinaryOperatorPrecedence {
+  std::string_view lexeme;
+  std::size_t precedence;
+};
+
 std::array<std::string_view, 16> constexpr kTopLevelEndKeywords{
     "endmodule",    "endpackage",  "endinterface", "endprogram",
     "endprimitive", "endconfig",   "endchecker",   "endclass",
@@ -128,12 +144,6 @@ std::array<std::string_view, 37> constexpr kUnsupportedModuleItemKeywords{
 std::array<std::string_view, 14> constexpr kUnsupportedModuleItemNetTypes{
     "tri",  "tri0", "tri1",    "triand",  "trior", "trireg", "uwire",
     "wand", "wor",  "supply0", "supply1", "wire",  "logic",  "interconnect"};
-
-struct KeywordEndPair {
-  std::string_view keyword;
-  std::string_view end_keyword;
-  bool top_level_start;
-};
 
 auto constexpr kKeywordEndPairs{std::to_array<KeywordEndPair>({
     {.keyword = "module", .end_keyword = "endmodule", .top_level_start = true},
@@ -178,10 +188,23 @@ auto constexpr kKeywordEndPairs{std::to_array<KeywordEndPair>({
      .top_level_start = false},
 })};
 
-enum class BoundaryEndBehavior : std::uint8_t {
-  kStopAtEnd,
-  kThrow,
-};
+auto constexpr kBinaryOperatorPrecedences{
+    std::to_array<BinaryOperatorPrecedence>({
+        {.lexeme = "||", .precedence = 2},  {.lexeme = "&&", .precedence = 3},
+        {.lexeme = "|", .precedence = 4},   {.lexeme = "^", .precedence = 5},
+        {.lexeme = "^~", .precedence = 5},  {.lexeme = "~^", .precedence = 5},
+        {.lexeme = "&", .precedence = 6},   {.lexeme = "==", .precedence = 7},
+        {.lexeme = "!=", .precedence = 7},  {.lexeme = "===", .precedence = 7},
+        {.lexeme = "!==", .precedence = 7}, {.lexeme = "==?", .precedence = 7},
+        {.lexeme = "!=?", .precedence = 7}, {.lexeme = "<", .precedence = 8},
+        {.lexeme = ">", .precedence = 8},   {.lexeme = "<=", .precedence = 8},
+        {.lexeme = ">=", .precedence = 8},  {.lexeme = "<<", .precedence = 9},
+        {.lexeme = ">>", .precedence = 9},  {.lexeme = "<<<", .precedence = 9},
+        {.lexeme = ">>>", .precedence = 9}, {.lexeme = "+", .precedence = 10},
+        {.lexeme = "-", .precedence = 10},  {.lexeme = "*", .precedence = 11},
+        {.lexeme = "/", .precedence = 11},  {.lexeme = "%", .precedence = 11},
+        {.lexeme = "**", .precedence = 12},
+    })};
 
 inline auto IsParameterDeclarationPrefix(tokens_t const tokens) -> bool {
   return tokens.front().lexeme == "parameter" or
@@ -233,6 +256,19 @@ inline auto IsPackageScopeExportStart(tokens_t::iterator const token_iterator,
                                    end_iterator);
 }
 
+inline auto AdvancePastOptionalBlockLabel(tokens_t::iterator& token_iterator,
+                                          tokens_t::iterator const end_iterator)
+    -> void {
+  if (token_iterator != end_iterator and
+      token_iterator->type == TokenType::kColon) {
+    rng::advance(token_iterator, 1, end_iterator);
+    if (token_iterator != end_iterator and
+        token_iterator->type == TokenType::kIdentifier) {
+      rng::advance(token_iterator, 1, end_iterator);
+    }
+  }
+}
+
 auto AdvancePastAttributeInstances(tokens_t::iterator& token_iterator,
                                    tokens_t::iterator const end_iterator)
     -> void {
@@ -246,19 +282,6 @@ auto AdvancePastAttributeInstances(tokens_t::iterator& token_iterator,
         break;
       }
 
-      rng::advance(token_iterator, 1, end_iterator);
-    }
-  }
-}
-
-inline auto AdvancePastOptionalBlockLabel(tokens_t::iterator& token_iterator,
-                                          tokens_t::iterator const end_iterator)
-    -> void {
-  if (token_iterator != end_iterator and
-      token_iterator->type == TokenType::kColon) {
-    rng::advance(token_iterator, 1, end_iterator);
-    if (token_iterator != end_iterator and
-        token_iterator->type == TokenType::kIdentifier) {
       rng::advance(token_iterator, 1, end_iterator);
     }
   }
@@ -590,29 +613,6 @@ auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
 
   return name_index;
 }
-
-struct BinaryOperatorPrecedence {
-  std::string_view lexeme;
-  std::size_t precedence;
-};
-
-auto constexpr kBinaryOperatorPrecedences{
-    std::to_array<BinaryOperatorPrecedence>({
-        {.lexeme = "||", .precedence = 2},  {.lexeme = "&&", .precedence = 3},
-        {.lexeme = "|", .precedence = 4},   {.lexeme = "^", .precedence = 5},
-        {.lexeme = "^~", .precedence = 5},  {.lexeme = "~^", .precedence = 5},
-        {.lexeme = "&", .precedence = 6},   {.lexeme = "==", .precedence = 7},
-        {.lexeme = "!=", .precedence = 7},  {.lexeme = "===", .precedence = 7},
-        {.lexeme = "!==", .precedence = 7}, {.lexeme = "==?", .precedence = 7},
-        {.lexeme = "!=?", .precedence = 7}, {.lexeme = "<", .precedence = 8},
-        {.lexeme = ">", .precedence = 8},   {.lexeme = "<=", .precedence = 8},
-        {.lexeme = ">=", .precedence = 8},  {.lexeme = "<<", .precedence = 9},
-        {.lexeme = ">>", .precedence = 9},  {.lexeme = "<<<", .precedence = 9},
-        {.lexeme = ">>>", .precedence = 9}, {.lexeme = "+", .precedence = 10},
-        {.lexeme = "-", .precedence = 10},  {.lexeme = "*", .precedence = 11},
-        {.lexeme = "/", .precedence = 11},  {.lexeme = "%", .precedence = 11},
-        {.lexeme = "**", .precedence = 12},
-    })};
 
 auto BinaryPrecedence(Token const& token) -> std::size_t {
   if (token.type == TokenType::kEquals) {

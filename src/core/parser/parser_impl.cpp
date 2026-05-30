@@ -183,35 +183,14 @@ enum class BoundaryEndBehavior : std::uint8_t {
   kThrow,
 };
 
-// TODO(): perhaps move some helper into Token class
-
 inline auto IsParameterDeclarationPrefix(tokens_t const tokens) -> bool {
   return tokens.front().lexeme == "parameter" or
          tokens.front().lexeme == "localparam";
 }
 
-inline auto IsOpeningDelimiter(tokens_t::iterator const token_iterator)
-    -> bool {
-  return token_iterator->type == TokenType::kLParen or
-         token_iterator->type == TokenType::kLBracket or
-         token_iterator->type == TokenType::kLBrace;
-}
-
-inline auto IsClosingDelimiter(tokens_t::iterator const token_iterator)
-    -> bool {
-  return token_iterator->type == TokenType::kRParen or
-         token_iterator->type == TokenType::kRBracket or
-         token_iterator->type == TokenType::kRBrace;
-}
-
-inline auto IsListSeparator(tokens_t::iterator const token_iterator) -> bool {
-  return token_iterator->type == TokenType::kComma;
-}
-
-inline auto IsKeyword(tokens_t::iterator const token_iterator,
-                      std::string_view const lexeme) -> bool {
-  return token_iterator->type == TokenType::kKeyword and
-         token_iterator->lexeme == lexeme;
+inline auto TokenMatchesKeyword(tokens_t::iterator const token_iterator,
+                                std::string_view const lexeme) -> bool {
+  return token_iterator->IsKeyword(lexeme);
 }
 
 inline auto IsAttributeInstanceStart(tokens_t tokens) -> bool {
@@ -241,7 +220,7 @@ inline auto IsPackageScopeNameStart(tokens_t::iterator const token_iterator,
 inline auto IsPackageScopeImportStart(tokens_t::iterator const token_iterator,
                                       tokens_t::iterator const end_iterator)
     -> bool {
-  return ::IsKeyword(token_iterator, "import") and
+  return token_iterator->IsKeyword("import") and
          ::IsPackageScopeNameStart(rng::next(token_iterator, 1, end_iterator),
                                    end_iterator);
 }
@@ -249,7 +228,7 @@ inline auto IsPackageScopeImportStart(tokens_t::iterator const token_iterator,
 inline auto IsPackageScopeExportStart(tokens_t::iterator const token_iterator,
                                       tokens_t::iterator const end_iterator)
     -> bool {
-  return ::IsKeyword(token_iterator, "export") and
+  return token_iterator->IsKeyword("export") and
          ::IsPackageScopeNameStart(rng::next(token_iterator, 1, end_iterator),
                                    end_iterator);
 }
@@ -311,9 +290,9 @@ auto AdvanceToTopLevelBoundary(tokens_t::iterator& token_iterator,
       if (std::cmp_equal(block_depth, 0UZ)) {
         return;
       }
-    } else if (IsOpeningDelimiter(token_iterator)) {
+    } else if (token_iterator->IsOpeningDelimiter()) {
       delimiter_depth++;
-    } else if (IsClosingDelimiter(token_iterator)) {
+    } else if (token_iterator->IsClosingDelimiter()) {
       if (std::cmp_equal(delimiter_depth, 0UZ)) {
         if (stop_at_unmatched_closing_delimiter) {
           return;
@@ -490,12 +469,6 @@ auto ConsumeBalancedDelimitedTokens(tokens_t::iterator token_iterator,
       "[Parser] expected closing delimiter while parsing {} at ({}, "
       "{})",
       context, token_iterator->location.row, token_iterator->location.column)};
-}
-
-inline auto IsNetType(tokens_t::iterator const token_iterator) -> bool {
-  return token_iterator->type == TokenType::kKeyword and
-         (token_iterator->lexeme == "wire" or
-          token_iterator->lexeme == "logic");
 }
 
 constexpr auto HashLexeme(std::string_view const lexeme) -> std::uint64_t {
@@ -946,15 +919,15 @@ class StatementParser final : private TokenParserBase {
 
  private:
   auto ParseStatement() -> StatementPtr {
-    if (IsKeyword(m_token_iterator, "begin")) {
+    if (m_token_iterator->IsKeyword("begin")) {
       return ParseBeginEndBlock();
     }
-    if (IsKeyword(m_token_iterator, "if")) {
+    if (m_token_iterator->IsKeyword("if")) {
       return ParseIfElseStatement();
     }
-    if (IsKeyword(m_token_iterator, "case") or
-        IsKeyword(m_token_iterator, "casex") or
-        IsKeyword(m_token_iterator, "casez")) {
+    if (m_token_iterator->IsKeyword("case") or
+        m_token_iterator->IsKeyword("casex") or
+        m_token_iterator->IsKeyword("casez")) {
       return ParseCaseStatement();
     }
     if ((m_token_iterator->lexeme == "unique" or
@@ -971,28 +944,28 @@ class StatementParser final : private TokenParserBase {
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
       return ParseCaseStatement();
     }
-    if (IsKeyword(m_token_iterator, "for") or
-        IsKeyword(m_token_iterator, "while") or
-        IsKeyword(m_token_iterator, "repeat") or
-        IsKeyword(m_token_iterator, "foreach") or
-        IsKeyword(m_token_iterator, "forever")) {
+    if (m_token_iterator->IsKeyword("for") or
+        m_token_iterator->IsKeyword("while") or
+        m_token_iterator->IsKeyword("repeat") or
+        m_token_iterator->IsKeyword("foreach") or
+        m_token_iterator->IsKeyword("forever")) {
       return ParseLoopStatement();
     }
     if (m_token_iterator->type == TokenType::kAt or
         m_token_iterator->type == TokenType::kHash) {
       return ParseTimingControlStatement();
     }
-    if (IsKeyword(m_token_iterator, "wait") or
-        IsKeyword(m_token_iterator, "wait_order")) {
+    if (m_token_iterator->IsKeyword("wait") or
+        m_token_iterator->IsKeyword("wait_order")) {
       return ParseWaitStatement();
     }
-    if (IsKeyword(m_token_iterator, "fork")) {
+    if (m_token_iterator->IsKeyword("fork")) {
       return ParseForkJoinStatement();
     }
-    if (IsKeyword(m_token_iterator, "assign") or
-        IsKeyword(m_token_iterator, "deassign") or
-        IsKeyword(m_token_iterator, "force") or
-        IsKeyword(m_token_iterator, "release")) {
+    if (m_token_iterator->IsKeyword("assign") or
+        m_token_iterator->IsKeyword("deassign") or
+        m_token_iterator->IsKeyword("force") or
+        m_token_iterator->IsKeyword("release")) {
       return ParseProceduralContinuousAssignStatement();
     }
     if (m_token_iterator->type == TokenType::kIdentifier and
@@ -1010,7 +983,7 @@ class StatementParser final : private TokenParserBase {
     ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
 
     std::vector<StatementPtr> statements{};
-    while (not AtEnd() and not IsKeyword(m_token_iterator, "end")) {
+    while (not AtEnd() and not m_token_iterator->IsKeyword("end")) {
       auto const statement_begin_iterator{m_token_iterator};
       statements.push_back(ParseStatement());
       if (m_token_iterator == statement_begin_iterator) {
@@ -1067,9 +1040,9 @@ class StatementParser final : private TokenParserBase {
 
     auto const is_statement_block_end{
         [](tokens_t::iterator const token) -> bool {
-          return IsKeyword(token, "end") or IsKeyword(token, "join") or
-                 IsKeyword(token, "join_any") or
-                 IsKeyword(token, "join_none") or IsKeyword(token, "else");
+          return token->IsKeyword("end") or token->IsKeyword("join") or
+                 token->IsKeyword("join_any") or
+                 token->IsKeyword("join_none") or token->IsKeyword("else");
         }};
 
     auto const kind{[this]() -> CaseKind {
@@ -1091,26 +1064,26 @@ class StatementParser final : private TokenParserBase {
         rng::next(rng::cend(expression_tokens), 1, rng::cend(m_tokens));
 
     std::vector<CaseItem> items{};
-    while (not AtEnd() and not IsKeyword(m_token_iterator, "endcase")) {
+    while (not AtEnd() and not m_token_iterator->IsKeyword("endcase")) {
       if (is_statement_block_end(m_token_iterator)) {
         throw_expected_endcase();
       }
 
       auto const item_begin_iterator{m_token_iterator};
 
-      if (not IsKeyword(m_token_iterator, "default")) {
+      if (not m_token_iterator->IsKeyword("default")) {
         auto colon_iterator{m_token_iterator};
         ::AdvanceToTopLevelBoundary(
             colon_iterator, rng::cend(m_tokens),
             [](tokens_t::iterator const token) -> bool {
-              return ::IsKeyword(token, "endcase");
+              return token->IsKeyword("endcase");
             },
             [](tokens_t::iterator const token) -> bool {
               return token->type == TokenType::kColon;
             },
             false, BoundaryEndBehavior::kStopAtEnd, "case item");
         if (colon_iterator == rng::cend(m_tokens) or
-            IsKeyword(colon_iterator, "endcase")) {
+            colon_iterator->IsKeyword("endcase")) {
           throw std::runtime_error{fmt::format(
               "[Parser] expected ':' while parsing case item at ({}, {})",
               item_begin_iterator->location.row,
@@ -1381,9 +1354,9 @@ class StatementParser final : private TokenParserBase {
     ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
 
     std::vector<StatementPtr> statements{};
-    while (not AtEnd() and not IsKeyword(m_token_iterator, "join") and
-           not IsKeyword(m_token_iterator, "join_any") and
-           not IsKeyword(m_token_iterator, "join_none")) {
+    while (not AtEnd() and not m_token_iterator->IsKeyword("join") and
+           not m_token_iterator->IsKeyword("join_any") and
+           not m_token_iterator->IsKeyword("join_none")) {
       auto const statement_begin_iterator{m_token_iterator};
       statements.push_back(ParseStatement());
       if (m_token_iterator == statement_begin_iterator) {
@@ -1724,7 +1697,8 @@ class GenerateItemParser final : private TokenParserBase {
 
     auto const body_begin_iterator{m_token_iterator};
     ::AdvanceToMatchingEndKeyword(m_token_iterator, rng::cend(m_tokens),
-                                  "generate", "endgenerate", 1UZ, ::IsKeyword);
+                                  "generate", "endgenerate", 1UZ,
+                                  TokenMatchesKeyword);
     auto const body_end_iterator{m_token_iterator};
 
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
@@ -1852,7 +1826,7 @@ class GenerateItemParser final : private TokenParserBase {
 
   auto ParseGenerateIf() -> GenerateItem {
     auto const parse_optional_else_body{[this]() -> Body {
-      if (not AtEnd() and ::IsKeyword(m_token_iterator, "else")) {
+      if (not AtEnd() and m_token_iterator->IsKeyword("else")) {
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
         return ParseGenerateBody();
       }
@@ -1888,20 +1862,20 @@ class GenerateItemParser final : private TokenParserBase {
     m_token_iterator = rng::next(close_paren, 1, rng::cend(m_tokens));
 
     std::vector<GenerateCaseItem> case_items{};
-    while (not AtEnd() and not ::IsKeyword(m_token_iterator, "endcase")) {
+    while (not AtEnd() and not m_token_iterator->IsKeyword("endcase")) {
       auto const item_begin{m_token_iterator};
-      bool const is_default{::IsKeyword(m_token_iterator, "default")};
+      bool const is_default{m_token_iterator->IsKeyword("default")};
       auto colon{m_token_iterator};
       ::AdvanceToTopLevelBoundary(
           colon, rng::cend(m_tokens),
           [](tokens_t::iterator const token) -> bool {
-            return ::IsKeyword(token, "endcase");
+            return token->IsKeyword("endcase");
           },
           [](tokens_t::iterator const token) -> bool {
             return token->type == TokenType::kColon;
           },
           false, BoundaryEndBehavior::kStopAtEnd, "generate case item");
-      if (colon == rng::cend(m_tokens) or ::IsKeyword(colon, "endcase")) {
+      if (colon == rng::cend(m_tokens) or colon->IsKeyword("endcase")) {
         break;
       }
 
@@ -1936,7 +1910,7 @@ class GenerateItemParser final : private TokenParserBase {
   }
 
   auto ParseGenerateBody() -> Body {
-    if (not AtEnd() and ::IsKeyword(m_token_iterator, "begin")) {
+    if (not AtEnd() and m_token_iterator->IsKeyword("begin")) {
       return ParseBeginEndBody();
     }
 
@@ -1963,7 +1937,7 @@ class GenerateItemParser final : private TokenParserBase {
 
     auto const body_begin{m_token_iterator};
     ::AdvanceToMatchingEndKeyword(m_token_iterator, rng::cend(m_tokens),
-                                  "begin", "end", 1UZ, ::IsKeyword);
+                                  "begin", "end", 1UZ, TokenMatchesKeyword);
     auto const body_end{m_token_iterator};
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
 
@@ -2498,7 +2472,7 @@ auto TokenParserBase::MatchToken(TokenType const token_type) -> bool {
 }
 
 auto TokenParserBase::MatchKeyword(std::string_view const keyword) -> bool {
-  if (not AtEnd() and ::IsKeyword(m_token_iterator, keyword)) {
+  if (not AtEnd() and m_token_iterator->IsKeyword(keyword)) {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
     return true;
   }
@@ -2520,7 +2494,7 @@ auto TokenParserBase::ExpectToken(TokenType const expected_type,
 
 auto TokenParserBase::ExpectKeyword(std::string_view const lexeme,
                                     std::string_view const context) -> void {
-  if (not ::IsKeyword(m_token_iterator, lexeme)) [[unlikely]] {
+  if (not m_token_iterator->IsKeyword(lexeme)) [[unlikely]] {
     throw std::runtime_error{fmt::format(
         "[Parser] expected '{}' while parsing {} at ({}, {})", lexeme, context,
         m_token_iterator->location.row, m_token_iterator->location.column)};
@@ -3360,8 +3334,8 @@ auto Parser::ParsePackageDeclaration() -> PackageDeclaration {
 
   PackageDeclaration package_declaration{};
 
-  if (::IsKeyword(m_token_iterator, "automatic") or
-      ::IsKeyword(m_token_iterator, "static")) {
+  if (m_token_iterator->IsKeyword("automatic") or
+      m_token_iterator->IsKeyword("static")) {
     package_declaration.lifetime = m_token_iterator->lexeme;
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
@@ -3388,7 +3362,7 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
   std::vector<PackageItem> items{};
 
   while (m_token_iterator->type != TokenType::kEndOfFile and
-         not ::IsKeyword(m_token_iterator, "endpackage")) {
+         not m_token_iterator->IsKeyword("endpackage")) {
     if (m_token_iterator->lexeme == "timeunit" or
         m_token_iterator->lexeme == "timeprecision") {
       items.emplace_back(std::in_place_type<TimeDeclaration>,
@@ -3396,8 +3370,8 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
       continue;
     }
 
-    if (::IsKeyword(m_token_iterator, "parameter") or
-        ::IsKeyword(m_token_iterator, "localparam")) {
+    if (m_token_iterator->IsKeyword("parameter") or
+        m_token_iterator->IsKeyword("localparam")) {
       rng::transform(ParseParameters(TokenType::kSemicolon,
                                      "package parameter declaration"),
                      std::back_inserter(items),
@@ -3505,7 +3479,7 @@ auto Parser::SkipUnsupportedElementToMatchingEnd(
   auto matches_keyword{[&options](tokens_t::iterator const token_iterator,
                                   std::string_view const keyword) -> bool {
     if (options.match_keyword_tokens_only) {
-      return ::IsKeyword(token_iterator, keyword);
+      return token_iterator->IsKeyword(keyword);
     }
 
     return token_iterator->lexeme == keyword;
@@ -3528,8 +3502,8 @@ auto Parser::SkipUnsupportedElementToMatchingEnd(
 }
 
 auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
-  if (::IsKeyword(m_token_iterator, "automatic") or
-      ::IsKeyword(m_token_iterator, "static")) {
+  if (m_token_iterator->IsKeyword("automatic") or
+      m_token_iterator->IsKeyword("static")) {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
 
@@ -3734,7 +3708,7 @@ auto Parser::ParseModuleItem() -> ModuleItem {
   if (not rng::empty(matching_end_keyword) or is_attribute_instance_start or
       rng::contains(kUnsupportedModuleItemKeywords, m_token_iterator->lexeme) or
       rng::contains(kUnsupportedModuleItemNetTypes, m_token_iterator->lexeme) or
-      IsKeyword(m_token_iterator, "begin")) {
+      m_token_iterator->IsKeyword("begin")) {
     return ModuleItem{std::in_place_type<UnsupportedModuleItem>,
                       ParseUnsupportedModuleItem()};
   }
@@ -3788,7 +3762,8 @@ auto Parser::ParseKeywordBlockBody(std::string_view const start_keyword,
 
   auto const body_begin_iterator{m_token_iterator};
   ::AdvanceToMatchingEndKeyword(m_token_iterator, rng::cend(m_tokens),
-                                start_keyword, end_keyword, 1UZ, IsKeyword);
+                                start_keyword, end_keyword, 1UZ,
+                                TokenMatchesKeyword);
   auto const body{tokens_t{body_begin_iterator, m_token_iterator}};
   rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   return body;
@@ -3901,7 +3876,10 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
     ::AdvanceToTopLevelBoundary(
         m_token_iterator, rng::cend(m_tokens),
         [](tokens_t::iterator const) -> bool { return false; },
-        ::IsListSeparator, true, BoundaryEndBehavior::kThrow, "port list");
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->IsListSeparator();
+        },
+        true, BoundaryEndBehavior::kThrow, "port list");
 
     auto const port_tokens{tokens_t{port_begin, m_token_iterator}};
     auto const previous_direction{rng::empty(result)
@@ -3912,7 +3890,9 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
       result.push_back(port.value());
     }
 
-    if (::IsListSeparator(m_token_iterator)) {
+    if ([](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->IsListSeparator();
+        }(m_token_iterator)) {
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
     }
   }

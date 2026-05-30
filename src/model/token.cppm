@@ -63,6 +63,7 @@ export enum class TokenType : std::uint8_t {
 };
 
 /// @brief A single lexical token with type, text, and position.
+// NOLINTBEGIN(misc-non-private-member-variables-in-classes]
 export struct Token {
   /// Token category.
   TokenType type;
@@ -74,7 +75,31 @@ export struct Token {
   [[nodiscard]] auto IsPackageScopeNamePart() const -> bool {
     return type == TokenType::kIdentifier or lexeme == "*";
   }
+
+  [[nodiscard]] auto IsKeyword(std::string_view const expected_lexeme) const
+      -> bool {
+    return type == TokenType::kKeyword and lexeme == expected_lexeme;
+  }
+
+  [[nodiscard]] auto IsOpeningDelimiter() const -> bool {
+    return type == TokenType::kLParen or type == TokenType::kLBracket or
+           type == TokenType::kLBrace;
+  }
+
+  [[nodiscard]] auto IsClosingDelimiter() const -> bool {
+    return type == TokenType::kRParen or type == TokenType::kRBracket or
+           type == TokenType::kRBrace;
+  }
+
+  [[nodiscard]] auto IsListSeparator() const -> bool {
+    return type == TokenType::kComma;
+  }
+
+  [[nodiscard]] auto IsNetType() const -> bool {
+    return IsKeyword("wire") or IsKeyword("logic");
+  }
 };
+// NOLINTEND(misc-non-private-member-variables-in-classes]
 
 /// @brief Sequence of tokens.
 export using token_stream_t = std::vector<Token>;

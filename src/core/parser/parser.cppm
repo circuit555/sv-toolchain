@@ -93,27 +93,37 @@ export class Parser final : private TokenParserBase {
   };
 
   auto ParseDesignElement() -> ::svt::model::DesignElement;
-  auto ParseTimeDeclaration() -> ::svt::model::TimeDeclaration;
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
-  auto SkipAttributeInstances() -> void;
-  auto SkipUnsupportedElementToSemicolon(std::string_view stop_keyword = {})
-      -> void;
-  auto SkipUnsupportedElementToMatchingEnd(
-      std::string_view start_keyword, std::string_view end_keyword,
-      UnsupportedElementEndOptions const& options) -> void;
+  auto ParseTimeDeclaration() -> ::svt::model::TimeDeclaration;
+
+  auto ParsePackageDeclaration() -> ::svt::model::PackageDeclaration;
+  auto ParsePackageItems() -> std::vector<::svt::model::PackageItem>;
+  auto ParseUnsupportedPackageItem() -> ::svt::model::UnsupportedPackageItem;
+
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseUnsupportedModuleItem() -> ::svt::model::UnsupportedModuleItem;
+
+  auto ParseParameterTokens(::svt::model::TokenType end_token,
+                            std::string_view context) -> tokens_t;
+  auto ParseParameters(
+      ::svt::model::TokenType end_token = ::svt::model::TokenType::kRParen,
+      std::string_view context = "parameter list")
+      -> std::vector<::svt::model::ParameterDeclaration>;
+  auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;
   auto ParseAlwaysEventControl() -> void;
   auto ParseKeywordBlockBody(std::string_view start_keyword,
                              std::string_view end_keyword,
                              std::string_view context) -> tokens_t;
   auto ParseSingleStatementBody(std::string_view context) -> void;
-  auto ParseParameterTokens() -> tokens_t;
-  auto ParseParameters() -> std::vector<::svt::model::ParameterDeclaration>;
-  auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;
+
+  auto SkipUnsupportedElementToSemicolon(std::string_view stop_keyword = {})
+      -> void;
+  auto SkipUnsupportedElementToMatchingEnd(
+      std::string_view start_keyword, std::string_view end_keyword,
+      UnsupportedElementEndOptions const& options) -> void;
 
   Lexer m_lexer;
 };

@@ -93,6 +93,7 @@ export class Parser final : private TokenParserBase {
   };
 
   auto ParseDesignElement() -> ::svt::model::DesignElement;
+  auto ParseTimeDeclaration() -> ::svt::model::TimeDeclaration;
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
   auto SkipAttributeInstances() -> void;

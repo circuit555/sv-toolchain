@@ -379,6 +379,18 @@ export struct GenerateItem {
   std::span<Token const> tokens;
 };
 
+export enum class TimeDeclarationKind : std::uint8_t {
+  kTimeUnit,
+  kTimePrecision
+};
+
+export struct TimeDeclaration {
+  TimeDeclarationKind kind{};
+  std::span<Token const> time_value;
+  std::span<Token const> precision_value;
+  std::span<Token const> tokens;
+};
+
 export struct UnsupportedModuleItem {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -386,7 +398,7 @@ export struct UnsupportedModuleItem {
 
 export using ModuleItem =
     std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
-                 FinalBlock, GenerateItem, ModuleInstantiation,
+                 FinalBlock, GenerateItem, ModuleInstantiation, TimeDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
@@ -402,6 +414,6 @@ export struct UnsupportedDesignElement {
 
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
-    std::variant<ModuleDeclaration, UnsupportedDesignElement>;
+    std::variant<ModuleDeclaration, TimeDeclaration, UnsupportedDesignElement>;
 
 }  // namespace svt::model

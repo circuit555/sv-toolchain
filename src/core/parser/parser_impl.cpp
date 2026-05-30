@@ -41,6 +41,8 @@ using UnsupportedGenerateItem = ::svt::model::UnsupportedGenerateItem;
 using ModuleInstantiation = ::svt::model::ModuleInstantiation;
 using ModuleItem = ::svt::model::ModuleItem;
 using UnsupportedModuleItem = ::svt::model::UnsupportedModuleItem;
+using TimeDeclaration = ::svt::model::TimeDeclaration;
+using TimeDeclarationKind = ::svt::model::TimeDeclarationKind;
 using UnsupportedDesignElement = ::svt::model::UnsupportedDesignElement;
 using Expression = ::svt::model::Expression;
 using ExpressionPtr = ::svt::model::ExpressionPtr;
@@ -2175,6 +2177,29 @@ auto ToString(NetType const type) -> std::string_view {
   std::unreachable();
 }
 
+auto ToString(TimeDeclarationKind const kind) -> std::string_view {
+  switch (kind) {
+    case TimeDeclarationKind::kTimeUnit:
+      return "timeunit";
+    case TimeDeclarationKind::kTimePrecision:
+      return "timeprecision";
+  }
+
+  std::unreachable();
+}
+
+auto PrintTimeDeclaration(TimeDeclaration const& declaration,
+                          std::string_view const indent = {}) -> void {
+  if (rng::empty(declaration.precision_value)) {
+    fmt::println("{}{} {}", indent, ToString(declaration.kind),
+                 JoinLexemes(declaration.time_value));
+  } else {
+    fmt::println("{}{} {} / {}", indent, ToString(declaration.kind),
+                 JoinLexemes(declaration.time_value),
+                 JoinLexemes(declaration.precision_value));
+  }
+}
+
 auto PrintParameter(ParameterDeclaration const& parameter) -> void {
   std::visit(
       [](auto const& resolved_parameter) -> void {
@@ -2280,6 +2305,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                            resolved_item.instance_name,
                            JoinLexemes(resolved_item.parameter_overrides),
                            JoinLexemes(resolved_item.port_connections));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              TimeDeclaration>) {
+              PrintTimeDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               UnsupportedModuleItem>) {
@@ -2766,9 +2795,9 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
       "program",      "property",    "real",         "realtime",
       "ref",          "reg",         "release",      "repeat",
       "restrict",     "sequence",    "shortint",     "shortreal",
-      "specify",      "task",        "time",         "typedef",
-      "wait",         "wait_order",  "wand",         "while",
-      "wire",         "wor",
+      "specify",      "task",        "time",         "timeprecision",
+      "timeunit",     "typedef",     "wait",         "wait_order",
+      "wand",         "while",       "wire",         "wor",
   })};
 
   auto const start_position{m_position - 1};
@@ -3012,6 +3041,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             ::PrintModule(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   TimeDeclaration>) {
+            PrintTimeDeclaration(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    UnsupportedDesignElement>) {
             fmt::println("{} <unsupported>", resolved_node.kind);
           } else {
@@ -3028,7 +3061,58 @@ auto Parser::ParseDesignElement() -> DesignElement {
     return ParseModuleDeclaration();
   }
 
+  if (m_token_iterator->lexeme == "timeunit" or
+      m_token_iterator->lexeme == "timeprecision") {
+    return ParseTimeDeclaration();
+  }
+
   return ParseUnsupportedDesignElement();
+}
+
+auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto const kind{m_token_iterator->lexeme == "timeunit"
+                      ? TimeDeclarationKind::kTimeUnit
+                      : TimeDeclarationKind::kTimePrecision};
+
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  auto const time_begin_iterator{m_token_iterator};
+
+  auto semicolon_iterator{
+      rng::find_if(tokens_t{m_token_iterator, rng::cend(m_tokens)},
+                   [](Token const& token) -> bool {
+                     return token.type == TokenType::kSemicolon;
+                   })};
+  if (semicolon_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected time declaration"};
+  }
+
+  auto slash_iterator{rng::find_if(
+      tokens_t{time_begin_iterator, semicolon_iterator},
+      [](Token const& token) -> bool { return token.lexeme == "/"; })};
+  if (time_begin_iterator == slash_iterator) {
+    throw std::runtime_error{"[Parser] expected time value"};
+  }
+
+  tokens_t precision_value{};
+  if (slash_iterator != semicolon_iterator) {
+    auto const precision_begin_iterator{
+        rng::next(slash_iterator, 1, rng::cend(m_tokens))};
+    if (precision_begin_iterator == semicolon_iterator) {
+      throw std::runtime_error{"[Parser] expected precision value"};
+    }
+    precision_value = {precision_begin_iterator, semicolon_iterator};
+  }
+
+  m_token_iterator = rng::next(semicolon_iterator, 1, rng::cend(m_tokens));
+
+  return TimeDeclaration{
+      .kind = kind,
+      .time_value = slash_iterator != semicolon_iterator
+                        ? tokens_t{time_begin_iterator, slash_iterator}
+                        : tokens_t{time_begin_iterator, semicolon_iterator},
+      .precision_value = precision_value,
+      .tokens = {declaration_begin_iterator, m_token_iterator}};
 }
 
 auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
@@ -3252,6 +3336,10 @@ auto Parser::ParseModuleItem() -> ModuleItem {
   switch (m_token_iterator->type) {
     case TokenType::kKeyword: {
       switch (::HashLexeme(m_token_iterator->lexeme)) {
+        case ::HashLexeme("timeunit"):
+        case ::HashLexeme("timeprecision"):
+          return ModuleItem{std::in_place_type<TimeDeclaration>,
+                            ParseTimeDeclaration()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
           return ModuleItem{std::in_place_type<NetDeclaration>,

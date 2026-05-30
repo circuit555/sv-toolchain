@@ -391,13 +391,24 @@ export struct TimeDeclaration {
   std::span<Token const> tokens;
 };
 
-export struct PackageImportDeclaration {
+export struct PackageScopeName {
+  std::string_view scope;
+  std::string_view name;
   std::span<Token const> tokens;
 };
 
-export struct PackageExportDeclaration {
+export struct ImportDeclaration {
+  std::vector<PackageScopeName> names;
   std::span<Token const> tokens;
 };
+
+export struct ExportDeclaration {
+  std::vector<PackageScopeName> names;
+  std::span<Token const> tokens;
+};
+
+export using PackageImportDeclaration = ImportDeclaration;
+export using PackageExportDeclaration = ExportDeclaration;
 
 // TODO(): why do we need unsupported stuff still?
 export struct UnsupportedPackageItem {
@@ -406,9 +417,8 @@ export struct UnsupportedPackageItem {
 };
 
 export using PackageItem =
-    std::variant<TimeDeclaration, ParameterDeclaration,
-                 PackageImportDeclaration, PackageExportDeclaration,
-                 UnsupportedPackageItem>;
+    std::variant<TimeDeclaration, ParameterDeclaration, ImportDeclaration,
+                 ExportDeclaration, UnsupportedPackageItem>;
 
 export struct PackageDeclaration : Declaration {
   // TODO(): maybe std::optional<std::string_view> lifetime{};
@@ -425,10 +435,11 @@ export struct UnsupportedModuleItem {
 export using ModuleItem =
     std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
                  FinalBlock, GenerateItem, ModuleInstantiation, TimeDeclaration,
-                 UnsupportedModuleItem>;
+                 ImportDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;
+  std::vector<ImportDeclaration> imports;
   std::vector<PortDeclaration> ports;
   std::vector<ModuleItem> items;
 };
@@ -441,6 +452,6 @@ export struct UnsupportedDesignElement {
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
     std::variant<ModuleDeclaration, PackageDeclaration, TimeDeclaration,
-                 UnsupportedDesignElement>;
+                 ImportDeclaration, UnsupportedDesignElement>;
 
 }  // namespace svt::model

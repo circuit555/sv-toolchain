@@ -100,6 +100,8 @@ export class Parser final : private TokenParserBase {
   auto ParsePackageDeclaration() -> ::svt::model::PackageDeclaration;
   auto ParsePackageItems() -> std::vector<::svt::model::PackageItem>;
   auto ParseUnsupportedPackageItem() -> ::svt::model::UnsupportedPackageItem;
+  auto ParseImportDeclaration() -> ::svt::model::ImportDeclaration;
+  auto ParseExportDeclaration() -> ::svt::model::ExportDeclaration;
 
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;

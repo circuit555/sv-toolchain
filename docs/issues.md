@@ -21,15 +21,6 @@ and existing parser tests still pass.
 
 ## Issues
 
-### 1. Add top-level time declarations
-
-- Parse `timeunit` and `timeprecision` as first-class compilation-unit items.
-- Model optional precision syntax such as `1ns / 1ps`.
-- Update the AST printer so these no longer appear as unsupported top-level
-  elements.
-- Add focused unit tests for `timeunit`, `timeprecision`, and continued
-  top-level parsing after time declarations.
-
 ### 2. Add package declarations
 
 - Parse `package ... endpackage`, including optional attributes and lifetime.

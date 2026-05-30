@@ -70,6 +70,10 @@ export struct Token {
   std::string_view lexeme;
   /// Source location of the token start.
   SourceLocation location;
+
+  [[nodiscard]] auto IsPackageScopeNamePart() const -> bool {
+    return type == TokenType::kIdentifier or lexeme == "*";
+  }
 };
 
 /// @brief Sequence of tokens.

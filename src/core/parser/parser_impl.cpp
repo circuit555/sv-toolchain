@@ -47,6 +47,9 @@ using PackageDeclaration = ::svt::model::PackageDeclaration;
 using PackageItem = ::svt::model::PackageItem;
 using PackageImportDeclaration = ::svt::model::PackageImportDeclaration;
 using PackageExportDeclaration = ::svt::model::PackageExportDeclaration;
+using PackageScopeName = ::svt::model::PackageScopeName;
+using ImportDeclaration = ::svt::model::ImportDeclaration;
+using ExportDeclaration = ::svt::model::ExportDeclaration;
 using UnsupportedPackageItem = ::svt::model::UnsupportedPackageItem;
 using UnsupportedDesignElement = ::svt::model::UnsupportedDesignElement;
 using Expression = ::svt::model::Expression;
@@ -180,6 +183,8 @@ enum class BoundaryEndBehavior : std::uint8_t {
   kThrow,
 };
 
+// TODO(): perhaps move some helper into Token class
+
 inline auto IsParameterDeclarationPrefix(tokens_t const tokens) -> bool {
   return tokens.front().lexeme == "parameter" or
          tokens.front().lexeme == "localparam";
@@ -215,6 +220,38 @@ inline auto IsAttributeInstanceStart(tokens_t tokens) -> bool {
   return std::cmp_greater(rng::size(tokens), 1) and
          tokens.front().type == TokenType::kLParen and
          rng::next(rng::cbegin(tokens))->lexeme == "*";
+}
+
+inline auto IsPackageScopeNameStart(tokens_t::iterator const token_iterator,
+                                    tokens_t::iterator const end_iterator)
+    -> bool {
+  if (token_iterator == end_iterator) {
+    return false;
+  }
+
+  auto const scope_separator_iterator{
+      rng::next(token_iterator, 1, end_iterator)};
+  auto const name_iterator{rng::next(token_iterator, 2, end_iterator)};
+  return name_iterator != end_iterator and
+         token_iterator->IsPackageScopeNamePart() and
+         scope_separator_iterator->lexeme == "::" and
+         name_iterator->IsPackageScopeNamePart();
+}
+
+inline auto IsPackageScopeImportStart(tokens_t::iterator const token_iterator,
+                                      tokens_t::iterator const end_iterator)
+    -> bool {
+  return ::IsKeyword(token_iterator, "import") and
+         ::IsPackageScopeNameStart(rng::next(token_iterator, 1, end_iterator),
+                                   end_iterator);
+}
+
+inline auto IsPackageScopeExportStart(tokens_t::iterator const token_iterator,
+                                      tokens_t::iterator const end_iterator)
+    -> bool {
+  return ::IsKeyword(token_iterator, "export") and
+         ::IsPackageScopeNameStart(rng::next(token_iterator, 1, end_iterator),
+                                   end_iterator);
 }
 
 auto AdvancePastAttributeInstances(tokens_t::iterator& token_iterator,
@@ -542,6 +579,22 @@ inline auto MatchingModuleItemEndKeyword(
 
     throw;
   }
+}
+
+inline auto ParsePackageScopeName(tokens_t const tokens,
+                                  std::string_view const context)
+    -> PackageScopeName {
+  if (std::cmp_not_equal(rng::size(tokens), 3) or
+      not tokens[0].IsPackageScopeNamePart() or tokens[1].lexeme != "::" or
+      not tokens[2].IsPackageScopeNamePart()) [[unlikely]] {
+    throw std::runtime_error{fmt::format(
+        "[Parser] expected package-scope name while parsing {} at ({}, {})",
+        context, tokens.empty() ? 0 : tokens.front().location.row,
+        tokens.empty() ? 0 : tokens.front().location.column)};
+  }
+
+  return PackageScopeName{
+      .scope = tokens[0].lexeme, .name = tokens[2].lexeme, .tokens = tokens};
 }
 
 auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
@@ -2252,6 +2305,24 @@ auto PrintParameter(ParameterDeclaration const& parameter) -> void {
       parameter);
 }
 
+auto JoinPackageScopeNames(std::vector<PackageScopeName> const& names)
+    -> std::string {
+  return names | rng::views::transform([](PackageScopeName const& name) {
+           return JoinLexemes(name.tokens);
+         }) |
+         rng::views::join_with(std::string_view{", "}) | rng::to<std::string>();
+}
+
+auto PrintImportDeclaration(ImportDeclaration const& declaration,
+                            std::string_view const indent = {}) -> void {
+  fmt::println("{}import {}", indent, JoinPackageScopeNames(declaration.names));
+}
+
+auto PrintExportDeclaration(ExportDeclaration const& declaration,
+                            std::string_view const indent = {}) -> void {
+  fmt::println("{}export {}", indent, JoinPackageScopeNames(declaration.names));
+}
+
 auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
   fmt::println("package {}", package_declaration.name);
 
@@ -2271,13 +2342,11 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               PackageImportDeclaration>) {
-              fmt::println("    import {}",
-                           JoinLexemes(resolved_item.tokens.subspan(1)));
+              PrintImportDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               PackageExportDeclaration>) {
-              fmt::println("    export {}",
-                           JoinLexemes(resolved_item.tokens.subspan(1)));
+              PrintExportDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               UnsupportedPackageItem>) {
@@ -2296,6 +2365,13 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
     fmt::println("  parameters:");
     for (auto const& parameter : module_declaration.parameters) {
       PrintParameter(parameter);
+    }
+  }
+
+  if (not rng::empty(module_declaration.imports)) {
+    fmt::println("  imports:");
+    for (auto const& import_declaration : module_declaration.imports) {
+      PrintImportDeclaration(import_declaration, "    ");
     }
   }
 
@@ -2377,6 +2453,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                                                   decltype(resolved_item)>,
                                               TimeDeclaration>) {
               PrintTimeDeclaration(resolved_item, "    ");
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ImportDeclaration>) {
+              PrintImportDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               UnsupportedModuleItem>) {
@@ -3118,6 +3198,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             PrintTimeDeclaration(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   ImportDeclaration>) {
+            PrintImportDeclaration(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    UnsupportedDesignElement>) {
             fmt::println("{} <unsupported>", resolved_node.kind);
           } else {
@@ -3144,6 +3228,13 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("timeprecision"):
         m_token_iterator = dispatch_iterator;
         return ParseTimeDeclaration();
+      case ::HashLexeme("import"):
+        if (::IsPackageScopeImportStart(dispatch_iterator,
+                                        rng::cend(m_tokens))) {
+          m_token_iterator = dispatch_iterator;
+          return ParseImportDeclaration();
+        }
+        break;
       default:
         break;
     }
@@ -3196,6 +3287,70 @@ auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
                         : tokens_t{time_begin_iterator, semicolon_iterator},
       .precision_value = precision_value,
       .tokens = {declaration_begin_iterator, m_token_iterator}};
+}
+
+auto Parser::ParseImportDeclaration() -> ImportDeclaration {
+  auto const import_begin_iterator{m_token_iterator};
+  ExpectKeyword("import", "import declaration");
+
+  ImportDeclaration declaration{};
+  while (m_token_iterator->type != TokenType::kEndOfFile and
+         m_token_iterator->type != TokenType::kSemicolon) {
+    auto const name_begin_iterator{m_token_iterator};
+    ::AdvanceToTopLevelBoundary(
+        m_token_iterator, rng::cend(m_tokens),
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->type == TokenType::kSemicolon;
+        },
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->type == TokenType::kComma or
+                 token_iterator->type == TokenType::kSemicolon;
+        },
+        false, BoundaryEndBehavior::kThrow, "import declaration");
+
+    declaration.names.push_back(::ParsePackageScopeName(
+        tokens_t{name_begin_iterator, m_token_iterator}, "import declaration"));
+
+    if (m_token_iterator->type == TokenType::kComma) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    }
+  }
+
+  ExpectToken(TokenType::kSemicolon, "import declaration");
+  declaration.tokens = {import_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseExportDeclaration() -> ExportDeclaration {
+  auto const export_begin_iterator{m_token_iterator};
+  ExpectKeyword("export", "export declaration");
+
+  ExportDeclaration declaration{};
+  while (m_token_iterator->type != TokenType::kEndOfFile and
+         m_token_iterator->type != TokenType::kSemicolon) {
+    auto const name_begin_iterator{m_token_iterator};
+    ::AdvanceToTopLevelBoundary(
+        m_token_iterator, rng::cend(m_tokens),
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->type == TokenType::kSemicolon;
+        },
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->type == TokenType::kComma or
+                 token_iterator->type == TokenType::kSemicolon;
+        },
+        false, BoundaryEndBehavior::kThrow, "export declaration");
+
+    declaration.names.push_back(::ParsePackageScopeName(
+        tokens_t{name_begin_iterator, m_token_iterator}, "export declaration"));
+
+    if (m_token_iterator->type == TokenType::kComma) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    }
+  }
+
+  ExpectToken(TokenType::kSemicolon, "export declaration");
+  declaration.tokens = {export_begin_iterator, m_token_iterator};
+  return declaration;
 }
 
 auto Parser::ParsePackageDeclaration() -> PackageDeclaration {
@@ -3254,21 +3409,15 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
       continue;
     }
 
-    if (::IsKeyword(m_token_iterator, "import")) {
-      auto const import_begin_iterator{m_token_iterator};
-      SkipUnsupportedElementToSemicolon("endpackage");
-      items.emplace_back(std::in_place_type<PackageImportDeclaration>,
-                         tokens_t{import_begin_iterator, m_token_iterator});
-
+    if (::IsPackageScopeImportStart(m_token_iterator, rng::cend(m_tokens))) {
+      items.emplace_back(std::in_place_type<ImportDeclaration>,
+                         ParseImportDeclaration());
       continue;
     }
 
-    if (::IsKeyword(m_token_iterator, "export")) {
-      auto const export_begin_iterator{m_token_iterator};
-      SkipUnsupportedElementToSemicolon("endpackage");
-      items.emplace_back(std::in_place_type<PackageExportDeclaration>,
-                         tokens_t{export_begin_iterator, m_token_iterator});
-
+    if (::IsPackageScopeExportStart(m_token_iterator, rng::cend(m_tokens))) {
+      items.emplace_back(std::in_place_type<ExportDeclaration>,
+                         ParseExportDeclaration());
       continue;
     }
 
@@ -3394,8 +3543,8 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   module_declaration.name = m_token_iterator->lexeme;
   rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
 
-  while (::IsKeyword(m_token_iterator, "import")) {
-    SkipUnsupportedElementToSemicolon();
+  while (::IsPackageScopeImportStart(m_token_iterator, rng::cend(m_tokens))) {
+    module_declaration.imports.push_back(ParseImportDeclaration());
   }
 
   if (m_token_iterator->type != TokenType::kHash and
@@ -3518,6 +3667,13 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("assign"):
           return ModuleItem{std::in_place_type<ContinuousAssign>,
                             ParseContinuousAssign()};
+        case ::HashLexeme("import"):
+          if (::IsPackageScopeImportStart(m_token_iterator,
+                                          rng::cend(m_tokens))) {
+            return ModuleItem{std::in_place_type<ImportDeclaration>,
+                              ParseImportDeclaration()};
+          }
+          break;
         case ::HashLexeme("always"):
           return parse_always_block(ProceduralBlockKind::kAlways);
         case ::HashLexeme("always_ff"):

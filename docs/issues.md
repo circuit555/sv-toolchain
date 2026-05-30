@@ -39,7 +39,7 @@ parsing after time declarations.
 - Keep unsupported package items scoped inside the package instead of surfacing
   as separate top-level unsupported elements.
 
-### 3. Add import and export declarations
+### 3. Add import and export declarations (done)
 
 - Parse top-level, package-level, and module-level `import` declarations.
 - Parse package exports, including explicit symbols and wildcard exports.

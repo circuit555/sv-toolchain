@@ -32,6 +32,8 @@ using TimeDeclarationKind = svt::model::TimeDeclarationKind;
 using PackageDeclaration = svt::model::PackageDeclaration;
 using PackageImportDeclaration = svt::model::PackageImportDeclaration;
 using PackageExportDeclaration = svt::model::PackageExportDeclaration;
+using ImportDeclaration = svt::model::ImportDeclaration;
+using ExportDeclaration = svt::model::ExportDeclaration;
 using UnsupportedPackageItem = svt::model::UnsupportedPackageItem;
 using ParameterDeclaration = svt::model::ParameterDeclaration;
 using Expression = svt::model::Expression;
@@ -306,16 +308,66 @@ TEST_CASE("Parse package declarations", "[parser]") {
                       package_declaration.items.at(3))
                       .tokens) ==
           std::vector<std::string_view>{"import", "q", "::", "r", ";"});
+  auto const& import_declaration{
+      std::get<PackageImportDeclaration>(package_declaration.items.at(3))};
+  REQUIRE(import_declaration.names.size() == 1);
+  REQUIRE(import_declaration.names.front().scope == "q");
+  REQUIRE(import_declaration.names.front().name == "r");
+
   REQUIRE(Lexemes(std::get<PackageExportDeclaration>(
                       package_declaration.items.at(4))
                       .tokens) ==
           std::vector<std::string_view>{"export", "*", "::", "*", ";"});
+  auto const& export_declaration{
+      std::get<PackageExportDeclaration>(package_declaration.items.at(4))};
+  REQUIRE(export_declaration.names.size() == 1);
+  REQUIRE(export_declaration.names.front().scope == "*");
+  REQUIRE(export_declaration.names.front().name == "*");
 
   auto const& unsupported_item{
       std::get<UnsupportedPackageItem>(package_declaration.items.at(5))};
   REQUIRE(unsupported_item.kind == "program");
 
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(1)).name == "foo");
+}
+
+TEST_CASE("Parse import declarations", "[parser]") {
+  std::string src = R"(
+    import p::x, p::*;
+
+    module foo import p::*, q::r; ();
+      import p::x;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& top_level_import{
+      std::get<ImportDeclaration>(translation_unit.at(0))};
+  REQUIRE(top_level_import.names.size() == 2);
+  REQUIRE(top_level_import.names.at(0).scope == "p");
+  REQUIRE(top_level_import.names.at(0).name == "x");
+  REQUIRE(top_level_import.names.at(1).scope == "p");
+  REQUIRE(top_level_import.names.at(1).name == "*");
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.at(1))};
+  REQUIRE(module_declaration.imports.size() == 1);
+  REQUIRE(module_declaration.imports.front().names.size() == 2);
+  REQUIRE(module_declaration.imports.front().names.at(0).scope == "p");
+  REQUIRE(module_declaration.imports.front().names.at(0).name == "*");
+  REQUIRE(module_declaration.imports.front().names.at(1).scope == "q");
+  REQUIRE(module_declaration.imports.front().names.at(1).name == "r");
+
+  REQUIRE(module_declaration.items.size() == 1);
+  auto const& module_item_import{
+      std::get<ImportDeclaration>(module_declaration.items.front())};
+  REQUIRE(module_item_import.names.size() == 1);
+  REQUIRE(module_item_import.names.front().scope == "p");
+  REQUIRE(module_item_import.names.front().name == "x");
 }
 
 TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {

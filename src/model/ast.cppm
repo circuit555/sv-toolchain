@@ -391,6 +391,32 @@ export struct TimeDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct PackageImportDeclaration {
+  std::span<Token const> tokens;
+};
+
+export struct PackageExportDeclaration {
+  std::span<Token const> tokens;
+};
+
+// TODO(): why do we need unsupported stuff still?
+export struct UnsupportedPackageItem {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
+export using PackageItem =
+    std::variant<TimeDeclaration, ParameterDeclaration,
+                 PackageImportDeclaration, PackageExportDeclaration,
+                 UnsupportedPackageItem>;
+
+export struct PackageDeclaration : Declaration {
+  // TODO(): maybe std::optional<std::string_view> lifetime{};
+  std::string_view lifetime;
+  std::vector<PackageItem> items;
+  std::span<Token const> tokens;
+};
+
 export struct UnsupportedModuleItem {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -414,6 +440,7 @@ export struct UnsupportedDesignElement {
 
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
-    std::variant<ModuleDeclaration, TimeDeclaration, UnsupportedDesignElement>;
+    std::variant<ModuleDeclaration, PackageDeclaration, TimeDeclaration,
+                 UnsupportedDesignElement>;
 
 }  // namespace svt::model

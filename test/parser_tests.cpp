@@ -29,6 +29,11 @@ using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
 using TimeDeclaration = svt::model::TimeDeclaration;
 using TimeDeclarationKind = svt::model::TimeDeclarationKind;
+using PackageDeclaration = svt::model::PackageDeclaration;
+using PackageImportDeclaration = svt::model::PackageImportDeclaration;
+using PackageExportDeclaration = svt::model::PackageExportDeclaration;
+using UnsupportedPackageItem = svt::model::UnsupportedPackageItem;
+using ParameterDeclaration = svt::model::ParameterDeclaration;
 using Expression = svt::model::Expression;
 using IdentifierExpression = svt::model::IdentifierExpression;
 using LiteralExpression = svt::model::LiteralExpression;
@@ -248,6 +253,71 @@ TEST_CASE("Parse module time declarations", "[parser]") {
   REQUIRE(done_declaration.name == "done");
 }
 
+TEST_CASE("Parse package declarations", "[parser]") {
+  std::string src = R"(
+    (* foo = 1 *) package static p;
+      timeunit 1ns;
+      parameter int x = 1;
+      parameter type y_t = logic[x:0];
+      import q::r;
+      export *::*;
+      program; endprogram
+    endpackage
+
+    module foo ();
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& package_declaration{
+      std::get<PackageDeclaration>(translation_unit.at(0))};
+  REQUIRE(package_declaration.name == "p");
+  REQUIRE(package_declaration.lifetime == "static");
+  REQUIRE(package_declaration.items.size() == 6);
+  REQUIRE(Lexemes(package_declaration.tokens).front() == "(");
+
+  auto const& time_declaration{
+      std::get<TimeDeclaration>(package_declaration.items.at(0))};
+  REQUIRE(time_declaration.kind == TimeDeclarationKind::kTimeUnit);
+  REQUIRE(Lexemes(time_declaration.time_value) ==
+          std::vector<std::string_view>{"1ns"});
+
+  auto const& value_parameter{
+      std::get<ParameterDeclaration>(package_declaration.items.at(1))};
+  auto const& x_parameter{std::get<ParameterValueDeclaration>(value_parameter)};
+  REQUIRE(x_parameter.name == "x");
+  REQUIRE(Lexemes(x_parameter.type_specifier) ==
+          std::vector<std::string_view>{"int"});
+  REQUIRE(Lexemes(x_parameter.default_value->tokens) ==
+          std::vector<std::string_view>{"1"});
+
+  auto const& type_parameter{
+      std::get<ParameterDeclaration>(package_declaration.items.at(2))};
+  auto const& y_parameter{std::get<ParameterTypeDeclaration>(type_parameter)};
+  REQUIRE(y_parameter.name == "y_t");
+  REQUIRE(Lexemes(y_parameter.default_type) ==
+          std::vector<std::string_view>{"logic", "[", "x", ":", "0", "]"});
+
+  REQUIRE(Lexemes(std::get<PackageImportDeclaration>(
+                      package_declaration.items.at(3))
+                      .tokens) ==
+          std::vector<std::string_view>{"import", "q", "::", "r", ";"});
+  REQUIRE(Lexemes(std::get<PackageExportDeclaration>(
+                      package_declaration.items.at(4))
+                      .tokens) ==
+          std::vector<std::string_view>{"export", "*", "::", "*", ";"});
+
+  auto const& unsupported_item{
+      std::get<UnsupportedPackageItem>(package_declaration.items.at(5))};
+  REQUIRE(unsupported_item.kind == "program");
+
+  REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(1)).name == "foo");
+}
+
 TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
   std::string src = R"(
     timeunit 1ns / 1ps;
@@ -270,8 +340,7 @@ TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
   REQUIRE(translation_unit.size() == 4);
   REQUIRE(std::get<TimeDeclaration>(translation_unit.at(0)).kind ==
           TimeDeclarationKind::kTimeUnit);
-  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(1)).kind ==
-          "package");
+  REQUIRE(std::get<PackageDeclaration>(translation_unit.at(1)).name == "p");
   REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(2)).kind ==
           "class");
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(3)).name == "foo");

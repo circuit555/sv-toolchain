@@ -456,6 +456,7 @@ TEST_CASE("Parse rich module headers", "[parser]") {
 
   auto const& m1{std::get<ModuleDeclaration>(translation_unit.at(0))};
   REQUIRE(m1.name == "m1");
+  REQUIRE(m1.lifetime == "automatic");
   REQUIRE(m1.parameters.size() == 1);
   REQUIRE(m1.imports.size() == 1);
   REQUIRE(m1.imports.front().names.size() == 2);
@@ -476,6 +477,7 @@ TEST_CASE("Parse rich module headers", "[parser]") {
 
   auto const& m2{std::get<ModuleDeclaration>(translation_unit.at(1))};
   REQUIRE(m2.name == "m2");
+  REQUIRE(m2.lifetime.empty());
   REQUIRE(m2.parameters.size() == 3);
   REQUIRE(m2.ports.size() == 5);
   REQUIRE(m2.ports.at(0).kind == ModulePortKind::kImplicit);

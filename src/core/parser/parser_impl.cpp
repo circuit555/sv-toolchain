@@ -2408,7 +2408,12 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
 }
 
 auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
-  fmt::println("module {}", module_declaration.name);
+  if (rng::empty(module_declaration.lifetime)) {
+    fmt::println("module {}", module_declaration.name);
+  } else {
+    fmt::println("module {} {}", module_declaration.lifetime,
+                 module_declaration.name);
+  }
 
   if (not rng::empty(module_declaration.parameters)) {
     fmt::println("  parameters:");
@@ -3584,8 +3589,11 @@ auto Parser::SkipUnsupportedElementToMatchingEnd(
 }
 
 auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
+  ModuleDeclaration module_declaration{};
+
   if (m_token_iterator->IsKeyword("automatic") or
       m_token_iterator->IsKeyword("static")) {
+    module_declaration.lifetime = m_token_iterator->lexeme;
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
 
@@ -3595,7 +3603,6 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
         m_token_iterator->location.row, m_token_iterator->location.column)};
   }
 
-  ModuleDeclaration module_declaration{};
   module_declaration.name = m_token_iterator->lexeme;
   rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
 

@@ -446,6 +446,7 @@ export using ModuleItem =
                  ImportDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
+  std::string_view lifetime;
   std::vector<ParameterDeclaration> parameters;
   std::vector<ImportDeclaration> imports;
   std::vector<ModulePort> ports;

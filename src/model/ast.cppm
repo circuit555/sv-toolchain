@@ -272,8 +272,16 @@ export struct PackedSizeDimension {
 export using PackedDimension =
     std::variant<PackedRangeDimension, PackedSizeDimension>;
 
-export struct PortDeclaration : Declaration {
-  PortDirection direction{};
+export enum class ModulePortKind : std::uint8_t {
+  kImplicit,
+  kExplicitNamed,
+  kEmpty
+};
+
+export struct ModulePort : Declaration {
+  ModulePortKind kind{};
+  std::optional<PortDirection> direction;
+  std::span<Token const> tokens;
 };
 
 export struct NetDeclaration : Declaration {
@@ -440,7 +448,7 @@ export using ModuleItem =
 export struct ModuleDeclaration : Declaration {
   std::vector<ParameterDeclaration> parameters;
   std::vector<ImportDeclaration> imports;
-  std::vector<PortDeclaration> ports;
+  std::vector<ModulePort> ports;
   std::vector<ModuleItem> items;
 };
 

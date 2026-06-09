@@ -9,6 +9,7 @@ import svt.core.parser;
 namespace {
 using Parser = svt::core::Parser;
 using ModuleDeclaration = svt::model::ModuleDeclaration;
+using ModulePortKind = svt::model::ModulePortKind;
 using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
@@ -456,16 +457,42 @@ TEST_CASE("Parse rich module headers", "[parser]") {
   auto const& m1{std::get<ModuleDeclaration>(translation_unit.at(0))};
   REQUIRE(m1.name == "m1");
   REQUIRE(m1.parameters.size() == 1);
-  REQUIRE(m1.ports.empty());
+  REQUIRE(m1.imports.size() == 1);
+  REQUIRE(m1.imports.front().names.size() == 2);
+  REQUIRE(m1.ports.size() == 4);
+  REQUIRE(m1.ports.at(0).kind == ModulePortKind::kImplicit);
+  REQUIRE(m1.ports.at(0).name == "a");
+  REQUIRE(m1.ports.at(0).direction == PortDirection::kInput);
+  REQUIRE(m1.ports.at(1).kind == ModulePortKind::kImplicit);
+  REQUIRE(m1.ports.at(1).name == "b");
+  REQUIRE(m1.ports.at(1).direction == PortDirection::kOutput);
+  REQUIRE(m1.ports.at(2).kind == ModulePortKind::kEmpty);
+  REQUIRE(m1.ports.at(2).name.empty());
+  REQUIRE(not m1.ports.at(2).direction.has_value());
+  REQUIRE(m1.ports.at(3).kind == ModulePortKind::kExplicitNamed);
+  REQUIRE(m1.ports.at(3).name == "c");
+  REQUIRE(not m1.ports.at(3).direction.has_value());
+  REQUIRE(m1.items.empty());
 
   auto const& m2{std::get<ModuleDeclaration>(translation_unit.at(1))};
   REQUIRE(m2.name == "m2");
   REQUIRE(m2.parameters.size() == 3);
-  REQUIRE(m2.ports.size() == 2);
+  REQUIRE(m2.ports.size() == 5);
+  REQUIRE(m2.ports.at(0).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(0).name == "a");
   REQUIRE(m2.ports.at(0).direction == PortDirection::kInput);
+  REQUIRE(m2.ports.at(1).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(1).name == "b");
   REQUIRE(m2.ports.at(1).direction == PortDirection::kOutput);
+  REQUIRE(m2.ports.at(2).kind == ModulePortKind::kImplicit);
+  REQUIRE(m2.ports.at(2).name == "c");
+  REQUIRE(not m2.ports.at(2).direction.has_value());
+  REQUIRE(m2.ports.at(3).kind == ModulePortKind::kImplicit);
+  REQUIRE(m2.ports.at(3).name == "d");
+  REQUIRE(not m2.ports.at(3).direction.has_value());
+  REQUIRE(m2.ports.at(4).kind == ModulePortKind::kExplicitNamed);
+  REQUIRE(m2.ports.at(4).name == "e");
+  REQUIRE(not m2.ports.at(4).direction.has_value());
 }
 
 TEST_CASE("Parse module parameters followed by ports", "[parser]") {

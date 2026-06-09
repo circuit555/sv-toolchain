@@ -46,7 +46,7 @@ parsing after time declarations.
 - Reuse a common package-scope name representation for paths like `p::x` and
   `*::*`.
 
-### 4. Expand module header support
+### 4. Expand module header support (done)
 
 - Parse module lifetime (`automatic` / `static`) and module-header imports.
 - Parse non-ANSI and mixed port lists without turning later `input`/`output`

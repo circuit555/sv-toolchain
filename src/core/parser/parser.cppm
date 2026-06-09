@@ -104,8 +104,9 @@ export class Parser final : private TokenParserBase {
   auto ParseExportDeclaration() -> ::svt::model::ExportDeclaration;
 
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
-  auto ParseModuleItems() -> std::vector<::svt::model::ModuleItem>;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
+  auto ParseModulePortDeclarations()
+      -> std::vector<::svt::model::ModulePort>;
   auto ParseUnsupportedModuleItem() -> ::svt::model::UnsupportedModuleItem;
 
   auto ParseParameterTokens(::svt::model::TokenType end_token,
@@ -114,7 +115,7 @@ export class Parser final : private TokenParserBase {
       ::svt::model::TokenType end_token = ::svt::model::TokenType::kRParen,
       std::string_view context = "parameter list")
       -> std::vector<::svt::model::ParameterDeclaration>;
-  auto ParsePorts() -> std::vector<::svt::model::PortDeclaration>;
+  auto ParsePorts() -> std::vector<::svt::model::ModulePort>;
   auto ParseAlwaysEventControl() -> void;
   auto ParseKeywordBlockBody(std::string_view start_keyword,
                              std::string_view end_keyword,

@@ -19,7 +19,8 @@ using ModuleDeclaration = ::svt::model::ModuleDeclaration;
 using ParameterDeclaration = ::svt::model::ParameterDeclaration;
 using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
-using PortDeclaration = ::svt::model::PortDeclaration;
+using ModulePort = ::svt::model::ModulePort;
+using ModulePortKind = ::svt::model::ModulePortKind;
 using PortDirection = ::svt::model::PortDirection;
 using NetDeclaration = ::svt::model::NetDeclaration;
 using NetType = ::svt::model::NetType;
@@ -2087,7 +2088,7 @@ auto ParseParameterDeclaration(
 
 auto ParsePortDeclaration(
     tokens_t const port_tokens,
-    std::optional<PortDirection> const& previous_direction) -> PortDeclaration {
+    std::optional<PortDirection> const& previous_direction) -> ModulePort {
   auto is_port_direction_token{[](Token const& token) -> bool {
     return token.lexeme == "input" or token.lexeme == "output";
   }};
@@ -2129,7 +2130,9 @@ auto ParsePortDeclaration(
         port_tokens.front().location.row, port_tokens.front().location.column)};
   }
 
-  PortDeclaration port{};
+  ModulePort port{};
+  port.kind = ModulePortKind::kImplicit;
+  port.tokens = port_tokens;
   port.name = port_name_iterator->lexeme;
   port.direction = is_port_direction_token(port_tokens.front())
                        ? parse_port_direction()
@@ -2171,7 +2174,7 @@ auto StripLeadingAttributes(tokens_t port_tokens) -> tokens_t {
 
 auto TryParsePort(tokens_t const port_tokens,
                   std::optional<PortDirection> const previous_direction)
-    -> std::optional<PortDeclaration> {
+    -> std::optional<ModulePort> {
   auto const stripped_port_tokens{StripLeadingAttributes(port_tokens)};
   if (rng::empty(stripped_port_tokens)) {
     return std::nullopt;
@@ -2192,6 +2195,65 @@ auto TryParsePort(tokens_t const port_tokens,
   }
 
   return ParsePortDeclaration(stripped_port_tokens, previous_direction);
+}
+
+auto ParseModulePort(tokens_t const port_tokens) -> ModulePort {
+  ModulePort port{};
+  port.tokens = port_tokens;
+
+  auto const stripped_port_tokens{StripLeadingAttributes(port_tokens)};
+  if (rng::empty(stripped_port_tokens)) {
+    port.kind = ModulePortKind::kEmpty;
+    return port;
+  }
+
+  if (stripped_port_tokens.front().type == TokenType::kDot) {
+    port.kind = ModulePortKind::kExplicitNamed;
+    auto const name_iterator{
+        rng::find_if(stripped_port_tokens, [](Token const& token) -> bool {
+          return token.type == TokenType::kIdentifier;
+        })};
+    if (name_iterator != rng::cend(stripped_port_tokens)) {
+      port.name = name_iterator->lexeme;
+    }
+    return port;
+  }
+
+  port.kind = ModulePortKind::kImplicit;
+  auto const name_iterator{
+      rng::find_if(stripped_port_tokens | rng::views::reverse,
+                   [](Token const& token) -> bool {
+                     return token.type == TokenType::kIdentifier;
+                   })};
+  if (name_iterator != rng::crend(stripped_port_tokens)) {
+    port.name = name_iterator->lexeme;
+  }
+  return port;
+}
+
+inline auto PreviousPortDirection(std::vector<ModulePort> const& ports)
+    -> std::optional<PortDirection> {
+  for (auto port_iterator{rng::crbegin(ports)};
+       port_iterator != rng::crend(ports); ++port_iterator) {
+    if (port_iterator->direction.has_value()) {
+      return port_iterator->direction;
+    }
+  }
+
+  return std::nullopt;
+}
+
+inline auto FindUndirectedImplicitPort(std::vector<ModulePort>& ports,
+                                       ModulePort const& declaration)
+    -> std::vector<ModulePort>::iterator {
+  if (rng::empty(declaration.name)) {
+    return rng::end(ports);
+  }
+
+  return rng::find_if(ports, [&declaration](ModulePort const& port) -> bool {
+    return port.kind == ModulePortKind::kImplicit and
+           port.name == declaration.name and not port.direction.has_value();
+  });
 }
 
 auto JoinLexemes(tokens_t const tokens) -> std::string {
@@ -2219,6 +2281,19 @@ auto ToString(PortDirection const direction) -> std::string_view {
       return "input";
     case PortDirection::kOutput:
       return "output";
+  }
+
+  std::unreachable();
+}
+
+auto ToString(ModulePortKind const kind) -> std::string_view {
+  switch (kind) {
+    case ModulePortKind::kImplicit:
+      return "implicit";
+    case ModulePortKind::kExplicitNamed:
+      return "explicit named";
+    case ModulePortKind::kEmpty:
+      return "empty";
   }
 
   std::unreachable();
@@ -2352,7 +2427,14 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
   if (not rng::empty(module_declaration.ports)) {
     fmt::println("  ports:");
     for (auto const& port : module_declaration.ports) {
-      fmt::println("    {} {}", ToString(port.direction), port.name);
+      auto line{fmt::format("    {}", ToString(port.kind))};
+      if (port.direction.has_value()) {
+        line += fmt::format(" {}", ToString(port.direction.value()));
+      }
+      if (not rng::empty(port.name)) {
+        line += fmt::format(" {}", port.name);
+      }
+      fmt::println("{}", line);
     }
   }
 
@@ -3544,24 +3626,67 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
 
-  module_declaration.items = ParseModuleItems();
-
-  return module_declaration;
-}
-
-auto Parser::ParseModuleItems() -> std::vector<ModuleItem> {
-  std::vector<ModuleItem> items{};
-
+  // now parsing module items
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
-    items.push_back(ParseModuleItem());
+    if (m_token_iterator->IsKeyword("input") or
+        m_token_iterator->IsKeyword("output")) {
+      for (auto const& port_declaration : ParseModulePortDeclarations()) {
+        auto const matching_header_port_iterator{::FindUndirectedImplicitPort(
+            module_declaration.ports, port_declaration)};
+        if (matching_header_port_iterator !=
+            rng::end(module_declaration.ports)) {
+          matching_header_port_iterator->direction = port_declaration.direction;
+          continue;
+        }
+
+        module_declaration.ports.push_back(port_declaration);
+      }
+
+      continue;
+    }
+
+    module_declaration.items.push_back(ParseModuleItem());
   }
 
   if (m_token_iterator->lexeme == "endmodule") {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
+  // TODO(): if not shouldn't we throw here i.e. why dont we have
+  // ExpectKeyword for endmodule before?
 
-  return items;
+  return module_declaration;
+}
+
+auto Parser::ParseModulePortDeclarations() -> std::vector<ModulePort> {
+  std::vector<ModulePort> ports{};
+
+  while (m_token_iterator->type != TokenType::kSemicolon) {
+    auto const port_begin{m_token_iterator};
+
+    ::AdvanceToTopLevelBoundary(
+        m_token_iterator, rng::cend(m_tokens),
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->type == TokenType::kSemicolon;
+        },
+        [](tokens_t::iterator const token_iterator) -> bool {
+          return token_iterator->type == TokenType::kComma or
+                 token_iterator->type == TokenType::kSemicolon;
+        },
+        true, BoundaryEndBehavior::kThrow, "module port declaration");
+
+    auto const port_tokens{tokens_t{port_begin, m_token_iterator}};
+    auto const previous_direction{::PreviousPortDirection(ports)};
+    ports.push_back(::ParsePortDeclaration(port_tokens, previous_direction));
+
+    if (m_token_iterator->type == TokenType::kComma) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    }
+  }
+
+  ExpectToken(TokenType::kSemicolon, "module port declaration");
+
+  return ports;
 }
 
 auto Parser::ParseModuleItem() -> ModuleItem {
@@ -3863,8 +3988,8 @@ auto Parser::ParseParameterTokens(TokenType const end_token,
   return {parameter_begin, m_token_iterator};
 }
 
-auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
-  std::vector<PortDeclaration> result{};
+auto Parser::ParsePorts() -> std::vector<ModulePort> {
+  std::vector<ModulePort> result{};
 
   auto const is_port_list_end{[this]() -> bool {
     return m_token_iterator->type == TokenType::kRParen;
@@ -3881,18 +4006,78 @@ auto Parser::ParsePorts() -> std::vector<PortDeclaration> {
         },
         true, BoundaryEndBehavior::kThrow, "port list");
 
+    // In the following code,
+    // TryParsePort() succeeds when the entry can be modeled as a port with a
+    // known input/ output direction.
+    //
+    // ```
+    // module m(input int a, output logic b);
+    // endmodule
+    // ```
+    //
+    // Result comes from TryParsePort():
+    //
+    // implicit input a
+    // implicit output b
+    //
+    // It also succeeds for inherited direction:
+    //
+    // ```
+    // module m(input a, b, c);
+    // endmodule
+    // ```
+    //
+    // input a gives the previous direction, then b and c inherit it:
+    //
+    // implicit input a
+    // implicit input b
+    // implicit input c
+    //
+    // ParseModulePort() runs only when TryParsePort() fails, mostly for
+    // non-declaration or not-yet-supported forms:
+    //
+    // module m(a, , .e(), ref c, interface.mod d);
+    // endmodule
+    //
+    // Fallback results:
+    //
+    // implicit a
+    // empty
+    // explicit named e
+    // implicit c
+    // implicit d
+    //
+    // There is also an intended merge case:
+    //
+    // module m(a);
+    //   input a;
+    // endmodule
+    //
+    // The header a is first parsed by ParseModulePort() as implicit a. Later,
+    // body input a; is parsed as a declaration and merged onto the existing
+    // port, giving:
+    //
+    // implicit input a
+    //
+    // See ParseModuleItem() for this special merge case
+
     auto const port_tokens{tokens_t{port_begin, m_token_iterator}};
-    auto const previous_direction{rng::empty(result)
-                                      ? std::nullopt
-                                      : std::optional{result.back().direction}};
-    if (auto port{::TryParsePort(port_tokens, previous_direction)};
-        port.has_value()) {
-      result.push_back(port.value());
+    if (auto declaration_opt{
+            ::TryParsePort(port_tokens, ::PreviousPortDirection(result))};
+        declaration_opt.has_value()) {
+      auto const matching_header_port_iterator{
+          ::FindUndirectedImplicitPort(result, declaration_opt.value())};
+      if (matching_header_port_iterator != rng::end(result)) {
+        matching_header_port_iterator->direction =
+            declaration_opt.value().direction;
+      } else {
+        result.push_back(declaration_opt.value());
+      }
+    } else {
+      result.push_back(::ParseModulePort(port_tokens));
     }
 
-    if ([](tokens_t::iterator const token_iterator) -> bool {
-          return token_iterator->IsListSeparator();
-        }(m_token_iterator)) {
+    if (m_token_iterator->IsListSeparator()) {
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
     }
   }

@@ -86,7 +86,7 @@ parsing after time declarations.
 - Parse `nettype` declarations, including optional resolution functions.
 - Allow user-defined net types in declarations and module items.
 
-### 9. Add interface declarations
+### 9. Add interface declarations (done)
 
 - Parse `interface ... endinterface` as a top-level design element.
 - Model interface ports, interface items, modports, extern tasks/functions, and

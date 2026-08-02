@@ -33,6 +33,11 @@ using TypeDeclaration = svt::model::TypeDeclaration;
 using TypeDeclarationKind = svt::model::TypeDeclarationKind;
 using StructuredVariableDeclaration = svt::model::StructuredVariableDeclaration;
 using UserDefinedNetDeclaration = svt::model::UserDefinedNetDeclaration;
+using InterfaceDeclaration = svt::model::InterfaceDeclaration;
+using ModportDeclaration = svt::model::ModportDeclaration;
+using InterfaceSubroutineDeclaration =
+    svt::model::InterfaceSubroutineDeclaration;
+using DefaultClockingDeclaration = svt::model::DefaultClockingDeclaration;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
 using TimeDeclaration = svt::model::TimeDeclaration;
@@ -836,6 +841,48 @@ TEST_CASE("Parse type and nettype declarations", "[parser]") {
   REQUIRE(anonymous_declaration.declarators.front().name == "anonymous");
 }
 
+TEST_CASE("Parse interface declarations", "[parser]") {
+  std::string src = R"(
+    interface Iface(input wire clk);
+      timeunit 1ns;
+      int value;
+      extern function void foo(int i);
+      extern task bar;
+      modport master(input clk, output value);
+      default clocking cb;
+    endinterface : Iface
+  )";
+  Parser parser{std::move(src)};
+
+  auto const translation_unit{parser.Parse()};
+  REQUIRE(translation_unit.size() == 1);
+  auto const& interface_declaration{
+      std::get<InterfaceDeclaration>(translation_unit.front())};
+  REQUIRE(interface_declaration.name == "Iface");
+  REQUIRE(interface_declaration.ports.size() == 1);
+  REQUIRE(interface_declaration.ports.front().name == "clk");
+  REQUIRE(interface_declaration.items.size() == 6);
+  REQUIRE(std::holds_alternative<TimeDeclaration>(
+      interface_declaration.items.at(0)));
+  REQUIRE(std::holds_alternative<VariableDeclaration>(
+      interface_declaration.items.at(1)));
+  auto const& function_declaration{std::get<InterfaceSubroutineDeclaration>(
+      interface_declaration.items.at(2))};
+  REQUIRE(not function_declaration.task);
+  REQUIRE(function_declaration.extern_declaration);
+  auto const& task_declaration{std::get<InterfaceSubroutineDeclaration>(
+      interface_declaration.items.at(3))};
+  REQUIRE(task_declaration.task);
+  auto const& modport_declaration{
+      std::get<ModportDeclaration>(interface_declaration.items.at(4))};
+  REQUIRE(modport_declaration.name == "master");
+  REQUIRE(Lexemes(modport_declaration.ports) ==
+          std::vector<std::string_view>{"(", "input", "clk", ",", "output",
+                                        "value", ")"});
+  REQUIRE(std::holds_alternative<DefaultClockingDeclaration>(
+      interface_declaration.items.at(5)));
+}
+
 TEST_CASE("Parse unsupported module item declarations without losing sync",
           "[parser]") {
   std::string src = R"(
@@ -855,8 +902,8 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.items.size() == 5);
 
-  auto const expected_kinds{std::vector<std::string_view>{
-      "genvar", "wor", "let", "defparam"}};
+  auto const expected_kinds{
+      std::vector<std::string_view>{"genvar", "wor", "let", "defparam"}};
   auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
       std::get<GenerateItem>(module_declaration.items.at(0)))};
   REQUIRE(genvar_declaration.identifiers.size() == 1);

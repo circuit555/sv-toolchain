@@ -72,7 +72,7 @@ parsing after time declarations.
 - Replace the current keyword-based `UnsupportedModuleItem` fallback for these
   declaration forms.
 
-### 7. Add parameter and localparam declarations as module items
+### 7. Add parameter and localparam declarations as module items (done)
 
 - Parse `parameter` and `localparam` declarations outside parameter lists.
 - Support value parameters, type parameters, typed parameters, and multiple

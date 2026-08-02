@@ -2161,10 +2161,12 @@ auto constexpr kVariableTypes{std::array{
 
 inline auto FindVariableType(std::string_view const lexeme)
     -> std::optional<VariableType> {
+  // NOLINTBEGIN(readability-qualified-auto)
   auto const iterator{
       rng::find_if(kVariableTypes, [lexeme](auto const& variable_type) -> bool {
         return variable_type.first == lexeme;
       })};
+  // NOLINTEND(readability-qualified-auto)
   if (iterator == rng::cend(kVariableTypes)) {
     return std::nullopt;
   }
@@ -2504,7 +2506,8 @@ auto PrintParameter(ParameterDeclaration const& parameter) -> void {
 
 auto JoinPackageScopeNames(std::vector<PackageScopeName> const& names)
     -> std::string {
-  return names | rng::views::transform([](PackageScopeName const& name) {
+  return names |
+         rng::views::transform([](PackageScopeName const& name) -> std::string {
            return JoinLexemes(name.tokens);
          }) |
          rng::views::join_with(std::string_view{", "}) | rng::to<std::string>();
@@ -2555,6 +2558,7 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
   }
 }
 
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
   if (rng::empty(module_declaration.lifetime)) {
     fmt::println("module {}", module_declaration.name);
@@ -2711,6 +2715,7 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
     }
   }
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 }  // namespace
 

@@ -96,6 +96,12 @@ export class Parser final : private TokenParserBase {
   auto ParseUnsupportedDesignElement()
       -> ::svt::model::UnsupportedDesignElement;
   auto ParseTimeDeclaration() -> ::svt::model::TimeDeclaration;
+  auto ParseInterfaceDeclaration() -> ::svt::model::InterfaceDeclaration;
+  auto ParseModportDeclaration() -> ::svt::model::ModportDeclaration;
+  auto ParseInterfaceSubroutineDeclaration()
+      -> ::svt::model::InterfaceSubroutineDeclaration;
+  auto ParseDefaultClockingDeclaration()
+      -> ::svt::model::DefaultClockingDeclaration;
 
   auto ParsePackageDeclaration() -> ::svt::model::PackageDeclaration;
   auto ParsePackageItems() -> std::vector<::svt::model::PackageItem>;

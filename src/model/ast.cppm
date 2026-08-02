@@ -480,6 +480,40 @@ export struct TimeDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct ModportDeclaration : Declaration {
+  std::span<Token const> ports;
+  std::span<Token const> tokens;
+};
+
+export struct InterfaceSubroutineDeclaration {
+  bool task{false};
+  bool extern_declaration{false};
+  std::span<Token const> tokens;
+};
+
+export struct DefaultClockingDeclaration {
+  std::span<Token const> tokens;
+};
+
+export struct InterfaceItemDeclaration {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
+export using InterfaceItem =
+    std::variant<TimeDeclaration, ModulePort, VariableDeclaration,
+                 TypeDeclaration, StructuredVariableDeclaration,
+                 ModportDeclaration, InterfaceSubroutineDeclaration,
+                 DefaultClockingDeclaration, InterfaceItemDeclaration>;
+
+export struct InterfaceDeclaration : Declaration {
+  std::string_view lifetime;
+  std::vector<ParameterDeclaration> parameters;
+  std::vector<ModulePort> ports;
+  std::vector<InterfaceItem> items;
+  std::span<Token const> tokens;
+};
+
 export struct PackageScopeName {
   std::string_view scope;
   std::string_view name;
@@ -543,7 +577,8 @@ export struct UnsupportedDesignElement {
 
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
-    std::variant<ModuleDeclaration, PackageDeclaration, TypeDeclaration,
-                 TimeDeclaration, ImportDeclaration, UnsupportedDesignElement>;
+    std::variant<ModuleDeclaration, PackageDeclaration, InterfaceDeclaration,
+                 TypeDeclaration, TimeDeclaration, ImportDeclaration,
+                 UnsupportedDesignElement>;
 
 }  // namespace svt::model

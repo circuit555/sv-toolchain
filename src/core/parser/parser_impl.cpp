@@ -16,6 +16,13 @@ using token_stream_t = ::svt::model::token_stream_t;
 using SourceLocation = ::svt::model::SourceLocation;
 using DesignElement = ::svt::model::DesignElement;
 using ModuleDeclaration = ::svt::model::ModuleDeclaration;
+using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
+using InterfaceItem = ::svt::model::InterfaceItem;
+using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
+using ModportDeclaration = ::svt::model::ModportDeclaration;
+using InterfaceSubroutineDeclaration =
+    ::svt::model::InterfaceSubroutineDeclaration;
+using DefaultClockingDeclaration = ::svt::model::DefaultClockingDeclaration;
 using ParameterDeclaration = ::svt::model::ParameterDeclaration;
 using ParameterKind = ::svt::model::ParameterKind;
 using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
@@ -2230,7 +2237,14 @@ auto ParsePortDeclaration(
   auto const has_explicit_direction{
       is_port_direction_token(stripped_port_tokens.front())};
   auto const is_interface_port{stripped_port_tokens.front().lexeme ==
-                               "interface"};
+                                   "interface" or
+                               (rng::size(stripped_port_tokens) > 3UZ and
+                                rng::next(rng::cbegin(stripped_port_tokens), 1,
+                                          rng::cend(stripped_port_tokens))
+                                        ->lexeme == "." and
+                                rng::next(rng::cbegin(stripped_port_tokens), 2,
+                                          rng::cend(stripped_port_tokens))
+                                        ->type == TokenType::kIdentifier)};
   if (not has_explicit_direction and not is_interface_port and
       not previous_direction.has_value()) [[unlikely]] {
     throw std::runtime_error{
@@ -2311,13 +2325,22 @@ auto TryParsePort(tokens_t const port_tokens,
     return std::nullopt;
   }
 
-  if (auto const has_explicit_direction{
-          stripped_port_tokens.front().lexeme == "input" or
-          stripped_port_tokens.front().lexeme == "output" or
-          stripped_port_tokens.front().lexeme == "inout" or
-          stripped_port_tokens.front().lexeme == "ref" or
-          stripped_port_tokens.front().lexeme == "interface"};
-      not has_explicit_direction and not previous_direction.has_value()) {
+  auto const has_explicit_direction{
+      stripped_port_tokens.front().lexeme == "input" or
+      stripped_port_tokens.front().lexeme == "output" or
+      stripped_port_tokens.front().lexeme == "inout" or
+      stripped_port_tokens.front().lexeme == "ref"};
+  auto const is_interface_port{stripped_port_tokens.front().lexeme ==
+                                   "interface" or
+                               (rng::size(stripped_port_tokens) > 3UZ and
+                                rng::next(rng::cbegin(stripped_port_tokens), 1,
+                                          rng::cend(stripped_port_tokens))
+                                        ->lexeme == "." and
+                                rng::next(rng::cbegin(stripped_port_tokens), 2,
+                                          rng::cend(stripped_port_tokens))
+                                        ->type == TokenType::kIdentifier)};
+  if (not has_explicit_direction and not is_interface_port and
+      not previous_direction.has_value()) {
     return std::nullopt;
   }
 
@@ -3597,43 +3620,34 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
   static constexpr auto kKeywords{std::to_array<std::string_view>({
-      "alias",       "always",       "always_comb",
-      "always_ff",   "always_latch", "assign",
-      "assume",      "automatic",    "begin",
-      "bind",        "bit",          "case",
-      "casex",       "casez",        "chandle",
-      "checker",     "class",        "clocking",
-      "config",      "constraint",   "cover",
-      "covergroup",  "deassign",     "default",
-      "defparam",    "disable",      "else",
-      "end",         "endchecker",   "endclass",
-      "endclocking", "endconfig",    "endfunction",
-      "endgenerate", "endgroup",     "endinterface",
-      "endmodule",   "endpackage",   "endprimitive",
-      "endprogram",  "endproperty",  "endsequence",
-      "endcase",     "endspecify",   "endtask",
-      "event",       "export",       "extern",
-      "final",       "for",          "force",
-      "foreach",     "forever",      "fork",
-      "function",    "generate",     "genvar",
-      "global",      "if",           "import",
-      "initial",     "input",        "int",
-      "integer",     "interface",    "inout",
-      "join",        "join_any",     "join_none",
-      "let",         "localparam",   "logic",
-      "longint",     "macromodule",  "module",
-      "nettype",     "output",       "package",
-      "parameter",   "primitive",    "program",
-      "property",    "real",         "realtime",
-      "ref",         "reg",          "release",
-      "repeat",      "restrict",     "sequence",
-      "shortint",    "shortreal",    "specify",
-      "static",      "struct",       "tagged",
-      "task",        "time",         "timeprecision",
-      "timeunit",    "typedef",      "union",
-      "wait",        "wait_order",   "wand",
-      "while",       "with",         "wire",
-      "wor",         "enum",         "packed",
+      "alias",        "always",      "always_comb",  "always_ff",
+      "always_latch", "assign",      "assume",       "automatic",
+      "begin",        "bind",        "bit",          "case",
+      "casex",        "casez",       "chandle",      "checker",
+      "class",        "clocking",    "config",       "constraint",
+      "cover",        "covergroup",  "deassign",     "default",
+      "defparam",     "disable",     "else",         "end",
+      "endchecker",   "endclass",    "endclocking",  "endconfig",
+      "endfunction",  "endgenerate", "endgroup",     "endinterface",
+      "endmodule",    "endpackage",  "endprimitive", "endprogram",
+      "endproperty",  "endsequence", "endcase",      "endspecify",
+      "endtask",      "event",       "export",       "extern",
+      "final",        "for",         "force",        "foreach",
+      "forever",      "fork",        "function",     "generate",
+      "genvar",       "global",      "if",           "import",
+      "initial",      "input",       "int",          "integer",
+      "interface",    "inout",       "join",         "join_any",
+      "join_none",    "let",         "localparam",   "logic",
+      "modport",      "longint",     "macromodule",  "module",
+      "nettype",      "output",      "package",      "parameter",
+      "primitive",    "program",     "property",     "real",
+      "realtime",     "ref",         "reg",          "release",
+      "repeat",       "restrict",    "sequence",     "shortint",
+      "shortreal",    "specify",     "static",       "struct",
+      "tagged",       "task",        "time",         "timeprecision",
+      "timeunit",     "typedef",     "union",        "wait",
+      "wait_order",   "wand",        "while",        "with",
+      "wire",         "wor",         "enum",         "packed",
   })};
 
   auto const start_position{m_position - 1};
@@ -3867,6 +3881,48 @@ auto Parser::Parse() -> TranslationUnit {
   return translation_unit;
 }
 
+auto PrintInterface(InterfaceDeclaration const& declaration) -> void {
+  fmt::println("interface {}", declaration.name);
+  if (not rng::empty(declaration.ports)) {
+    fmt::println("  ports:");
+    for (auto const& port : declaration.ports) {
+      fmt::println("    {}", JoinLexemes(port.tokens));
+    }
+  }
+  for (auto const& item : declaration.items) {
+    std::visit(
+        [](auto const& resolved_item) -> void {
+          using Item = std::remove_cvref_t<decltype(resolved_item)>;
+          if constexpr (std::same_as<Item, TimeDeclaration>) {
+            PrintTimeDeclaration(resolved_item, "  ");
+          } else if constexpr (std::same_as<Item, ModportDeclaration>) {
+            fmt::println("  modport {}", resolved_item.name);
+          } else if constexpr (std::same_as<Item,
+                                            InterfaceSubroutineDeclaration>) {
+            fmt::println("  {}", JoinLexemes(resolved_item.tokens));
+          } else if constexpr (std::same_as<Item, DefaultClockingDeclaration>) {
+            fmt::println("  {}", JoinLexemes(resolved_item.tokens));
+          } else if constexpr (std::same_as<Item, InterfaceItemDeclaration>) {
+            fmt::println("  {}", resolved_item.kind);
+          } else if constexpr (std::same_as<Item, ModulePort>) {
+            fmt::println("  {}", JoinLexemes(resolved_item.tokens));
+          } else if constexpr (std::same_as<Item, VariableDeclaration>) {
+            for (auto const& declarator : resolved_item.declarators) {
+              fmt::println("  {}", declarator.name);
+            }
+          } else if constexpr (std::same_as<Item, TypeDeclaration>) {
+            PrintTypeDeclaration(resolved_item, "  ");
+          } else if constexpr (std::same_as<Item,
+                                            StructuredVariableDeclaration>) {
+            for (auto const& declarator : resolved_item.declarators) {
+              fmt::println("  {}", declarator.name);
+            }
+          }
+        },
+        item);
+  }
+}
+
 auto Print(Parser::TranslationUnit const& translation_unit) -> void {
   for (auto const& design_element : translation_unit) {
     std::visit(
@@ -3879,6 +3935,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
                                    std::remove_cvref_t<decltype(resolved_node)>,
                                    PackageDeclaration>) {
             ::PrintPackage(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   InterfaceDeclaration>) {
+            PrintInterface(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
                                    TypeDeclaration>) {
@@ -3903,6 +3963,192 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
   }
 }
 
+auto Parser::ParseModportDeclaration() -> ModportDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  ExpectKeyword("modport", "modport declaration");
+  auto const name_iterator{m_token_iterator};
+  if (m_token_iterator->type != TokenType::kIdentifier) {
+    throw std::runtime_error{"[Parser] expected modport name"};
+  }
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  auto const ports_begin_iterator{m_token_iterator};
+  auto declaration_end_iterator{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      declaration_end_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "modport declaration");
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{"[Parser] expected ';' while parsing modport"};
+  }
+
+  ModportDeclaration declaration{};
+  declaration.name = name_iterator->lexeme;
+  declaration.ports = tokens_t{ports_begin_iterator, declaration_end_iterator};
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "modport declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseInterfaceSubroutineDeclaration()
+    -> InterfaceSubroutineDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto declaration_end_iterator{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      declaration_end_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd,
+      "interface subroutine declaration");
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing interface subroutine"};
+  }
+
+  InterfaceSubroutineDeclaration declaration{};
+  declaration.extern_declaration = m_token_iterator->lexeme == "extern";
+  declaration.task = rng::find_if(m_token_iterator, declaration_end_iterator,
+                                  [](Token const& token) {
+                                    return token.lexeme == "task";
+                                  }) != declaration_end_iterator;
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "interface subroutine declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseDefaultClockingDeclaration() -> DefaultClockingDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto declaration_end_iterator{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      declaration_end_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "default clocking declaration");
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing default clocking"};
+  }
+  DefaultClockingDeclaration declaration{};
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "default clocking declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseInterfaceDeclaration() -> InterfaceDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  ExpectKeyword("interface", "interface declaration");
+  InterfaceDeclaration declaration{};
+  if (m_token_iterator->IsKeyword("automatic") or
+      m_token_iterator->IsKeyword("static")) {
+    declaration.lifetime = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  if (m_token_iterator->type != TokenType::kIdentifier) {
+    throw std::runtime_error{"[Parser] expected interface name"};
+  }
+  declaration.name = m_token_iterator->lexeme;
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  if (m_token_iterator->type == TokenType::kHash) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    declaration.parameters = ParseParameters();
+  }
+  if (m_token_iterator->type == TokenType::kLParen) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    declaration.ports = ParsePorts();
+  }
+  ExpectToken(TokenType::kSemicolon, "interface declaration");
+
+  while (m_token_iterator->type != TokenType::kEndOfFile and
+         not m_token_iterator->IsKeyword("endinterface")) {
+    if (m_token_iterator->IsKeyword("timeunit") or
+        m_token_iterator->IsKeyword("timeprecision")) {
+      declaration.items.emplace_back(ParseTimeDeclaration());
+    } else if (m_token_iterator->IsKeyword("typedef") or
+               m_token_iterator->IsKeyword("nettype")) {
+      declaration.items.emplace_back(ParseTypeDeclaration());
+    } else if (m_token_iterator->IsKeyword("struct") or
+               m_token_iterator->IsKeyword("union") or
+               m_token_iterator->IsKeyword("enum")) {
+      declaration.items.emplace_back(ParseStructuredVariableDeclaration());
+    } else if (m_token_iterator->IsKeyword("modport")) {
+      declaration.items.emplace_back(ParseModportDeclaration());
+    } else if (m_token_iterator->IsKeyword("extern")) {
+      declaration.items.emplace_back(ParseInterfaceSubroutineDeclaration());
+    } else if (m_token_iterator->IsKeyword("default") and
+               rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+                   rng::cend(m_tokens) and
+               rng::next(m_token_iterator, 1, rng::cend(m_tokens))->lexeme ==
+                   "clocking") {
+      declaration.items.emplace_back(ParseDefaultClockingDeclaration());
+    } else if (m_token_iterator->IsKeyword("interface")) {
+      auto const item_begin_iterator{m_token_iterator};
+      auto nested_depth{1UZ};
+      auto item_end_iterator{
+          rng::next(m_token_iterator, 1, rng::cend(m_tokens))};
+      while (item_end_iterator != rng::cend(m_tokens) and
+             item_end_iterator->type != TokenType::kEndOfFile) {
+        if (item_end_iterator->IsKeyword("interface")) {
+          nested_depth += 1;
+        } else if (item_end_iterator->IsKeyword("endinterface")) {
+          nested_depth -= 1;
+          if (nested_depth == 0UZ) {
+            break;
+          }
+        }
+        rng::advance(item_end_iterator, 1, rng::cend(m_tokens));
+      }
+      if (item_end_iterator == rng::cend(m_tokens) or
+          item_end_iterator->type == TokenType::kEndOfFile) {
+        throw std::runtime_error{"[Parser] expected 'endinterface'"};
+      }
+      m_token_iterator = rng::next(item_end_iterator, 1, rng::cend(m_tokens));
+      declaration.items.emplace_back(InterfaceItemDeclaration{
+          .kind = "interface",
+          .tokens = tokens_t{item_begin_iterator, m_token_iterator}});
+    } else {
+      auto const stripped_tokens{StripLeadingAttributes(
+          tokens_t{m_token_iterator, rng::cend(m_tokens)})};
+      if (not rng::empty(stripped_tokens) and
+          FindVariableType(stripped_tokens.front().lexeme).has_value()) {
+        declaration.items.emplace_back(ParseVariableDeclaration());
+      } else if (m_token_iterator->IsKeyword("input") or
+                 m_token_iterator->IsKeyword("output") or
+                 m_token_iterator->IsKeyword("inout") or
+                 m_token_iterator->IsKeyword("ref")) {
+        for (auto& port : ParseModulePortDeclarations()) {
+          declaration.items.emplace_back(std::move(port));
+        }
+      } else {
+        auto const unsupported{ParseUnsupportedModuleItem()};
+        declaration.items.emplace_back(InterfaceItemDeclaration{
+            .kind = unsupported.kind, .tokens = unsupported.tokens});
+      }
+    }
+  }
+  ExpectKeyword("endinterface", "interface declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::ParseDesignElement() -> DesignElement {
   auto dispatch_iterator{m_token_iterator};
   ::AdvancePastAttributeInstances(dispatch_iterator, rng::cend(m_tokens));
@@ -3915,6 +4161,15 @@ auto Parser::ParseDesignElement() -> DesignElement {
         return ParseModuleDeclaration();
       case ::HashLexeme("package"):
         return ParsePackageDeclaration();
+      case ::HashLexeme("interface"):
+        if (rng::next(dispatch_iterator, 1, rng::cend(m_tokens)) !=
+                rng::cend(m_tokens) and
+            rng::next(dispatch_iterator, 1, rng::cend(m_tokens))->lexeme ==
+                "class") {
+          break;
+        }
+        m_token_iterator = dispatch_iterator;
+        return ParseInterfaceDeclaration();
       case ::HashLexeme("timeunit"):
       case ::HashLexeme("timeprecision"):
         m_token_iterator = dispatch_iterator;

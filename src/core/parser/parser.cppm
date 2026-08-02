@@ -106,6 +106,11 @@ export class Parser final : private TokenParserBase {
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
+  auto ParseTypeDeclaration() -> ::svt::model::TypeDeclaration;
+  auto ParseStructuredVariableDeclaration()
+      -> ::svt::model::StructuredVariableDeclaration;
+  auto ParseUserDefinedNetDeclaration()
+      -> ::svt::model::UserDefinedNetDeclaration;
   auto ParseModulePortDeclarations() -> std::vector<::svt::model::ModulePort>;
   auto ParseUnsupportedModuleItem() -> ::svt::model::UnsupportedModuleItem;
 
@@ -129,6 +134,7 @@ export class Parser final : private TokenParserBase {
       UnsupportedElementEndOptions const& options) -> void;
 
   Lexer m_lexer;
+  std::vector<std::string_view> m_user_defined_net_types;
 };
 
 /// @brief Print a parsed translation unit to stdout.

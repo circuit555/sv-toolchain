@@ -35,6 +35,14 @@ export enum class VariableType : std::uint8_t {
 
 export enum class ParameterKind : std::uint8_t { kParameter, kLocalparam };
 
+export enum class TypeDeclarationKind : std::uint8_t {
+  kTypedef,
+  kEnum,
+  kStruct,
+  kUnion,
+  kNettype
+};
+
 export enum class LiteralKind : std::uint8_t { kInteger, kReal, kString };
 
 struct Declaration {
@@ -335,6 +343,32 @@ export struct VariableDeclaration : Declaration {
   std::span<Token const> tokens;
 };
 
+export struct TypeDeclaration : Declaration {
+  TypeDeclarationKind kind{TypeDeclarationKind::kTypedef};
+  bool packed{false};
+  bool tagged{false};
+  bool forward{false};
+  std::span<Token const> type_specifier;
+  std::span<Token const> body;
+  std::span<Token const> resolution_function;
+  std::span<Token const> tokens;
+};
+
+export struct StructuredVariableDeclaration : Declaration {
+  TypeDeclarationKind kind{TypeDeclarationKind::kStruct};
+  bool packed{false};
+  bool tagged{false};
+  std::span<Token const> body;
+  std::vector<VariableDeclarator> declarators;
+  std::span<Token const> tokens;
+};
+
+export struct UserDefinedNetDeclaration : Declaration {
+  std::span<Token const> type_specifier;
+  std::span<Token const> unpacked_dimensions;
+  std::span<Token const> tokens;
+};
+
 export struct ParameterTypeDeclaration : Declaration {
   ParameterKind kind{ParameterKind::kParameter};
   std::span<Token const> default_type;
@@ -472,8 +506,8 @@ export struct UnsupportedPackageItem {
 };
 
 export using PackageItem =
-    std::variant<TimeDeclaration, ParameterDeclaration, ImportDeclaration,
-                 ExportDeclaration, UnsupportedPackageItem>;
+    std::variant<TimeDeclaration, ParameterDeclaration, TypeDeclaration,
+                 ImportDeclaration, ExportDeclaration, UnsupportedPackageItem>;
 
 export struct PackageDeclaration : Declaration {
   // TODO(): maybe std::optional<std::string_view> lifetime{};
@@ -489,9 +523,10 @@ export struct UnsupportedModuleItem {
 
 export using ModuleItem =
     std::variant<NetDeclaration, VariableDeclaration, ParameterDeclaration,
-                 ContinuousAssign, AlwaysBlock, InitialBlock, FinalBlock,
-                 GenerateItem, ModuleInstantiation, TimeDeclaration,
-                 ImportDeclaration, UnsupportedModuleItem>;
+                 TypeDeclaration, StructuredVariableDeclaration,
+                 UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
+                 InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
+                 TimeDeclaration, ImportDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   std::string_view lifetime;
@@ -508,7 +543,7 @@ export struct UnsupportedDesignElement {
 
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
-    std::variant<ModuleDeclaration, PackageDeclaration, TimeDeclaration,
-                 ImportDeclaration, UnsupportedDesignElement>;
+    std::variant<ModuleDeclaration, PackageDeclaration, TypeDeclaration,
+                 TimeDeclaration, ImportDeclaration, UnsupportedDesignElement>;
 
 }  // namespace svt::model

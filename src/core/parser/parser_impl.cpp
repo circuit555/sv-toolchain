@@ -28,6 +28,11 @@ using NetType = ::svt::model::NetType;
 using VariableDeclaration = ::svt::model::VariableDeclaration;
 using VariableDeclarator = ::svt::model::VariableDeclarator;
 using VariableType = ::svt::model::VariableType;
+using TypeDeclaration = ::svt::model::TypeDeclaration;
+using TypeDeclarationKind = ::svt::model::TypeDeclarationKind;
+using StructuredVariableDeclaration =
+    ::svt::model::StructuredVariableDeclaration;
+using UserDefinedNetDeclaration = ::svt::model::UserDefinedNetDeclaration;
 using ContinuousAssign = ::svt::model::ContinuousAssign;
 using AlwaysBlock = ::svt::model::AlwaysBlock;
 using InitialBlock = ::svt::model::InitialBlock;
@@ -137,11 +142,10 @@ std::array<std::string_view, 16> constexpr kTopLevelEndKeywords{
     "endfunction",  "endtask",     "endspecify",   "endclocking",
     "endproperty",  "endsequence", "endgroup",     "endgenerate"};
 
-std::array<std::string_view, 22> constexpr kUnsupportedModuleItemKeywords{
-    "genvar", "typedef", "let",      "defparam", "bind",    "assert",
-    "assume", "cover",   "restrict", "deassign", "nettype", "default",
-    "extern", "import",  "export",   "alias",    "modport", "input",
-    "output", "inout",   "ref",      "final"};
+std::array<std::string_view, 20> constexpr kUnsupportedModuleItemKeywords{
+    "genvar",   "let",      "defparam", "bind",   "assert", "assume", "cover",
+    "restrict", "deassign", "default",  "extern", "import", "export", "alias",
+    "modport",  "input",    "output",   "inout",  "ref",    "final"};
 
 std::array<std::string_view, 14> constexpr kUnsupportedModuleItemNetTypes{
     "tri",  "tri0", "tri1",    "triand",  "trior", "trireg", "uwire",
@@ -2481,6 +2485,33 @@ auto ToString(ParameterKind const kind) -> std::string_view {
   std::unreachable();
 }
 
+auto ToString(TypeDeclarationKind const kind) -> std::string_view {
+  switch (kind) {
+    case TypeDeclarationKind::kTypedef:
+      return "typedef";
+    case TypeDeclarationKind::kEnum:
+      return "enum";
+    case TypeDeclarationKind::kStruct:
+      return "struct";
+    case TypeDeclarationKind::kUnion:
+      return "union";
+    case TypeDeclarationKind::kNettype:
+      return "nettype";
+  }
+  std::unreachable();
+}
+
+auto PrintTypeDeclaration(TypeDeclaration const& declaration,
+                          std::string_view const indent = {}) -> void {
+  auto line{fmt::format("{}{} {}", indent, ToString(declaration.kind),
+                        declaration.name)};
+  if (not rng::empty(declaration.resolution_function)) {
+    line +=
+        fmt::format(" with {}", JoinLexemes(declaration.resolution_function));
+  }
+  fmt::println("{}", line);
+}
+
 auto ToString(TimeDeclarationKind const kind) -> std::string_view {
   switch (kind) {
     case TimeDeclarationKind::kTimeUnit:
@@ -2561,6 +2592,10 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
                                                   decltype(resolved_item)>,
                                               ParameterDeclaration>) {
               PrintParameter(resolved_item);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              TypeDeclaration>) {
+              PrintTypeDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               PackageImportDeclaration>) {
@@ -2673,6 +2708,23 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                                                   decltype(resolved_item)>,
                                               ParameterDeclaration>) {
               PrintParameter(resolved_item);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              TypeDeclaration>) {
+              PrintTypeDeclaration(resolved_item, "    ");
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              StructuredVariableDeclaration>) {
+              for (auto const& declarator : resolved_item.declarators) {
+                fmt::println("    {} {}", ToString(resolved_item.kind),
+                             declarator.name);
+              }
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              UserDefinedNetDeclaration>) {
+              fmt::println("    {} {}",
+                           JoinLexemes(resolved_item.type_specifier),
+                           resolved_item.name);
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               ContinuousAssign>) {
@@ -2897,6 +2949,259 @@ auto Parser::ParseVariableDeclaration() -> VariableDeclaration {
 
   m_token_iterator = declaration_end_iterator;
   ExpectToken(TokenType::kSemicolon, "variable declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseTypeDeclaration() -> TypeDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto declaration_end_iterator{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      declaration_end_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "type declaration");
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing type declaration"};
+  }
+
+  auto const declaration_tokens{
+      tokens_t{declaration_begin_iterator, declaration_end_iterator}};
+  auto const first_lexeme{declaration_tokens.front().lexeme};
+  TypeDeclaration declaration{};
+  declaration.kind = first_lexeme == "nettype" ? TypeDeclarationKind::kNettype
+                                               : TypeDeclarationKind::kTypedef;
+
+  auto type_begin_iterator{rng::next(rng::cbegin(declaration_tokens), 1,
+                                     rng::cend(declaration_tokens))};
+  if (first_lexeme == "typedef" and
+      type_begin_iterator != rng::cend(declaration_tokens)) {
+    if (type_begin_iterator->lexeme == "enum") {
+      declaration.kind = TypeDeclarationKind::kEnum;
+    } else if (type_begin_iterator->lexeme == "struct") {
+      declaration.kind = TypeDeclarationKind::kStruct;
+    } else if (type_begin_iterator->lexeme == "union") {
+      declaration.kind = TypeDeclarationKind::kUnion;
+    }
+  }
+
+  auto const open_brace_iterator{rng::find_if(
+      type_begin_iterator, rng::cend(declaration_tokens),
+      [](Token const& token) { return token.type == TokenType::kLBrace; })};
+  auto name_begin_iterator{open_brace_iterator};
+  if (open_brace_iterator != rng::cend(declaration_tokens)) {
+    auto const close_brace_iterator{FindMatchingDelimiter(
+        open_brace_iterator, rng::cend(declaration_tokens), TokenType::kLBrace,
+        TokenType::kRBrace)};
+    if (close_brace_iterator == rng::cend(declaration_tokens)) {
+      throw std::runtime_error{
+          "[Parser] expected '}' while parsing type declaration"};
+    }
+    declaration.body =
+        tokens_t{rng::next(open_brace_iterator, 1, close_brace_iterator),
+                 close_brace_iterator};
+    name_begin_iterator =
+        rng::next(close_brace_iterator, 1, rng::cend(declaration_tokens));
+    auto const modifier_end_iterator{open_brace_iterator};
+    for (auto iterator{type_begin_iterator}; iterator != modifier_end_iterator;
+         rng::advance(iterator, 1, modifier_end_iterator)) {
+      declaration.packed |= iterator->lexeme == "packed";
+      declaration.tagged |= iterator->lexeme == "tagged";
+    }
+  } else if (first_lexeme == "typedef" and
+             type_begin_iterator != rng::cend(declaration_tokens) and
+             type_begin_iterator->lexeme == "class") {
+    declaration.forward = true;
+    name_begin_iterator =
+        rng::next(type_begin_iterator, 1, rng::cend(declaration_tokens));
+  } else if (first_lexeme == "nettype") {
+    auto const with_iterator{rng::find_if(
+        type_begin_iterator, rng::cend(declaration_tokens),
+        [](Token const& token) { return token.lexeme == "with"; })};
+    name_begin_iterator = with_iterator;
+    if (with_iterator != rng::cend(declaration_tokens)) {
+      declaration.resolution_function =
+          tokens_t{rng::next(with_iterator, 1, rng::cend(declaration_tokens)),
+                   rng::cend(declaration_tokens)};
+    }
+  }
+
+  auto name_iterator{rng::cend(declaration_tokens)};
+  if (open_brace_iterator != rng::cend(declaration_tokens) or
+      declaration.forward) {
+    name_iterator =
+        rng::find_if(name_begin_iterator, rng::cend(declaration_tokens),
+                     [](Token const& token) {
+                       return token.type == TokenType::kIdentifier;
+                     });
+  } else {
+    auto const search_end_iterator{first_lexeme == "nettype" and
+                                           name_begin_iterator !=
+                                               rng::cend(declaration_tokens)
+                                       ? name_begin_iterator
+                                       : rng::cend(declaration_tokens)};
+    auto const name_riterator{rng::find_if(
+        tokens_t{rng::cbegin(declaration_tokens), search_end_iterator} |
+            rng::views::reverse,
+        [](Token const& token) {
+          return token.type == TokenType::kIdentifier;
+        })};
+    if (name_riterator != rng::crend(tokens_t{rng::cbegin(declaration_tokens),
+                                              search_end_iterator})) {
+      name_iterator = rng::prev(name_riterator.base());
+    }
+  }
+  if (name_iterator == rng::cend(declaration_tokens)) {
+    throw std::runtime_error{"[Parser] expected type name"};
+  }
+  declaration.name = name_iterator->lexeme;
+  declaration.type_specifier = tokens_t{type_begin_iterator, name_iterator};
+  if (first_lexeme == "nettype" and declaration.resolution_function.empty()) {
+    declaration.type_specifier = tokens_t{type_begin_iterator, name_iterator};
+  }
+
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "type declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseStructuredVariableDeclaration()
+    -> StructuredVariableDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto declaration_end_iterator{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      declaration_end_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "structured declaration");
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing structured declaration"};
+  }
+
+  auto const declaration_tokens{
+      tokens_t{declaration_begin_iterator, declaration_end_iterator}};
+  auto const open_brace_iterator{rng::find_if(
+      declaration_tokens,
+      [](Token const& token) { return token.type == TokenType::kLBrace; })};
+  if (open_brace_iterator == rng::cend(declaration_tokens)) {
+    throw std::runtime_error{
+        "[Parser] expected '{' while parsing structured declaration"};
+  }
+  auto const close_brace_iterator{
+      FindMatchingDelimiter(open_brace_iterator, rng::cend(declaration_tokens),
+                            TokenType::kLBrace, TokenType::kRBrace)};
+  if (close_brace_iterator == rng::cend(declaration_tokens)) {
+    throw std::runtime_error{
+        "[Parser] expected '}' while parsing structured declaration"};
+  }
+
+  StructuredVariableDeclaration declaration{};
+  declaration.kind = declaration_tokens.front().lexeme == "union"
+                         ? TypeDeclarationKind::kUnion
+                     : declaration_tokens.front().lexeme == "enum"
+                         ? TypeDeclarationKind::kEnum
+                         : TypeDeclarationKind::kStruct;
+  declaration.body =
+      tokens_t{rng::next(open_brace_iterator, 1, close_brace_iterator),
+               close_brace_iterator};
+  for (auto iterator{rng::cbegin(declaration_tokens)};
+       iterator != open_brace_iterator;
+       rng::advance(iterator, 1, open_brace_iterator)) {
+    declaration.packed |= iterator->lexeme == "packed";
+    declaration.tagged |= iterator->lexeme == "tagged";
+  }
+
+  auto const declarator_tokens{tokens_t{
+      rng::next(close_brace_iterator, 1, rng::cend(declaration_tokens)),
+      rng::cend(declaration_tokens)}};
+  for (auto const declarator_tokens_slice :
+       SplitTopLevelSeparatedTokens(declarator_tokens, TokenType::kComma,
+                                    "structured declaration", false)) {
+    auto const equals_iterator{
+        FindTopLevelAssignmentOperator(rng::cbegin(declarator_tokens_slice),
+                                       rng::cend(declarator_tokens_slice))};
+    auto const end_iterator{equals_iterator ==
+                                    rng::cend(declarator_tokens_slice)
+                                ? rng::cend(declarator_tokens_slice)
+                                : equals_iterator};
+    auto const name_iterator{rng::find_if(rng::cbegin(declarator_tokens_slice),
+                                          end_iterator, [](Token const& token) {
+                                            return token.type ==
+                                                   TokenType::kIdentifier;
+                                          })};
+    if (name_iterator == end_iterator) {
+      throw std::runtime_error{"[Parser] expected structured variable name"};
+    }
+    VariableDeclarator declarator{};
+    declarator.name = name_iterator->lexeme;
+    declarator.unpacked_dimensions =
+        tokens_t{rng::next(name_iterator, 1, end_iterator), end_iterator};
+    if (equals_iterator != rng::cend(declarator_tokens_slice)) {
+      declarator.initializer = tokens_t{
+          rng::next(equals_iterator, 1, rng::cend(declarator_tokens_slice)),
+          rng::cend(declarator_tokens_slice)};
+    }
+    declarator.tokens = declarator_tokens_slice;
+    declaration.declarators.push_back(declarator);
+  }
+
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "structured declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseUserDefinedNetDeclaration() -> UserDefinedNetDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto declaration_end_iterator{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      declaration_end_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) -> bool {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "user-defined net declaration");
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing user-defined net declaration"};
+  }
+
+  auto const declaration_tokens{
+      tokens_t{declaration_begin_iterator, declaration_end_iterator}};
+  auto const name_riterator{rng::find_if(
+      declaration_tokens | rng::views::reverse,
+      [](Token const& token) { return token.type == TokenType::kIdentifier; })};
+  if (name_riterator == rng::crend(declaration_tokens)) {
+    throw std::runtime_error{"[Parser] expected user-defined net name"};
+  }
+  auto const name_iterator{rng::prev(name_riterator.base())};
+
+  UserDefinedNetDeclaration declaration{};
+  declaration.name = name_iterator->lexeme;
+  declaration.type_specifier =
+      tokens_t{rng::cbegin(declaration_tokens), name_iterator};
+  declaration.unpacked_dimensions =
+      tokens_t{rng::next(name_iterator, 1, rng::cend(declaration_tokens)),
+               rng::cend(declaration_tokens)};
+
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "user-defined net declaration");
   declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
   return declaration;
 }
@@ -3292,33 +3597,43 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
   static constexpr auto kKeywords{std::to_array<std::string_view>({
-      "alias",         "always",      "always_comb",  "always_ff",
-      "always_latch",  "assign",      "assume",       "automatic",
-      "begin",         "bind",        "bit",          "case",
-      "casex",         "casez",       "chandle",      "checker",
-      "class",         "clocking",    "config",       "constraint",
-      "cover",         "covergroup",  "deassign",     "default",
-      "defparam",      "disable",     "else",         "end",
-      "endchecker",    "endclass",    "endclocking",  "endconfig",
-      "endfunction",   "endgenerate", "endgroup",     "endinterface",
-      "endmodule",     "endpackage",  "endprimitive", "endprogram",
-      "endproperty",   "endsequence", "endcase",      "endspecify",
-      "endtask",       "event",       "export",       "extern",
-      "final",         "for",         "force",        "foreach",
-      "forever",       "fork",        "function",     "generate",
-      "genvar",        "global",      "if",           "import",
-      "initial",       "input",       "int",          "integer",
-      "interface",     "inout",       "join",         "join_any",
-      "join_none",     "let",         "localparam",   "logic",
-      "longint",       "macromodule", "module",       "nettype",
-      "output",        "package",     "parameter",    "primitive",
-      "program",       "property",    "real",         "realtime",
-      "ref",           "reg",         "release",      "repeat",
-      "restrict",      "sequence",    "shortint",     "shortreal",
-      "specify",       "static",      "task",         "time",
-      "timeprecision", "timeunit",    "typedef",      "wait",
-      "wait_order",    "wand",        "while",        "wire",
-      "wor",
+      "alias",       "always",       "always_comb",
+      "always_ff",   "always_latch", "assign",
+      "assume",      "automatic",    "begin",
+      "bind",        "bit",          "case",
+      "casex",       "casez",        "chandle",
+      "checker",     "class",        "clocking",
+      "config",      "constraint",   "cover",
+      "covergroup",  "deassign",     "default",
+      "defparam",    "disable",      "else",
+      "end",         "endchecker",   "endclass",
+      "endclocking", "endconfig",    "endfunction",
+      "endgenerate", "endgroup",     "endinterface",
+      "endmodule",   "endpackage",   "endprimitive",
+      "endprogram",  "endproperty",  "endsequence",
+      "endcase",     "endspecify",   "endtask",
+      "event",       "export",       "extern",
+      "final",       "for",          "force",
+      "foreach",     "forever",      "fork",
+      "function",    "generate",     "genvar",
+      "global",      "if",           "import",
+      "initial",     "input",        "int",
+      "integer",     "interface",    "inout",
+      "join",        "join_any",     "join_none",
+      "let",         "localparam",   "logic",
+      "longint",     "macromodule",  "module",
+      "nettype",     "output",       "package",
+      "parameter",   "primitive",    "program",
+      "property",    "real",         "realtime",
+      "ref",         "reg",          "release",
+      "repeat",      "restrict",     "sequence",
+      "shortint",    "shortreal",    "specify",
+      "static",      "struct",       "tagged",
+      "task",        "time",         "timeprecision",
+      "timeunit",    "typedef",      "union",
+      "wait",        "wait_order",   "wand",
+      "while",       "with",         "wire",
+      "wor",         "enum",         "packed",
   })};
 
   auto const start_position{m_position - 1};
@@ -3566,6 +3881,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             ::PrintPackage(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   TypeDeclaration>) {
+            PrintTypeDeclaration(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    TimeDeclaration>) {
             PrintTimeDeclaration(resolved_node);
           } else if constexpr (std::same_as<
@@ -3600,6 +3919,10 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("timeprecision"):
         m_token_iterator = dispatch_iterator;
         return ParseTimeDeclaration();
+      case ::HashLexeme("typedef"):
+      case ::HashLexeme("nettype"):
+        m_token_iterator = dispatch_iterator;
+        return ParseTypeDeclaration();
       case ::HashLexeme("import"):
         if (::IsPackageScopeImportStart(dispatch_iterator,
                                         rng::cend(m_tokens))) {
@@ -3781,6 +4104,13 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
       continue;
     }
 
+    if (m_token_iterator->IsKeyword("typedef") or
+        m_token_iterator->IsKeyword("nettype")) {
+      items.emplace_back(std::in_place_type<TypeDeclaration>,
+                         ParseTypeDeclaration());
+      continue;
+    }
+
     if (::IsPackageScopeImportStart(m_token_iterator, rng::cend(m_tokens))) {
       items.emplace_back(std::in_place_type<ImportDeclaration>,
                          ParseImportDeclaration());
@@ -3901,6 +4231,7 @@ auto Parser::SkipUnsupportedElementToMatchingEnd(
 
 auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   ModuleDeclaration module_declaration{};
+  m_user_defined_net_types.clear();
 
   if (m_token_iterator->IsKeyword("automatic") or
       m_token_iterator->IsKeyword("static")) {
@@ -3947,6 +4278,26 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   // now parsing module items
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
+    if (m_token_iterator->IsKeyword("typedef") or
+        m_token_iterator->IsKeyword("nettype")) {
+      auto declaration{ParseTypeDeclaration()};
+      if (declaration.kind == TypeDeclarationKind::kNettype) {
+        m_user_defined_net_types.push_back(declaration.name);
+      }
+      module_declaration.items.emplace_back(std::in_place_type<TypeDeclaration>,
+                                            std::move(declaration));
+      continue;
+    }
+
+    if (m_token_iterator->IsKeyword("struct") or
+        m_token_iterator->IsKeyword("union") or
+        m_token_iterator->IsKeyword("enum")) {
+      module_declaration.items.emplace_back(
+          std::in_place_type<StructuredVariableDeclaration>,
+          ParseStructuredVariableDeclaration());
+      continue;
+    }
+
     if (m_token_iterator->IsKeyword("parameter") or
         m_token_iterator->IsKeyword("localparam")) {
       auto parameters{ParseParameters(TokenType::kSemicolon,
@@ -3955,6 +4306,14 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
         module_declaration.items.emplace_back(
             std::in_place_type<ParameterDeclaration>, std::move(parameter));
       }
+      continue;
+    }
+
+    if (m_token_iterator->type == TokenType::kIdentifier and
+        rng::contains(m_user_defined_net_types, m_token_iterator->lexeme)) {
+      module_declaration.items.emplace_back(
+          std::in_place_type<UserDefinedNetDeclaration>,
+          ParseUserDefinedNetDeclaration());
       continue;
     }
 

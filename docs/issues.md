@@ -79,7 +79,7 @@ parsing after time declarations.
   declarators.
 - Share as much AST shape as possible with existing parameter-list parsing.
 
-### 8. Add type declarations
+### 8. Add type declarations (done)
 
 - Parse `typedef`, `enum`, `struct`, `union`, tagged unions, forward class
   typedefs, and scoped type references.

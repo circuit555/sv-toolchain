@@ -29,6 +29,10 @@ using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 using VariableDeclaration = svt::model::VariableDeclaration;
 using VariableType = svt::model::VariableType;
+using TypeDeclaration = svt::model::TypeDeclaration;
+using TypeDeclarationKind = svt::model::TypeDeclarationKind;
+using StructuredVariableDeclaration = svt::model::StructuredVariableDeclaration;
+using UserDefinedNetDeclaration = svt::model::UserDefinedNetDeclaration;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
 using TimeDeclaration = svt::model::TimeDeclaration;
@@ -764,13 +768,80 @@ TEST_CASE("Parse variable declarations", "[parser]") {
           VariableType::kString);
 }
 
+TEST_CASE("Parse type and nettype declarations", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      typedef enum { red, green } color_t;
+      typedef struct packed { int a; logic b; } struct_t;
+      typedef union tagged { int value; } union_t;
+      typedef class Base;
+      nettype struct_t net_t;
+      nettype struct_t resolved_t with pkg::resolve;
+      net_t n;
+      struct packed { int x; } anonymous;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto const translation_unit{parser.Parse()};
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 8);
+
+  auto const& enum_declaration{
+      std::get<TypeDeclaration>(module_declaration.items.at(0))};
+  REQUIRE(enum_declaration.kind == TypeDeclarationKind::kEnum);
+  REQUIRE(enum_declaration.name == "color_t");
+  REQUIRE(Lexemes(enum_declaration.body) ==
+          std::vector<std::string_view>{"red", ",", "green"});
+
+  auto const& struct_declaration{
+      std::get<TypeDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(struct_declaration.kind == TypeDeclarationKind::kStruct);
+  REQUIRE(struct_declaration.packed);
+  REQUIRE(struct_declaration.name == "struct_t");
+  REQUIRE(Lexemes(struct_declaration.body) ==
+          std::vector<std::string_view>{"int", "a", ";", "logic", "b", ";"});
+
+  auto const& union_declaration{
+      std::get<TypeDeclaration>(module_declaration.items.at(2))};
+  REQUIRE(union_declaration.kind == TypeDeclarationKind::kUnion);
+  REQUIRE(union_declaration.tagged);
+
+  auto const& forward_class{
+      std::get<TypeDeclaration>(module_declaration.items.at(3))};
+  REQUIRE(forward_class.forward);
+  REQUIRE(forward_class.name == "Base");
+
+  auto const& nettype_declaration{
+      std::get<TypeDeclaration>(module_declaration.items.at(4))};
+  REQUIRE(nettype_declaration.kind == TypeDeclarationKind::kNettype);
+  REQUIRE(nettype_declaration.name == "net_t");
+
+  auto const& resolved_nettype{
+      std::get<TypeDeclaration>(module_declaration.items.at(5))};
+  REQUIRE(resolved_nettype.name == "resolved_t");
+  REQUIRE(Lexemes(resolved_nettype.resolution_function) ==
+          std::vector<std::string_view>{"pkg", "::", "resolve"});
+
+  auto const& net_declaration{
+      std::get<UserDefinedNetDeclaration>(module_declaration.items.at(6))};
+  REQUIRE(net_declaration.name == "n");
+  REQUIRE(Lexemes(net_declaration.type_specifier) ==
+          std::vector<std::string_view>{"net_t"});
+
+  auto const& anonymous_declaration{
+      std::get<StructuredVariableDeclaration>(module_declaration.items.at(7))};
+  REQUIRE(anonymous_declaration.packed);
+  REQUIRE(anonymous_declaration.declarators.front().name == "anonymous");
+}
+
 TEST_CASE("Parse unsupported module item declarations without losing sync",
           "[parser]") {
   std::string src = R"(
     module foo ();
       genvar g;
       wor [1:0] w;
-      typedef logic [3:0] nibble_t;
       let inc(x) = x + 1;
       defparam u.WIDTH = 4;
       assign y = w;
@@ -782,15 +853,15 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
 
   auto const& module_declaration{
       std::get<ModuleDeclaration>(translation_unit.front())};
-  REQUIRE(module_declaration.items.size() == 6);
+  REQUIRE(module_declaration.items.size() == 5);
 
   auto const expected_kinds{std::vector<std::string_view>{
-      "genvar", "wor", "typedef", "let", "defparam"}};
+      "genvar", "wor", "let", "defparam"}};
   auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
       std::get<GenerateItem>(module_declaration.items.at(0)))};
   REQUIRE(genvar_declaration.identifiers.size() == 1);
   REQUIRE(genvar_declaration.identifiers.front().name == "g");
-  for (auto const item_index : std::views::iota(1UZ, 5UZ)) {
+  for (auto const item_index : std::views::iota(1UZ, 4UZ)) {
     auto const& unsupported_item{std::get<UnsupportedModuleItem>(
         module_declaration.items.at(item_index))};
     REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
@@ -798,7 +869,7 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
   }
 
   auto const& continuous_assign{
-      std::get<ContinuousAssign>(module_declaration.items.at(5))};
+      std::get<ContinuousAssign>(module_declaration.items.at(4))};
   REQUIRE(Lexemes(continuous_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"y"});
   REQUIRE(Lexemes(continuous_assign.right_hand_side->tokens) ==

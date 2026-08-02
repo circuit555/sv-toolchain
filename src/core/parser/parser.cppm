@@ -105,8 +105,8 @@ export class Parser final : private TokenParserBase {
 
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
-  auto ParseModulePortDeclarations()
-      -> std::vector<::svt::model::ModulePort>;
+  auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
+  auto ParseModulePortDeclarations() -> std::vector<::svt::model::ModulePort>;
   auto ParseUnsupportedModuleItem() -> ::svt::model::UnsupportedModuleItem;
 
   auto ParseParameterTokens(::svt::model::TokenType end_token,

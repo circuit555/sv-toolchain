@@ -61,7 +61,7 @@ parsing after time declarations.
 - Preserve port declaration details in the AST instead of only name and
   direction.
 
-### 6. Add data declarations beyond wire and logic
+### 6. Add data declarations beyond wire and logic (done)
 
 - Parse common variable declarations: `reg`, `int`, `integer`, `shortint`,
   `longint`, `byte`, `bit`, `real`, `time`, `shortreal`, `chandle`,

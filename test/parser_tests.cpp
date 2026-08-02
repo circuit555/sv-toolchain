@@ -26,6 +26,8 @@ using GenerateItem = svt::model::GenerateItem;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
+using VariableDeclaration = svt::model::VariableDeclaration;
+using VariableType = svt::model::VariableType;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
 using TimeDeclaration = svt::model::TimeDeclaration;
@@ -625,23 +627,91 @@ TEST_CASE("Parse complete module declaration with body", "[parser]") {
   REQUIRE(ExprAs<LiteralExpression>(*word_dimension.size).value == "8");
 }
 
+TEST_CASE("Parse variable declarations", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      (* keep = 1 *) reg [3:0] r, s[2] = 0;
+      int i[2], j = 1;
+      integer integer_value;
+      shortint short_value;
+      longint long_value;
+      byte byte_value;
+      bit bit_value;
+      real real_value;
+      time time_value;
+      shortreal shortreal_value;
+      chandle chandle_value;
+      realtime realtime_value;
+      event event_value;
+      string string_value;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto const translation_unit{parser.Parse()};
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 14);
+
+  auto const& reg_declaration{
+      std::get<VariableDeclaration>(module_declaration.items.at(0))};
+  REQUIRE(reg_declaration.type == VariableType::kReg);
+  REQUIRE(Lexemes(reg_declaration.attributes) ==
+          std::vector<std::string_view>{"(", "*", "keep", "=", "1", "*", ")"});
+  REQUIRE(Lexemes(reg_declaration.type_specifier) ==
+          std::vector<std::string_view>{"[", "3", ":", "0", "]"});
+  REQUIRE(reg_declaration.declarators.size() == 2);
+  REQUIRE(reg_declaration.declarators.at(0).name == "r");
+  REQUIRE(reg_declaration.declarators.at(1).name == "s");
+  REQUIRE(Lexemes(reg_declaration.declarators.at(1).unpacked_dimensions) ==
+          std::vector<std::string_view>{"[", "2", "]"});
+  REQUIRE(Lexemes(reg_declaration.declarators.at(1).initializer) ==
+          std::vector<std::string_view>{"0"});
+
+  auto const& int_declaration{
+      std::get<VariableDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(int_declaration.type == VariableType::kInt);
+  REQUIRE(int_declaration.declarators.size() == 2);
+  REQUIRE(Lexemes(int_declaration.declarators.at(0).unpacked_dimensions) ==
+          std::vector<std::string_view>{"[", "2", "]"});
+  REQUIRE(Lexemes(int_declaration.declarators.at(1).initializer) ==
+          std::vector<std::string_view>{"1"});
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(2)).type ==
+          VariableType::kInteger);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(3)).type ==
+          VariableType::kShortint);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(4)).type ==
+          VariableType::kLongint);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(5)).type ==
+          VariableType::kByte);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(6)).type ==
+          VariableType::kBit);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(7)).type ==
+          VariableType::kReal);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(8)).type ==
+          VariableType::kTime);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(9)).type ==
+          VariableType::kShortreal);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(10)).type ==
+          VariableType::kChandle);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(11)).type ==
+          VariableType::kRealtime);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(12)).type ==
+          VariableType::kEvent);
+  REQUIRE(std::get<VariableDeclaration>(module_declaration.items.at(13)).type ==
+          VariableType::kString);
+}
+
 TEST_CASE("Parse unsupported module item declarations without losing sync",
           "[parser]") {
   std::string src = R"(
     module foo ();
-      reg [3:0] r;
-      int i[2];
-      event ev;
       genvar g;
-      time t;
-      shortreal sr;
-      chandle c;
-      realtime rt;
       wor [1:0] w;
       typedef logic [3:0] nibble_t;
       let inc(x) = x + 1;
       defparam u.WIDTH = 4;
-      assign y = r;
+      assign y = w;
     endmodule
   )";
   Parser parser{std::move(src)};
@@ -650,34 +720,27 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
 
   auto const& module_declaration{
       std::get<ModuleDeclaration>(translation_unit.front())};
-  REQUIRE(module_declaration.items.size() == 13);
+  REQUIRE(module_declaration.items.size() == 6);
 
   auto const expected_kinds{std::vector<std::string_view>{
-      "reg", "int", "event", "time", "shortreal", "chandle", "realtime", "wor",
-      "typedef", "let", "defparam"}};
-  for (auto const item_index : std::views::iota(0UZ, 3UZ)) {
+      "genvar", "wor", "typedef", "let", "defparam"}};
+  auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
+      std::get<GenerateItem>(module_declaration.items.at(0)))};
+  REQUIRE(genvar_declaration.identifiers.size() == 1);
+  REQUIRE(genvar_declaration.identifiers.front().name == "g");
+  for (auto const item_index : std::views::iota(1UZ, 5UZ)) {
     auto const& unsupported_item{std::get<UnsupportedModuleItem>(
         module_declaration.items.at(item_index))};
     REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
     REQUIRE(not unsupported_item.tokens.empty());
   }
-  auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
-      std::get<GenerateItem>(module_declaration.items.at(3)))};
-  REQUIRE(genvar_declaration.identifiers.size() == 1);
-  REQUIRE(genvar_declaration.identifiers.front().name == "g");
-  for (auto const item_index : std::views::iota(4UZ, 12UZ)) {
-    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
-        module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index - 1));
-    REQUIRE(not unsupported_item.tokens.empty());
-  }
 
   auto const& continuous_assign{
-      std::get<ContinuousAssign>(module_declaration.items.at(12))};
+      std::get<ContinuousAssign>(module_declaration.items.at(5))};
   REQUIRE(Lexemes(continuous_assign.left_hand_side->tokens) ==
           std::vector<std::string_view>{"y"});
   REQUIRE(Lexemes(continuous_assign.right_hand_side->tokens) ==
-          std::vector<std::string_view>{"r"});
+          std::vector<std::string_view>{"w"});
 }
 
 TEST_CASE("Parse unsupported module item blocks without losing sync",

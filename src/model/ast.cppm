@@ -33,6 +33,8 @@ export enum class VariableType : std::uint8_t {
   kString
 };
 
+export enum class ParameterKind : std::uint8_t { kParameter, kLocalparam };
+
 export enum class LiteralKind : std::uint8_t { kInteger, kReal, kString };
 
 struct Declaration {
@@ -334,10 +336,12 @@ export struct VariableDeclaration : Declaration {
 };
 
 export struct ParameterTypeDeclaration : Declaration {
+  ParameterKind kind{ParameterKind::kParameter};
   std::span<Token const> default_type;
 };
 
 export struct ParameterValueDeclaration : Declaration {
+  ParameterKind kind{ParameterKind::kParameter};
   std::span<Token const> type_specifier;
   ExpressionPtr default_value;
 };
@@ -484,10 +488,10 @@ export struct UnsupportedModuleItem {
 };
 
 export using ModuleItem =
-    std::variant<NetDeclaration, VariableDeclaration, ContinuousAssign,
-                 AlwaysBlock, InitialBlock, FinalBlock, GenerateItem,
-                 ModuleInstantiation, TimeDeclaration, ImportDeclaration,
-                 UnsupportedModuleItem>;
+    std::variant<NetDeclaration, VariableDeclaration, ParameterDeclaration,
+                 ContinuousAssign, AlwaysBlock, InitialBlock, FinalBlock,
+                 GenerateItem, ModuleInstantiation, TimeDeclaration,
+                 ImportDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   std::string_view lifetime;

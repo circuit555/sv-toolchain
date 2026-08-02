@@ -17,6 +17,7 @@ using SourceLocation = ::svt::model::SourceLocation;
 using DesignElement = ::svt::model::DesignElement;
 using ModuleDeclaration = ::svt::model::ModuleDeclaration;
 using ParameterDeclaration = ::svt::model::ParameterDeclaration;
+using ParameterKind = ::svt::model::ParameterKind;
 using ParameterTypeDeclaration = ::svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = ::svt::model::ParameterValueDeclaration;
 using ModulePort = ::svt::model::ModulePort;
@@ -136,11 +137,11 @@ std::array<std::string_view, 16> constexpr kTopLevelEndKeywords{
     "endfunction",  "endtask",     "endspecify",   "endclocking",
     "endproperty",  "endsequence", "endgroup",     "endgenerate"};
 
-std::array<std::string_view, 24> constexpr kUnsupportedModuleItemKeywords{
-    "genvar",     "typedef", "let",      "defparam", "bind",    "assert",
-    "assume",     "cover",   "restrict", "deassign", "nettype", "default",
-    "extern",     "import",  "export",   "alias",    "modport", "parameter",
-    "localparam", "input",   "output",   "inout",    "ref",     "final"};
+std::array<std::string_view, 22> constexpr kUnsupportedModuleItemKeywords{
+    "genvar", "typedef", "let",      "defparam", "bind",    "assert",
+    "assume", "cover",   "restrict", "deassign", "nettype", "default",
+    "extern", "import",  "export",   "alias",    "modport", "input",
+    "output", "inout",   "ref",      "final"};
 
 std::array<std::string_view, 14> constexpr kUnsupportedModuleItemNetTypes{
     "tri",  "tri0", "tri1",    "triand",  "trior", "trireg", "uwire",
@@ -1990,6 +1991,9 @@ auto ParseParameterDeclaration(
     throw std::runtime_error{"[Parser] expected parameter declarations"};
   }
 
+  auto const parameter_kind{tokens.front().lexeme == "localparam"
+                                ? ParameterKind::kLocalparam
+                                : ParameterKind::kParameter};
   auto const parameter_begin_iterator{rng::next(
       rng::cbegin(tokens), IsParameterDeclarationPrefix(tokens) ? 1 : 0,
       rng::cend(tokens))};
@@ -2007,10 +2011,11 @@ auto ParseParameterDeclaration(
     throw std::runtime_error{"[Parser] expected parameter tokens"};
   }
 
-  auto parameter{[tokens_slice]() -> ParameterDeclaration {
+  auto parameter{[tokens_slice, parameter_kind]() -> ParameterDeclaration {
     if (tokens_slice.front().lexeme == "type") {
-      return [tokens_slice]() -> ParameterTypeDeclaration {
+      return [tokens_slice, parameter_kind]() -> ParameterTypeDeclaration {
         ParameterTypeDeclaration type_parameter{};
+        type_parameter.kind = parameter_kind;
 
         auto const parameter_name_iterator{
             rng::next(rng::cbegin(tokens_slice), 1, rng::cend(tokens_slice))};
@@ -2041,8 +2046,9 @@ auto ParseParameterDeclaration(
       }();
     }
 
-    return [tokens_slice]() -> ParameterValueDeclaration {
+    return [tokens_slice, parameter_kind]() -> ParameterValueDeclaration {
       ParameterValueDeclaration value_parameter{};
+      value_parameter.kind = parameter_kind;
 
       auto const parameter_name_riterator{rng::find_if(
           tokens_slice | rng::views::reverse, [](Token const& token) -> bool {
@@ -2084,12 +2090,17 @@ auto ParseParameterDeclaration(
               previous_parameter.value())) {
         ParameterTypeDeclaration type_parameter{};
         type_parameter.name = value_parameter.name;
+        type_parameter.kind =
+            std::get<ParameterTypeDeclaration>(previous_parameter.value()).kind;
         type_parameter.default_type = default_value_tokens;
         parameter = type_parameter;
       } else {
         value_parameter.type_specifier =
             std::get<ParameterValueDeclaration>(previous_parameter.value())
                 .type_specifier;
+        value_parameter.kind =
+            std::get<ParameterValueDeclaration>(previous_parameter.value())
+                .kind;
       }
     }
   }
@@ -2460,6 +2471,16 @@ auto ToString(VariableType const type) -> std::string_view {
   std::unreachable();
 }
 
+auto ToString(ParameterKind const kind) -> std::string_view {
+  switch (kind) {
+    case ParameterKind::kParameter:
+      return "parameter";
+    case ParameterKind::kLocalparam:
+      return "localparam";
+  }
+  std::unreachable();
+}
+
 auto ToString(TimeDeclarationKind const kind) -> std::string_view {
   switch (kind) {
     case TimeDeclarationKind::kTimeUnit:
@@ -2489,11 +2510,12 @@ auto PrintParameter(ParameterDeclaration const& parameter) -> void {
         if constexpr (std::same_as<
                           std::remove_cvref_t<decltype(resolved_parameter)>,
                           ParameterTypeDeclaration>) {
-          fmt::println("    parameter type {} = {}", resolved_parameter.name,
+          fmt::println("    {} type {} = {}", ToString(resolved_parameter.kind),
+                       resolved_parameter.name,
                        JoinLexemes(resolved_parameter.default_type));
         } else {
           fmt::println(
-              "    parameter {} {} = {}",
+              "    {} {} {} = {}", ToString(resolved_parameter.kind),
               JoinLexemes(resolved_parameter.type_specifier),
               resolved_parameter.name,
               JoinLexemes(resolved_parameter.default_value
@@ -2647,6 +2669,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                 }
                 fmt::println("{}", line);
               }
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ParameterDeclaration>) {
+              PrintParameter(resolved_item);
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               ContinuousAssign>) {
@@ -3921,6 +3947,17 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   // now parsing module items
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
+    if (m_token_iterator->IsKeyword("parameter") or
+        m_token_iterator->IsKeyword("localparam")) {
+      auto parameters{ParseParameters(TokenType::kSemicolon,
+                                      "module parameter declaration")};
+      for (auto& parameter : parameters) {
+        module_declaration.items.emplace_back(
+            std::in_place_type<ParameterDeclaration>, std::move(parameter));
+      }
+      continue;
+    }
+
     if (m_token_iterator->IsKeyword("input") or
         m_token_iterator->IsKeyword("output") or
         m_token_iterator->IsKeyword("inout") or

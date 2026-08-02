@@ -53,7 +53,7 @@ parsing after time declarations.
   declarations into unsupported module items.
 - Model empty positional ports and explicit named ports such as `.e()`.
 
-### 5. Expand port declarations
+### 5. Expand port declarations (done)
 
 - Add directions beyond `input` and `output`: `inout` and `ref`.
 - Parse port data types, packed dimensions, unpacked dimensions, default

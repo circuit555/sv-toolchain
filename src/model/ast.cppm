@@ -7,7 +7,12 @@ import svt.model.token;
 
 namespace svt::model {
 
-export enum class PortDirection : std::uint8_t { kInput, kOutput };
+export enum class PortDirection : std::uint8_t {
+  kInput,
+  kOutput,
+  kInout,
+  kRef
+};
 
 export enum class NetType : std::uint8_t { kWire, kLogic };
 
@@ -281,6 +286,12 @@ export enum class ModulePortKind : std::uint8_t {
 export struct ModulePort : Declaration {
   ModulePortKind kind{};
   std::optional<PortDirection> direction;
+  std::span<Token const> attributes;
+  std::span<Token const> type_specifier;
+  std::vector<std::span<Token const>> packed_dimensions;
+  std::span<Token const> unpacked_dimensions;
+  std::span<Token const> default_value;
+  std::span<Token const> interface_type;
   std::span<Token const> tokens;
 };
 

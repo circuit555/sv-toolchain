@@ -1563,6 +1563,32 @@ auto ParsePackedDimensions(tokens_t const tokens)
   return result;
 }
 
+auto ParsePackedDimensionTokens(tokens_t const tokens)
+    -> std::vector<tokens_t> {
+  std::vector<tokens_t> result{};
+  auto token_iterator{rng::cbegin(tokens)};
+  while (token_iterator != rng::cend(tokens)) {
+    if (token_iterator->type != TokenType::kLBracket) {
+      rng::advance(token_iterator, 1, rng::cend(tokens));
+      continue;
+    }
+
+    auto const dimension_begin{token_iterator};
+    auto const dimension_end{
+        FindMatchingDelimiter(token_iterator, rng::cend(tokens),
+                              TokenType::kLBracket, TokenType::kRBracket)};
+    if (dimension_end == rng::cend(tokens)) {
+      break;
+    }
+
+    result.emplace_back(dimension_begin,
+                        rng::next(dimension_end, 1, rng::cend(tokens)));
+    token_iterator = rng::next(dimension_end, 1, rng::cend(tokens));
+  }
+
+  return result;
+}
+
 auto SplitTopLevelSemicolonExpressions(tokens_t const tokens)
     -> std::vector<tokens_t> {
   std::vector<tokens_t> result{};
@@ -2086,60 +2112,6 @@ auto ParseParameterDeclaration(
   return parameter;
 }
 
-auto ParsePortDeclaration(
-    tokens_t const port_tokens,
-    std::optional<PortDirection> const& previous_direction) -> ModulePort {
-  auto is_port_direction_token{[](Token const& token) -> bool {
-    return token.lexeme == "input" or token.lexeme == "output";
-  }};
-
-  auto parse_port_direction{[port_tokens]() -> PortDirection {
-    if (port_tokens.front().lexeme == "input") {
-      return PortDirection::kInput;
-    }
-
-    if (port_tokens.front().lexeme == "output") {
-      return PortDirection::kOutput;
-    }
-
-    throw std::runtime_error{fmt::format(
-        "[Parser] expected port direction at ({}, {})",
-        port_tokens.front().location.row, port_tokens.front().location.column)};
-  }};
-
-  if (rng::empty(port_tokens)) [[unlikely]] {
-    throw std::runtime_error{"[Parser] expected port declaration"};
-  }
-
-  if (not is_port_direction_token(port_tokens.front()) and
-      not previous_direction.has_value()) [[unlikely]] {
-    throw std::runtime_error{fmt::format(
-        "[Parser] expected port direction at ({}, {})",
-        port_tokens.front().location.row, port_tokens.front().location.column)};
-  }
-
-  auto const port_name_iterator{
-      rng::find_if(port_tokens | rng::views::reverse,
-                   [&is_port_direction_token](Token const& token) -> bool {
-                     return token.type == TokenType::kIdentifier and
-                            not is_port_direction_token(token);
-                   })};
-  if (port_name_iterator == rng::crend(port_tokens)) [[unlikely]] {
-    throw std::runtime_error{fmt::format(
-        "[Parser] expected port name at ({}, {})",
-        port_tokens.front().location.row, port_tokens.front().location.column)};
-  }
-
-  ModulePort port{};
-  port.kind = ModulePortKind::kImplicit;
-  port.tokens = port_tokens;
-  port.name = port_name_iterator->lexeme;
-  port.direction = is_port_direction_token(port_tokens.front())
-                       ? parse_port_direction()
-                       : previous_direction.value();
-  return port;
-}
-
 auto StripLeadingAttributes(tokens_t port_tokens) -> tokens_t {
   while (
       not rng::empty(port_tokens) and
@@ -2172,6 +2144,117 @@ auto StripLeadingAttributes(tokens_t port_tokens) -> tokens_t {
   return port_tokens;
 }
 
+auto ParsePortDeclaration(
+    tokens_t const port_tokens,
+    std::optional<PortDirection> const& previous_direction) -> ModulePort {
+  auto is_port_direction_token{[](Token const& token) -> bool {
+    return token.lexeme == "input" or token.lexeme == "output" or
+           token.lexeme == "inout" or token.lexeme == "ref";
+  }};
+
+  auto parse_port_direction{[](Token const& token) -> PortDirection {
+    if (token.lexeme == "input") {
+      return PortDirection::kInput;
+    }
+
+    if (token.lexeme == "output") {
+      return PortDirection::kOutput;
+    }
+
+    if (token.lexeme == "inout") {
+      return PortDirection::kInout;
+    }
+
+    if (token.lexeme == "ref") {
+      return PortDirection::kRef;
+    }
+
+    throw std::runtime_error{
+        fmt::format("[Parser] expected port direction at ({}, {})",
+                    token.location.row, token.location.column)};
+  }};
+
+  if (rng::empty(port_tokens)) [[unlikely]] {
+    throw std::runtime_error{"[Parser] expected port declaration"};
+  }
+
+  auto const stripped_port_tokens{StripLeadingAttributes(port_tokens)};
+  if (rng::empty(stripped_port_tokens)) [[unlikely]] {
+    throw std::runtime_error{"[Parser] expected port declaration"};
+  }
+
+  auto const has_explicit_direction{
+      is_port_direction_token(stripped_port_tokens.front())};
+  auto const is_interface_port{stripped_port_tokens.front().lexeme ==
+                               "interface"};
+  if (not has_explicit_direction and not is_interface_port and
+      not previous_direction.has_value()) [[unlikely]] {
+    throw std::runtime_error{
+        fmt::format("[Parser] expected port direction at ({}, {})",
+                    stripped_port_tokens.front().location.row,
+                    stripped_port_tokens.front().location.column)};
+  }
+
+  auto const default_begin_iterator{
+      rng::find_if(stripped_port_tokens, [](Token const& token) -> bool {
+        return token.type == TokenType::kEquals;
+      })};
+  auto const declaration_end_iterator{default_begin_iterator ==
+                                              rng::cend(stripped_port_tokens)
+                                          ? rng::cend(stripped_port_tokens)
+                                          : default_begin_iterator};
+  auto const declaration_tokens{
+      tokens_t{rng::cbegin(stripped_port_tokens), declaration_end_iterator}};
+  auto const port_name_iterator{
+      rng::find_if(declaration_tokens | rng::views::reverse,
+                   [&is_port_direction_token](Token const& token) -> bool {
+                     return token.type == TokenType::kIdentifier and
+                            not is_port_direction_token(token);
+                   })};
+  if (port_name_iterator == rng::crend(declaration_tokens)) [[unlikely]] {
+    throw std::runtime_error{
+        fmt::format("[Parser] expected port name at ({}, {})",
+                    stripped_port_tokens.front().location.row,
+                    stripped_port_tokens.front().location.column)};
+  }
+  auto const name_iterator{rng::prev(port_name_iterator.base())};
+  auto const attributes_end_iterator{rng::cbegin(stripped_port_tokens)};
+  auto const type_begin_iterator{
+      has_explicit_direction ? rng::next(rng::cbegin(stripped_port_tokens), 1,
+                                         rng::cend(stripped_port_tokens))
+                             : rng::cbegin(stripped_port_tokens)};
+  auto const unpacked_dimensions_end_iterator{
+      declaration_end_iterator == rng::cend(stripped_port_tokens)
+          ? rng::cend(stripped_port_tokens)
+          : declaration_end_iterator};
+
+  ModulePort port{};
+  port.kind = ModulePortKind::kImplicit;
+  port.tokens = port_tokens;
+  port.name = name_iterator->lexeme;
+  port.attributes = tokens_t{rng::cbegin(port_tokens), attributes_end_iterator};
+  if (has_explicit_direction) {
+    port.direction = parse_port_direction(stripped_port_tokens.front());
+  } else if (previous_direction.has_value() and not is_interface_port) {
+    port.direction = previous_direction.value();
+  }
+  if (is_interface_port) {
+    port.interface_type = tokens_t{type_begin_iterator, name_iterator};
+  } else {
+    port.type_specifier = tokens_t{type_begin_iterator, name_iterator};
+    port.packed_dimensions = ParsePackedDimensionTokens(port.type_specifier);
+  }
+  port.unpacked_dimensions =
+      tokens_t{rng::next(name_iterator, 1, unpacked_dimensions_end_iterator),
+               unpacked_dimensions_end_iterator};
+  if (default_begin_iterator != rng::cend(stripped_port_tokens)) {
+    port.default_value = tokens_t{
+        rng::next(default_begin_iterator, 1, rng::cend(stripped_port_tokens)),
+        rng::cend(stripped_port_tokens)};
+  }
+  return port;
+}
+
 auto TryParsePort(tokens_t const port_tokens,
                   std::optional<PortDirection> const previous_direction)
     -> std::optional<ModulePort> {
@@ -2180,21 +2263,21 @@ auto TryParsePort(tokens_t const port_tokens,
     return std::nullopt;
   }
 
-  if (stripped_port_tokens.front().type == TokenType::kDot or
-      stripped_port_tokens.front().lexeme == "ref" or
-      stripped_port_tokens.front().lexeme == "inout" or
-      stripped_port_tokens.front().lexeme == "interface") {
+  if (stripped_port_tokens.front().type == TokenType::kDot) {
     return std::nullopt;
   }
 
   if (auto const has_explicit_direction{
           stripped_port_tokens.front().lexeme == "input" or
-          stripped_port_tokens.front().lexeme == "output"};
+          stripped_port_tokens.front().lexeme == "output" or
+          stripped_port_tokens.front().lexeme == "inout" or
+          stripped_port_tokens.front().lexeme == "ref" or
+          stripped_port_tokens.front().lexeme == "interface"};
       not has_explicit_direction and not previous_direction.has_value()) {
     return std::nullopt;
   }
 
-  return ParsePortDeclaration(stripped_port_tokens, previous_direction);
+  return ParsePortDeclaration(port_tokens, previous_direction);
 }
 
 auto ParseModulePort(tokens_t const port_tokens) -> ModulePort {
@@ -2281,6 +2364,10 @@ auto ToString(PortDirection const direction) -> std::string_view {
       return "input";
     case PortDirection::kOutput:
       return "output";
+    case PortDirection::kInout:
+      return "inout";
+    case PortDirection::kRef:
+      return "ref";
   }
 
   std::unreachable();
@@ -2433,11 +2520,26 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
     fmt::println("  ports:");
     for (auto const& port : module_declaration.ports) {
       auto line{fmt::format("    {}", ToString(port.kind))};
+      if (not rng::empty(port.attributes)) {
+        line += fmt::format(" {}", JoinLexemes(port.attributes));
+      }
       if (port.direction.has_value()) {
         line += fmt::format(" {}", ToString(port.direction.value()));
       }
+      if (not rng::empty(port.interface_type)) {
+        line += fmt::format(" {}", JoinLexemes(port.interface_type));
+      }
+      if (not rng::empty(port.type_specifier)) {
+        line += fmt::format(" {}", JoinLexemes(port.type_specifier));
+      }
       if (not rng::empty(port.name)) {
         line += fmt::format(" {}", port.name);
+      }
+      if (not rng::empty(port.unpacked_dimensions)) {
+        line += fmt::format(" {}", JoinLexemes(port.unpacked_dimensions));
+      }
+      if (not rng::empty(port.default_value)) {
+        line += fmt::format(" = {}", JoinLexemes(port.default_value));
       }
       fmt::println("{}", line);
     }
@@ -3637,7 +3739,9 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
   while (m_token_iterator->type != TokenType::kEndOfFile and
          m_token_iterator->lexeme != "endmodule") {
     if (m_token_iterator->IsKeyword("input") or
-        m_token_iterator->IsKeyword("output")) {
+        m_token_iterator->IsKeyword("output") or
+        m_token_iterator->IsKeyword("inout") or
+        m_token_iterator->IsKeyword("ref")) {
       for (auto const& port_declaration : ParseModulePortDeclarations()) {
         auto const matching_header_port_iterator{::FindUndirectedImplicitPort(
             module_declaration.ports, port_declaration)};

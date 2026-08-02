@@ -13,6 +13,7 @@ using ModulePortKind = svt::model::ModulePortKind;
 using PortDirection = svt::model::PortDirection;
 using ParameterTypeDeclaration = svt::model::ParameterTypeDeclaration;
 using ParameterValueDeclaration = svt::model::ParameterValueDeclaration;
+using ParameterKind = svt::model::ParameterKind;
 using ContinuousAssign = svt::model::ContinuousAssign;
 using AlwaysBlock = svt::model::AlwaysBlock;
 using InitialBlock = svt::model::InitialBlock;
@@ -102,6 +103,11 @@ auto GenItemAs(svt::model::GenerateItem const& item) -> T const& {
   return std::get<T>(item.node);
 }
 
+template <typename T>
+auto ParameterAs(svt::model::ModuleItem const& item) -> T const& {
+  return std::get<T>(std::get<ParameterDeclaration>(item));
+}
+
 auto GenerateRegionBodyTokens(GenerateItem const& item)
     -> decltype(item.tokens) {
   if (item.tokens.size() < 2UZ) {
@@ -182,6 +188,62 @@ TEST_CASE("Parse generic module parameters", "[parser]") {
   REQUIRE(implicit_value_parameter.type_specifier.empty());
   REQUIRE(Lexemes(implicit_value_parameter.default_value->tokens) ==
           std::vector<std::string_view>{"8"});
+}
+
+TEST_CASE("Parse module parameter declarations", "[parser]") {
+  std::string src = R"(
+    module foo ();
+      parameter int A = 1, B = 2;
+      parameter type T = logic[3:0], U = bit;
+      localparam int C = A + B, D = 4;
+    endmodule
+  )";
+  Parser parser{std::move(src)};
+
+  auto const translation_unit{parser.Parse()};
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.items.size() == 6);
+
+  auto const& a_parameter{
+      ParameterAs<ParameterValueDeclaration>(module_declaration.items.at(0))};
+  REQUIRE(a_parameter.kind == ParameterKind::kParameter);
+  REQUIRE(a_parameter.name == "A");
+  REQUIRE(Lexemes(a_parameter.type_specifier) ==
+          std::vector<std::string_view>{"int"});
+  REQUIRE(Lexemes(a_parameter.default_value->tokens) ==
+          std::vector<std::string_view>{"1"});
+
+  auto const& b_parameter{
+      ParameterAs<ParameterValueDeclaration>(module_declaration.items.at(1))};
+  REQUIRE(b_parameter.name == "B");
+  REQUIRE(Lexemes(b_parameter.type_specifier) ==
+          std::vector<std::string_view>{"int"});
+
+  auto const& t_parameter{
+      ParameterAs<ParameterTypeDeclaration>(module_declaration.items.at(2))};
+  REQUIRE(t_parameter.name == "T");
+  REQUIRE(t_parameter.kind == ParameterKind::kParameter);
+  REQUIRE(Lexemes(t_parameter.default_type) ==
+          std::vector<std::string_view>{"logic", "[", "3", ":", "0", "]"});
+
+  auto const& u_parameter{
+      ParameterAs<ParameterTypeDeclaration>(module_declaration.items.at(3))};
+  REQUIRE(u_parameter.name == "U");
+  REQUIRE(Lexemes(u_parameter.default_type) ==
+          std::vector<std::string_view>{"bit"});
+
+  auto const& c_parameter{
+      ParameterAs<ParameterValueDeclaration>(module_declaration.items.at(4))};
+  REQUIRE(c_parameter.kind == ParameterKind::kLocalparam);
+  REQUIRE(c_parameter.name == "C");
+  REQUIRE(Lexemes(c_parameter.default_value->tokens) ==
+          std::vector<std::string_view>{"A", "+", "B"});
+
+  auto const& d_parameter{
+      ParameterAs<ParameterValueDeclaration>(module_declaration.items.at(5))};
+  REQUIRE(d_parameter.kind == ParameterKind::kLocalparam);
+  REQUIRE(d_parameter.name == "D");
 }
 
 TEST_CASE("Parse top-level time declarations", "[parser]") {
@@ -521,9 +583,9 @@ TEST_CASE("Parse rich module headers", "[parser]") {
   REQUIRE(m2.ports.at(1).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(1).name == "b");
   REQUIRE(m2.ports.at(1).direction == PortDirection::kOutput);
-  REQUIRE(Lexemes(m2.ports.at(1).attributes) ==
-          std::vector<std::string_view>{"(", "*", "bar", "=", "asdf", "*",
-                                        ")"});
+  REQUIRE(
+      Lexemes(m2.ports.at(1).attributes) ==
+      std::vector<std::string_view>{"(", "*", "bar", "=", "asdf", "*", ")"});
   REQUIRE(Lexemes(m2.ports.at(1).type_specifier) ==
           std::vector<std::string_view>{"logic"});
   REQUIRE(Lexemes(m2.ports.at(1).default_value) ==

@@ -24,6 +24,9 @@ using ModulePortKind = ::svt::model::ModulePortKind;
 using PortDirection = ::svt::model::PortDirection;
 using NetDeclaration = ::svt::model::NetDeclaration;
 using NetType = ::svt::model::NetType;
+using VariableDeclaration = ::svt::model::VariableDeclaration;
+using VariableDeclarator = ::svt::model::VariableDeclarator;
+using VariableType = ::svt::model::VariableType;
 using ContinuousAssign = ::svt::model::ContinuousAssign;
 using AlwaysBlock = ::svt::model::AlwaysBlock;
 using InitialBlock = ::svt::model::InitialBlock;
@@ -133,14 +136,11 @@ std::array<std::string_view, 16> constexpr kTopLevelEndKeywords{
     "endfunction",  "endtask",     "endspecify",   "endclocking",
     "endproperty",  "endsequence", "endgroup",     "endgenerate"};
 
-std::array<std::string_view, 37> constexpr kUnsupportedModuleItemKeywords{
-    "reg",       "int",        "integer", "shortint", "longint",  "byte",
-    "bit",       "real",       "event",   "genvar",   "time",     "shortreal",
-    "chandle",   "realtime",   "typedef", "let",      "defparam", "bind",
-    "assert",    "assume",     "cover",   "restrict", "deassign", "nettype",
-    "default",   "extern",     "import",  "export",   "alias",    "modport",
-    "parameter", "localparam", "input",   "output",   "inout",    "ref",
-    "final"};
+std::array<std::string_view, 24> constexpr kUnsupportedModuleItemKeywords{
+    "genvar",     "typedef", "let",      "defparam", "bind",    "assert",
+    "assume",     "cover",   "restrict", "deassign", "nettype", "default",
+    "extern",     "import",  "export",   "alias",    "modport", "parameter",
+    "localparam", "input",   "output",   "inout",    "ref",     "final"};
 
 std::array<std::string_view, 14> constexpr kUnsupportedModuleItemNetTypes{
     "tri",  "tri0", "tri1",    "triand",  "trior", "trireg", "uwire",
@@ -2144,6 +2144,33 @@ auto StripLeadingAttributes(tokens_t port_tokens) -> tokens_t {
   return port_tokens;
 }
 
+auto constexpr kVariableTypes{std::array{
+    std::pair{"reg", VariableType::kReg}, std::pair{"int", VariableType::kInt},
+    std::pair{"integer", VariableType::kInteger},
+    std::pair{"shortint", VariableType::kShortint},
+    std::pair{"longint", VariableType::kLongint},
+    std::pair{"byte", VariableType::kByte},
+    std::pair{"bit", VariableType::kBit},
+    std::pair{"real", VariableType::kReal},
+    std::pair{"time", VariableType::kTime},
+    std::pair{"shortreal", VariableType::kShortreal},
+    std::pair{"chandle", VariableType::kChandle},
+    std::pair{"realtime", VariableType::kRealtime},
+    std::pair{"event", VariableType::kEvent},
+    std::pair{"string", VariableType::kString}}};
+
+inline auto FindVariableType(std::string_view const lexeme)
+    -> std::optional<VariableType> {
+  auto const iterator{
+      rng::find_if(kVariableTypes, [lexeme](auto const& variable_type) -> bool {
+        return variable_type.first == lexeme;
+      })};
+  if (iterator == rng::cend(kVariableTypes)) {
+    return std::nullopt;
+  }
+  return iterator->second;
+}
+
 auto ParsePortDeclaration(
     tokens_t const port_tokens,
     std::optional<PortDirection> const& previous_direction) -> ModulePort {
@@ -2397,6 +2424,40 @@ auto ToString(NetType const type) -> std::string_view {
   std::unreachable();
 }
 
+auto ToString(VariableType const type) -> std::string_view {
+  switch (type) {
+    case VariableType::kReg:
+      return "reg";
+    case VariableType::kInt:
+      return "int";
+    case VariableType::kInteger:
+      return "integer";
+    case VariableType::kShortint:
+      return "shortint";
+    case VariableType::kLongint:
+      return "longint";
+    case VariableType::kByte:
+      return "byte";
+    case VariableType::kBit:
+      return "bit";
+    case VariableType::kReal:
+      return "real";
+    case VariableType::kTime:
+      return "time";
+    case VariableType::kShortreal:
+      return "shortreal";
+    case VariableType::kChandle:
+      return "chandle";
+    case VariableType::kRealtime:
+      return "realtime";
+    case VariableType::kEvent:
+      return "event";
+    case VariableType::kString:
+      return "string";
+  }
+  std::unreachable();
+}
+
 auto ToString(TimeDeclarationKind const kind) -> std::string_view {
   switch (kind) {
     case TimeDeclarationKind::kTimeUnit:
@@ -2564,6 +2625,26 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
               }
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
+                                              VariableDeclaration>) {
+              for (auto const& declarator : resolved_item.declarators) {
+                auto line{fmt::format("    {}", ToString(resolved_item.type))};
+                if (not rng::empty(resolved_item.type_specifier)) {
+                  line += fmt::format(
+                      " {}", JoinLexemes(resolved_item.type_specifier));
+                }
+                line += fmt::format(" {}", declarator.name);
+                if (not rng::empty(declarator.unpacked_dimensions)) {
+                  line += fmt::format(
+                      " {}", JoinLexemes(declarator.unpacked_dimensions));
+                }
+                if (not rng::empty(declarator.initializer)) {
+                  line +=
+                      fmt::format(" = {}", JoinLexemes(declarator.initializer));
+                }
+                fmt::println("{}", line);
+              }
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
                                               ContinuousAssign>) {
               fmt::println("    assign {} = {}",
                            JoinLexemes(resolved_item.left_hand_side->tokens),
@@ -2690,6 +2771,103 @@ auto TokenParserBase::ExpectKeyword(std::string_view const lexeme,
   }
 
   rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+}
+
+auto Parser::ParseVariableDeclaration() -> VariableDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  auto const declaration_end_iterator{
+      rng::find_if(std::span{m_token_iterator, rng::cend(m_tokens)},
+                   [](Token const& token) -> bool {
+                     return token.type == TokenType::kSemicolon or
+                            token.type == TokenType::kEndOfFile;
+                   })};
+  if (declaration_end_iterator == rng::cend(m_tokens) or
+      declaration_end_iterator->type == TokenType::kEndOfFile) {
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing variable declaration"};
+  }
+
+  auto const declaration_tokens{
+      tokens_t{declaration_begin_iterator, declaration_end_iterator}};
+  auto const stripped_tokens{StripLeadingAttributes(declaration_tokens)};
+  if (rng::empty(stripped_tokens)) {
+    throw std::runtime_error{"[Parser] expected variable type"};
+  }
+
+  auto const type{FindVariableType(stripped_tokens.front().lexeme)};
+  if (not type.has_value()) {
+    throw std::runtime_error{"[Parser] expected variable type"};
+  }
+  auto type_begin_iterator{
+      rng::next(rng::cbegin(stripped_tokens), 1, rng::cend(stripped_tokens))};
+  auto packed_end_iterator{type_begin_iterator};
+  while (packed_end_iterator != rng::cend(stripped_tokens) and
+         packed_end_iterator->type == TokenType::kLBracket) {
+    auto const close_iterator{
+        FindMatchingDelimiter(packed_end_iterator, rng::cend(stripped_tokens),
+                              TokenType::kLBracket, TokenType::kRBracket)};
+    if (close_iterator == rng::cend(stripped_tokens)) {
+      throw std::runtime_error{
+          "[Parser] expected ']' while parsing variable declaration"};
+    }
+    packed_end_iterator =
+        rng::next(close_iterator, 1, rng::cend(stripped_tokens));
+  }
+
+  auto const type_specifier{tokens_t{type_begin_iterator, packed_end_iterator}};
+  auto const declarator_tokens{
+      tokens_t{packed_end_iterator, rng::cend(stripped_tokens)}};
+  auto const declarators{SplitTopLevelSeparatedTokens(
+      declarator_tokens, TokenType::kComma, "variable declaration", false)};
+  if (rng::empty(declarators)) {
+    throw std::runtime_error{"[Parser] expected variable declarator"};
+  }
+
+  VariableDeclaration declaration{};
+  declaration.type = type.value();
+  declaration.attributes =
+      tokens_t{rng::cbegin(declaration_tokens), rng::cbegin(stripped_tokens)};
+  declaration.type_specifier = type_specifier;
+  declaration.packed_dimensions = ParsePackedDimensions(type_specifier);
+
+  for (auto const declarator_tokens : declarators) {
+    if (rng::empty(declarator_tokens)) {
+      throw std::runtime_error{"[Parser] expected variable declarator"};
+    }
+
+    auto const equals_iterator{FindTopLevelAssignmentOperator(
+        rng::cbegin(declarator_tokens), rng::cend(declarator_tokens))};
+    auto const declarator_end_iterator{equals_iterator ==
+                                               rng::cend(declarator_tokens)
+                                           ? rng::cend(declarator_tokens)
+                                           : equals_iterator};
+    auto const name_iterator{
+        rng::find_if(rng::cbegin(declarator_tokens), declarator_end_iterator,
+                     [](Token const& token) -> bool {
+                       return token.type == TokenType::kIdentifier;
+                     })};
+    if (name_iterator == declarator_end_iterator) {
+      throw std::runtime_error{"[Parser] expected variable name"};
+    }
+
+    VariableDeclarator declarator{};
+    declarator.name = name_iterator->lexeme;
+    declarator.unpacked_dimensions =
+        tokens_t{rng::next(name_iterator, 1, declarator_end_iterator),
+                 declarator_end_iterator};
+    if (equals_iterator != rng::cend(declarator_tokens)) {
+      declarator.initializer =
+          tokens_t{rng::next(equals_iterator, 1, rng::cend(declarator_tokens)),
+                   rng::cend(declarator_tokens)};
+    }
+    declarator.tokens = declarator_tokens;
+    declaration.declarators.push_back(declarator);
+  }
+
+  m_token_iterator = declaration_end_iterator;
+  ExpectToken(TokenType::kSemicolon, "variable declaration");
+  declaration.tokens = tokens_t{declaration_begin_iterator, m_token_iterator};
+  return declaration;
 }
 
 auto TokenParserBase::ParseNetDeclaration() -> NetDeclaration {
@@ -3862,6 +4040,14 @@ auto Parser::ParseModuleItem() -> ModuleItem {
     m_token_iterator = parser.CurrentTokenIterator();
     return result;
   }};
+
+  auto const declaration_start{
+      StripLeadingAttributes(tokens_t{m_token_iterator, rng::cend(m_tokens)})};
+  if (not rng::empty(declaration_start) and
+      FindVariableType(declaration_start.front().lexeme).has_value()) {
+    return ModuleItem{std::in_place_type<VariableDeclaration>,
+                      ParseVariableDeclaration()};
+  }
 
   switch (m_token_iterator->type) {
     case TokenType::kKeyword: {

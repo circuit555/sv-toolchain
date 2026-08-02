@@ -16,6 +16,23 @@ export enum class PortDirection : std::uint8_t {
 
 export enum class NetType : std::uint8_t { kWire, kLogic };
 
+export enum class VariableType : std::uint8_t {
+  kReg,
+  kInt,
+  kInteger,
+  kShortint,
+  kLongint,
+  kByte,
+  kBit,
+  kReal,
+  kTime,
+  kShortreal,
+  kChandle,
+  kRealtime,
+  kEvent,
+  kString
+};
+
 export enum class LiteralKind : std::uint8_t { kInteger, kReal, kString };
 
 struct Declaration {
@@ -301,6 +318,21 @@ export struct NetDeclaration : Declaration {
   std::vector<PackedDimension> packed_dimensions;
 };
 
+export struct VariableDeclarator : Declaration {
+  std::span<Token const> unpacked_dimensions;
+  std::span<Token const> initializer;
+  std::span<Token const> tokens;
+};
+
+export struct VariableDeclaration : Declaration {
+  VariableType type;
+  std::span<Token const> attributes;
+  std::span<Token const> type_specifier;
+  std::vector<PackedDimension> packed_dimensions;
+  std::vector<VariableDeclarator> declarators;
+  std::span<Token const> tokens;
+};
+
 export struct ParameterTypeDeclaration : Declaration {
   std::span<Token const> default_type;
 };
@@ -452,9 +484,10 @@ export struct UnsupportedModuleItem {
 };
 
 export using ModuleItem =
-    std::variant<NetDeclaration, ContinuousAssign, AlwaysBlock, InitialBlock,
-                 FinalBlock, GenerateItem, ModuleInstantiation, TimeDeclaration,
-                 ImportDeclaration, UnsupportedModuleItem>;
+    std::variant<NetDeclaration, VariableDeclaration, ContinuousAssign,
+                 AlwaysBlock, InitialBlock, FinalBlock, GenerateItem,
+                 ModuleInstantiation, TimeDeclaration, ImportDeclaration,
+                 UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   std::string_view lifetime;

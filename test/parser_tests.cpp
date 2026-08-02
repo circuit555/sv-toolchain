@@ -425,10 +425,38 @@ TEST_CASE("Parse module ports", "[parser]") {
   auto const& data_port{module_declaration.ports.at(1)};
   REQUIRE(data_port.name == "data");
   REQUIRE(data_port.direction == PortDirection::kOutput);
+  REQUIRE(Lexemes(data_port.type_specifier) ==
+          std::vector<std::string_view>{"logic", "[", "7", ":", "0", "]"});
+  REQUIRE(data_port.packed_dimensions.size() == 1);
+  REQUIRE(Lexemes(data_port.packed_dimensions.front()) ==
+          std::vector<std::string_view>{"[", "7", ":", "0", "]"});
 
   auto const& ready_port{module_declaration.ports.at(2)};
   REQUIRE(ready_port.name == "ready");
   REQUIRE(ready_port.direction == PortDirection::kOutput);
+}
+
+TEST_CASE("Parse inout module ports", "[parser]") {
+  std::string src = R"(
+    module foo (
+      inout wire pad
+    )
+  )";
+  Parser parser{std::move(src)};
+
+  auto translation_unit = parser.Parse();
+
+  REQUIRE(translation_unit.size() == 1);
+
+  auto const& module_declaration{
+      std::get<ModuleDeclaration>(translation_unit.front())};
+  REQUIRE(module_declaration.ports.size() == 1);
+
+  auto const& pad_port{module_declaration.ports.front()};
+  REQUIRE(pad_port.name == "pad");
+  REQUIRE(pad_port.direction == PortDirection::kInout);
+  REQUIRE(Lexemes(pad_port.type_specifier) ==
+          std::vector<std::string_view>{"wire"});
 }
 
 TEST_CASE("Parse rich module headers", "[parser]") {
@@ -483,15 +511,29 @@ TEST_CASE("Parse rich module headers", "[parser]") {
   REQUIRE(m2.ports.at(0).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(0).name == "a");
   REQUIRE(m2.ports.at(0).direction == PortDirection::kInput);
+  REQUIRE(Lexemes(m2.ports.at(0).type_specifier) ==
+          std::vector<std::string_view>{"int"});
+  REQUIRE(m2.ports.at(0).packed_dimensions.empty());
+  REQUIRE(Lexemes(m2.ports.at(0).unpacked_dimensions) ==
+          std::vector<std::string_view>{"[", "]"});
   REQUIRE(m2.ports.at(1).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(1).name == "b");
   REQUIRE(m2.ports.at(1).direction == PortDirection::kOutput);
+  REQUIRE(Lexemes(m2.ports.at(1).attributes) ==
+          std::vector<std::string_view>{"(", "*", "bar", "=", "asdf", "*",
+                                        ")"});
+  REQUIRE(Lexemes(m2.ports.at(1).type_specifier) ==
+          std::vector<std::string_view>{"logic"});
+  REQUIRE(Lexemes(m2.ports.at(1).default_value) ==
+          std::vector<std::string_view>{"1"});
   REQUIRE(m2.ports.at(2).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(2).name == "c");
-  REQUIRE(not m2.ports.at(2).direction.has_value());
+  REQUIRE(m2.ports.at(2).direction == PortDirection::kRef);
   REQUIRE(m2.ports.at(3).kind == ModulePortKind::kImplicit);
   REQUIRE(m2.ports.at(3).name == "d");
   REQUIRE(not m2.ports.at(3).direction.has_value());
+  REQUIRE(Lexemes(m2.ports.at(3).interface_type) ==
+          std::vector<std::string_view>{"interface", ".", "mod"});
   REQUIRE(m2.ports.at(4).kind == ModulePortKind::kExplicitNamed);
   REQUIRE(m2.ports.at(4).name == "e");
   REQUIRE(not m2.ports.at(4).direction.has_value());

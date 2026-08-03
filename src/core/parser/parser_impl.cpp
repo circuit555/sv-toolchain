@@ -2691,6 +2691,10 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
               PrintExportDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
+                                              TokenPreservingDeclaration>) {
+              fmt::println("    {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
                                               UnsupportedPackageItem>) {
               fmt::println("    {} <unsupported>", resolved_item.kind);
             }
@@ -4369,6 +4373,9 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("bind"):
         m_token_iterator = dispatch_iterator;
         return ParseTokenPreservingDeclaration();
+      case ::HashLexeme("extern"):
+        m_token_iterator = dispatch_iterator;
+        return ParseTokenPreservingDeclaration();
       case ::HashLexeme("class"):
         m_token_iterator = dispatch_iterator;
         return ParseClassDeclaration();
@@ -4402,6 +4409,14 @@ auto Parser::ParseDesignElement() -> DesignElement {
           return ParseImportDeclaration();
         }
         break;
+      case ::HashLexeme("export"):
+        if (::IsPackageScopeExportStart(dispatch_iterator,
+                                        rng::cend(m_tokens))) {
+          m_token_iterator = dispatch_iterator;
+          return ParseExportDeclaration();
+        }
+        m_token_iterator = dispatch_iterator;
+        return ParseTokenPreservingDeclaration();
       default:
         break;
     }
@@ -4636,8 +4651,11 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
       continue;
     }
 
-    items.emplace_back(std::in_place_type<UnsupportedPackageItem>,
-                       ParseUnsupportedPackageItem());
+    auto const unsupported{ParseUnsupportedPackageItem()};
+    items.emplace_back(
+        std::in_place_type<TokenPreservingDeclaration>,
+        TokenPreservingDeclaration{.kind = unsupported.kind,
+                                    .tokens = unsupported.tokens});
   }
 
   return items;

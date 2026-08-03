@@ -254,6 +254,8 @@ TEST_CASE("Classify specify paths", "[parser]") {
       std::get<ModuleDeclaration>(translation_unit.front()).items.front());
   REQUIRE(specify.structured_items.size() == 1);
   REQUIRE(specify.structured_items.front().kind == SpecifyBlock::ItemKind::kPath);
+  REQUIRE_FALSE(specify.structured_items.front().path.empty());
+  REQUIRE(specify.structured_items.front().timing_values.front().lexeme == "(");
 }
 
 TEST_CASE("Parse assertion declarations and statements", "[parser]") {

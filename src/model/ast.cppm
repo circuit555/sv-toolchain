@@ -540,6 +540,9 @@ export struct SpecifyBlock {
   enum class ItemKind : std::uint8_t { kSpecparam, kPath, kOther };
   struct Item {
     ItemKind kind{ItemKind::kOther};
+    std::span<Token const> condition;
+    std::span<Token const> path;
+    std::span<Token const> timing_values;
     std::span<Token const> tokens;
   };
   std::vector<Item> structured_items;

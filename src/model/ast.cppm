@@ -640,7 +640,16 @@ export struct DefaultDisableIffDeclaration {
 };
 
 export struct CheckerDeclaration : Declaration {
+  enum class ItemKind : std::uint8_t {
+    kDeclaration, kClocking, kDefaultDisable, kAssertion, kGenerate, kOther
+  };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::string_view name;
+    std::span<Token const> tokens;
+  };
   std::vector<ModulePort> ports;
+  std::vector<Item> items;
   std::span<Token const> body;
   std::span<Token const> tokens;
 };

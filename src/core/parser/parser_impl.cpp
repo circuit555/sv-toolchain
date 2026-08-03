@@ -5718,6 +5718,19 @@ auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
                }) != item_tokens.end()) {
       item.kind = SpecifyBlock::ItemKind::kPath;
     }
+    auto const equals_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.type == TokenType::kEquals; })};
+    auto const if_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.lexeme == "if"; })};
+    if (if_iterator != item_tokens.end()) {
+      item.condition = {std::next(if_iterator), equals_iterator};
+    }
+    if (item.kind == SpecifyBlock::ItemKind::kPath) {
+      item.path = {item_tokens.begin(), equals_iterator};
+    }
+    if (equals_iterator != item_tokens.end()) {
+      item.timing_values = {std::next(equals_iterator), item_tokens.end()};
+    }
     block.structured_items.push_back(item);
   }
   ExpectKeyword("endspecify", "specify block");

@@ -31,6 +31,7 @@ using StreamingConcatenationExpression =
     ::svt::model::StreamingConcatenationExpression;
 using DistributionExpression = ::svt::model::DistributionExpression;
 using MinTypMaxExpression = ::svt::model::MinTypMaxExpression;
+using TypeExpression = ::svt::model::TypeExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -935,6 +936,22 @@ class ExpressionParser final : private TokenParserBase {
           tokens_t{begin_iterator, m_token_iterator});
     }
 
+    if (m_token_iterator->lexeme == "type" and
+        rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+            rng::cend(m_tokens) and
+        rng::next(m_token_iterator, 1, rng::cend(m_tokens))->type ==
+            TokenType::kLParen) {
+      auto const opening{rng::next(m_token_iterator, 1, rng::cend(m_tokens))};
+      auto const contents{::ConsumeBalancedDelimitedTokens(
+          opening, rng::cend(m_tokens), TokenType::kLParen,
+          TokenType::kRParen, "type expression")};
+      m_token_iterator = rng::next(rng::cend(contents), 1,
+                                   rng::cend(m_tokens));
+      return std::make_unique<Expression>(
+          ExpressionNode{std::in_place_type<TypeExpression>, contents},
+          tokens_t{begin_iterator, m_token_iterator});
+    }
+
     if (m_token_iterator->type == TokenType::kIdentifier) {
       auto const name{m_token_iterator->lexeme};
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
@@ -943,6 +960,14 @@ class ExpressionParser final : private TokenParserBase {
             ExpressionNode{SystemIdentifierExpression{{name}}},
             tokens_t{begin_iterator, m_token_iterator});
       }
+      return std::make_unique<Expression>(
+          ExpressionNode{IdentifierExpression{{name}}},
+          tokens_t{begin_iterator, m_token_iterator});
+    }
+
+    if (m_token_iterator->type == TokenType::kKeyword) {
+      auto const name{m_token_iterator->lexeme};
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
       return std::make_unique<Expression>(
           ExpressionNode{IdentifierExpression{{name}}},
           tokens_t{begin_iterator, m_token_iterator});

@@ -146,6 +146,10 @@ export struct CastExpression {
   ExpressionPtr expression;
 };
 
+export struct TypeExpression {
+  std::span<Token const> specifier;
+};
+
 export struct MemberAccessExpression {
   ExpressionPtr base;
   std::string_view separator;
@@ -166,6 +170,7 @@ export using ExpressionNode =
                  MinTypMaxExpression,
                  ReplicationExpression, CallExpression,
                  AssignmentPatternExpression, CastExpression,
+                 TypeExpression,
                  MemberAccessExpression,
                  UnsupportedExpression>;
 

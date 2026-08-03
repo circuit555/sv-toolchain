@@ -275,6 +275,15 @@ TEST_CASE("Parse assertion declarations and statements", "[parser]") {
   REQUIRE_FALSE(assertion.expression.empty());
 }
 
+TEST_CASE("Parse assertion disable conditions", "[parser]") {
+  Parser parser{std::string{"module m; assert property (disable iff (reset) p); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& assertion = std::get<AssertionStatement>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  REQUIRE_FALSE(assertion.disable_condition.empty());
+  REQUIRE(assertion.disable_condition.front().lexeme == "(");
+}
+
 TEST_CASE("Parse clocking and default directives", "[parser]") {
   Parser parser{std::string{"module m; clocking cb @(posedge clk); input #1 a; output b; endclocking default clocking cb; default disable iff (reset); endmodule"}};
   auto translation_unit = parser.Parse();

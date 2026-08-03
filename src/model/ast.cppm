@@ -562,6 +562,7 @@ export struct AssertionDeclaration {
 export struct AssertionStatement {
   std::string_view kind;
   std::span<Token const> expression;
+  std::span<Token const> disable_condition;
   std::span<Token const> action;
   std::span<Token const> tokens;
 };

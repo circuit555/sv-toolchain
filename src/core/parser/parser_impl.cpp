@@ -5793,6 +5793,11 @@ auto Parser::ParseAssertionStatement() -> AssertionStatement {
       tokens_t{expression_begin, statement_end},
       [](Token const& token) { return token.lexeme == "else"; })};
   statement.expression = {expression_begin, action_begin};
+  auto const iff_iterator{rng::find_if(
+      statement.expression, [](Token const& token) { return token.lexeme == "iff"; })};
+  if (iff_iterator != statement.expression.end()) {
+    statement.disable_condition = {std::next(iff_iterator), action_begin};
+  }
   if (action_begin != statement_end) {
     statement.action = {std::next(action_begin), statement_end};
   }

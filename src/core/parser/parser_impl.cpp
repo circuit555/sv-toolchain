@@ -5123,6 +5123,28 @@ auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
     throw std::runtime_error{"[Parser] expected 'endconfig'"};
   }
   declaration.body = {body_begin, end_iterator};
+  for (auto const item_tokens : SplitTopLevelSeparatedTokens(
+           declaration.body, TokenType::kSemicolon, "config item", false)) {
+    if (item_tokens.empty()) {
+      continue;
+    }
+    ConfigDeclaration::Item item{.tokens = item_tokens};
+    if (item_tokens.front().lexeme == "design") {
+      item.kind = ConfigDeclaration::ItemKind::kDesign;
+    } else if (item_tokens.front().lexeme == "default" and
+               std::ranges::contains(item_tokens, "liblist",
+                                     &Token::lexeme)) {
+      item.kind = ConfigDeclaration::ItemKind::kDefaultLiblist;
+    } else if (item_tokens.front().lexeme == "cell" and
+               std::ranges::contains(item_tokens, "use", &Token::lexeme)) {
+      item.kind = ConfigDeclaration::ItemKind::kCellUse;
+    } else if (item_tokens.front().lexeme == "instance" and
+               std::ranges::contains(item_tokens, "liblist",
+                                     &Token::lexeme)) {
+      item.kind = ConfigDeclaration::ItemKind::kInstanceLiblist;
+    }
+    declaration.items.push_back(item);
+  }
   m_token_iterator = end_iterator;
   ExpectKeyword("endconfig", "config declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));

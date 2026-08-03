@@ -602,6 +602,14 @@ export struct CovergroupDeclaration : Declaration {
 };
 
 export struct ConfigDeclaration : Declaration {
+  enum class ItemKind : std::uint8_t {
+    kDesign, kDefaultLiblist, kCellUse, kInstanceLiblist, kOther
+  };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::span<Token const> tokens;
+  };
+  std::vector<Item> items;
   std::span<Token const> body;
   std::span<Token const> tokens;
 };

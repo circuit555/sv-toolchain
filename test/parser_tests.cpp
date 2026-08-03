@@ -336,6 +336,10 @@ TEST_CASE("Parse config declarations", "[parser]") {
   auto const& config = std::get<ConfigDeclaration>(translation_unit.front());
   REQUIRE(config.name == "cfg");
   REQUIRE_FALSE(config.body.empty());
+  REQUIRE(config.items.size() == 3);
+  REQUIRE(config.items.at(0).kind == ConfigDeclaration::ItemKind::kDesign);
+  REQUIRE(config.items.at(1).kind == ConfigDeclaration::ItemKind::kDefaultLiblist);
+  REQUIRE(config.items.at(2).kind == ConfigDeclaration::ItemKind::kCellUse);
 }
 
 TEST_CASE("Model semantic time literals", "[parser]") {

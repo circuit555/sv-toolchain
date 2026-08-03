@@ -32,6 +32,7 @@ using StreamingConcatenationExpression =
 using DistributionExpression = ::svt::model::DistributionExpression;
 using MinTypMaxExpression = ::svt::model::MinTypMaxExpression;
 using TypeExpression = ::svt::model::TypeExpression;
+using EventExpression = ::svt::model::EventExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -883,9 +884,39 @@ class ExpressionParser final : private TokenParserBase {
       } else if (MatchToken(TokenType::kLParen)) {
         auto arguments{ParseExpressionList(TokenType::kRParen)};
         ExpectToken(TokenType::kRParen, "call expression");
+        std::span<Token const> with_clause;
+        if (not AtEnd() and m_token_iterator->lexeme == "with") {
+          auto const with_begin{m_token_iterator};
+          rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+          if (AtEnd() or (m_token_iterator->type != TokenType::kLParen and
+                          m_token_iterator->type != TokenType::kLBrace)) {
+            throw std::runtime_error{"[Parser] expected with clause delimiter"};
+          }
+          auto const opening{m_token_iterator};
+          auto const closing_type{opening->type == TokenType::kLParen
+                                      ? TokenType::kRParen
+                                      : TokenType::kRBrace};
+          auto const contents{::FindMatchingDelimiter(
+              opening, rng::cend(m_tokens), opening->type, closing_type)};
+          if (contents == rng::cend(m_tokens)) {
+            throw std::runtime_error{"[Parser] expected with clause delimiter"};
+          }
+          m_token_iterator = rng::next(contents, 1, rng::cend(m_tokens));
+          with_clause = tokens_t{with_begin, m_token_iterator};
+        }
+        auto unique{false};
+        if (not AtEnd() and m_token_iterator->lexeme == "." and
+            rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+                rng::cend(m_tokens) and
+            rng::next(m_token_iterator, 1, rng::cend(m_tokens))->lexeme ==
+                "unique") {
+          unique = true;
+          rng::advance(m_token_iterator, 2, rng::cend(m_tokens));
+        }
         expression = std::make_unique<Expression>(
             ExpressionNode{std::in_place_type<CallExpression>,
-                           std::move(expression), std::move(arguments)},
+                           std::move(expression), std::move(arguments),
+                           with_clause, unique},
             tokens_t{begin_iterator, m_token_iterator});
       } else {
         break;
@@ -910,6 +941,25 @@ class ExpressionParser final : private TokenParserBase {
     }
 
     auto const begin_iterator{m_token_iterator};
+
+    if (m_token_iterator->type == TokenType::kAt) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      if (AtEnd() or m_token_iterator->type != TokenType::kLParen) {
+        throw std::runtime_error{"[Parser] expected event expression"};
+      }
+      auto const opening{m_token_iterator};
+      auto const closing{::FindMatchingDelimiter(
+          opening, rng::cend(m_tokens), TokenType::kLParen,
+          TokenType::kRParen)};
+      if (closing == rng::cend(m_tokens)) {
+        throw std::runtime_error{"[Parser] expected event expression delimiter"};
+      }
+      m_token_iterator = rng::next(closing, 1, rng::cend(m_tokens));
+      return std::make_unique<Expression>(
+          ExpressionNode{std::in_place_type<EventExpression>,
+                         tokens_t{begin_iterator, m_token_iterator}},
+          tokens_t{begin_iterator, m_token_iterator});
+    }
 
     auto type_end{m_token_iterator};
     while (type_end != rng::cend(m_tokens) and

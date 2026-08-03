@@ -123,6 +123,7 @@ using StreamingConcatenationExpression = svt::model::StreamingConcatenationExpre
 using DistributionExpression = svt::model::DistributionExpression;
 using MinTypMaxExpression = svt::model::MinTypMaxExpression;
 using TypeExpression = svt::model::TypeExpression;
+using EventExpression = svt::model::EventExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -631,6 +632,23 @@ TEST_CASE("Parse type expressions", "[parser]") {
   auto const& bits_assign = std::get<ContinuousAssign>(module.items.at(1));
   auto const& call = ExprAs<CallExpression>(*bits_assign.right_hand_side);
   REQUIRE(ExprAs<IdentifierExpression>(*call.arguments.front()).name == "int");
+}
+
+TEST_CASE("Parse event and with call expressions", "[parser]") {
+  Parser parser{std::string{
+      "module m; assign y = $rose(c, @(posedge clk)); assign z = obj.randomize() with { x < 3 }; assign w = a.find(x) with (x > 5).unique; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& rose = ExprAs<CallExpression>(
+      *std::get<ContinuousAssign>(module.items.at(0)).right_hand_side);
+  REQUIRE(std::holds_alternative<EventExpression>(rose.arguments.at(1)->node));
+  auto const& randomize = ExprAs<CallExpression>(
+      *std::get<ContinuousAssign>(module.items.at(1)).right_hand_side);
+  REQUIRE(not randomize.with_clause.empty());
+  auto const& find = ExprAs<CallExpression>(
+      *std::get<ContinuousAssign>(module.items.at(2)).right_hand_side);
+  REQUIRE(find.unique);
+  REQUIRE(not find.with_clause.empty());
 }
 
 TEST_CASE("Parse DPI declarations and subroutine defaults", "[parser]") {

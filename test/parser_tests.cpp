@@ -497,6 +497,15 @@ TEST_CASE("Parse temporal expression operators", "[parser]") {
   REQUIRE(std::get<BinaryExpression>(until_with.right_hand_side->node).operator_lexeme == "until_with");
 }
 
+TEST_CASE("Preserve procedural block labels", "[parser]") {
+  Parser parser{std::string{"module m; initial begin : named x = 1; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(block.label == "named");
+}
+
 TEST_CASE("Parse config declarations", "[parser]") {
   Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
   auto translation_unit = parser.Parse();

@@ -4912,6 +4912,33 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
         return iterator->IsKeyword(keyword);
       });
   declaration.body = {body_begin, m_token_iterator};
+  for (auto const member_tokens : SplitTopLevelSeparatedTokens(
+           declaration.body, TokenType::kSemicolon, "class member", false)) {
+    if (member_tokens.empty()) {
+      continue;
+    }
+    ClassDeclaration::Member member{.tokens = member_tokens};
+    if (std::ranges::contains(member_tokens, "function", &Token::lexeme) or
+        std::ranges::contains(member_tokens, "task", &Token::lexeme) or
+        std::ranges::contains(member_tokens, "extern", &Token::lexeme)) {
+      member.kind = ClassDeclaration::MemberKind::kMethod;
+    } else if (std::ranges::contains(member_tokens, "constraint",
+                                     &Token::lexeme)) {
+      member.kind = ClassDeclaration::MemberKind::kConstraint;
+    } else if (std::ranges::contains(member_tokens, "typedef", &Token::lexeme)) {
+      member.kind = ClassDeclaration::MemberKind::kType;
+    } else {
+      member.kind = ClassDeclaration::MemberKind::kField;
+    }
+    auto const name_iterator{rng::find_if(
+        member_tokens, [](Token const& token) {
+          return token.type == TokenType::kIdentifier;
+        })};
+    if (name_iterator != member_tokens.end()) {
+      member.name = name_iterator->lexeme;
+    }
+    declaration.members.push_back(std::move(member));
+  }
   ExpectKeyword("endclass", "class declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
   declaration.tokens = {declaration_begin_iterator, m_token_iterator};

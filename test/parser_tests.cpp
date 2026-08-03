@@ -709,6 +709,10 @@ TEST_CASE("Parse compilation-unit class declarations", "[parser]") {
       std::get<ClassDeclaration>(translation_unit.at(2));
   REQUIRE(class_declaration.name == "C");
   REQUIRE_FALSE(class_declaration.body.empty());
+  REQUIRE(class_declaration.members.size() == 1);
+  REQUIRE(class_declaration.members.front().kind ==
+          ClassDeclaration::MemberKind::kField);
+  REQUIRE(class_declaration.members.front().name == "i");
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(3)).name == "foo");
 }
 

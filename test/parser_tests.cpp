@@ -58,6 +58,7 @@ using IndexExpression = svt::model::IndexExpression;
 using RangeSelectExpression = svt::model::RangeSelectExpression;
 using ConcatenationExpression = svt::model::ConcatenationExpression;
 using UnsupportedExpression = svt::model::UnsupportedExpression;
+using AssignmentPatternExpression = svt::model::AssignmentPatternExpression;
 using PackedRangeDimension = svt::model::PackedRangeDimension;
 using PackedSizeDimension = svt::model::PackedSizeDimension;
 using Statement = svt::model::Statement;
@@ -438,6 +439,19 @@ TEST_CASE("Parse streaming concatenations", "[parser]") {
   REQUIRE(streaming.direction == "<<");
   REQUIRE(streaming.slice_size.front().lexeme == "byte");
   REQUIRE(streaming.elements.front().lexeme == "a");
+}
+
+TEST_CASE("Parse keyed assignment patterns", "[parser]") {
+  Parser parser{std::string{"module m; initial value = '{key: 1, default: 0}; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assignment = StmtAs<AssignmentStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& pattern = std::get<AssignmentPatternExpression>(
+      assignment.right_hand_side->node);
+  REQUIRE(pattern.entries.size() == 2);
+  REQUIRE(pattern.entries.at(0).key.front().lexeme == "key");
+  REQUIRE(pattern.entries.at(1).key.front().lexeme == "default");
 }
 
 TEST_CASE("Parse config declarations", "[parser]") {

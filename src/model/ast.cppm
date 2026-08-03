@@ -122,7 +122,12 @@ export struct CallExpression {
 };
 
 export struct AssignmentPatternExpression {
+  struct Entry {
+    std::span<Token const> key;
+    ExpressionPtr value;
+  };
   std::vector<ExpressionPtr> expressions;
+  std::vector<Entry> entries;
 };
 
 export struct CastExpression {

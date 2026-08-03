@@ -1000,11 +1000,31 @@ class ExpressionParser final : private TokenParserBase {
     }
 
     if (match_lexeme("'{")) {
-      auto expressions{ParseExpressionList(TokenType::kRBrace)};
+      std::vector<ExpressionPtr> expressions{};
+      std::vector<AssignmentPatternExpression::Entry> entries{};
+      while (not AtEnd() and m_token_iterator->type != TokenType::kRBrace) {
+        auto const key_begin{m_token_iterator};
+        auto key_end{key_begin};
+        while (key_end != rng::cend(m_tokens) and key_end->lexeme != ":" and
+               key_end->type != TokenType::kComma and
+               key_end->type != TokenType::kRBrace) {
+          rng::advance(key_end, 1, rng::cend(m_tokens));
+        }
+        if (key_end != rng::cend(m_tokens) and key_end->lexeme == ":") {
+          m_token_iterator = key_end;
+          auto const key{tokens_t{key_begin, key_end}};
+          rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+          entries.push_back(AssignmentPatternExpression::Entry{
+              .key = key, .value = ParseConditionalExpression()});
+        } else {
+          expressions.push_back(ParseConditionalExpression());
+        }
+        if (not MatchToken(TokenType::kComma)) break;
+      }
       ExpectToken(TokenType::kRBrace, "assignment pattern expression");
       return std::make_unique<Expression>(
           ExpressionNode{std::in_place_type<AssignmentPatternExpression>,
-                         std::move(expressions)},
+                         std::move(expressions), std::move(entries)},
           tokens_t{begin_iterator, m_token_iterator});
     }
 

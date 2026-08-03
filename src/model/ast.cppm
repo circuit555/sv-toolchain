@@ -35,6 +35,8 @@ export enum class VariableType : std::uint8_t {
 
 export enum class ParameterKind : std::uint8_t { kParameter, kLocalparam };
 
+export enum class ModuleSourceKind : std::uint8_t { kModule, kMacromodule };
+
 export enum class TypeDeclarationKind : std::uint8_t {
   kTypedef,
   kEnum,
@@ -563,11 +565,26 @@ export using ModuleItem =
                  TimeDeclaration, ImportDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
+  ModuleSourceKind source_kind{ModuleSourceKind::kModule};
   std::string_view lifetime;
   std::vector<ParameterDeclaration> parameters;
   std::vector<ImportDeclaration> imports;
   std::vector<ModulePort> ports;
   std::vector<ModuleItem> items;
+};
+
+export struct ProgramDeclaration : Declaration {
+  std::string_view lifetime;
+  std::vector<ModulePort> ports;
+  std::vector<ModuleItem> items;
+  std::span<Token const> tokens;
+};
+
+export struct PrimitiveDeclaration : Declaration {
+  std::vector<ModulePort> ports;
+  std::span<Token const> table;
+  std::span<Token const> initial_statement;
+  std::span<Token const> tokens;
 };
 
 export struct UnsupportedDesignElement {
@@ -577,8 +594,9 @@ export struct UnsupportedDesignElement {
 
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
-    std::variant<ModuleDeclaration, PackageDeclaration, InterfaceDeclaration,
-                 TypeDeclaration, TimeDeclaration, ImportDeclaration,
+    std::variant<ModuleDeclaration, ProgramDeclaration, PrimitiveDeclaration,
+                 PackageDeclaration, InterfaceDeclaration, TypeDeclaration,
+                 TimeDeclaration, ImportDeclaration,
                  UnsupportedDesignElement>;
 
 }  // namespace svt::model

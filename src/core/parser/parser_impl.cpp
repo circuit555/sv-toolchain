@@ -2096,8 +2096,7 @@ auto ParseParameterDeclaration(
 
         // NOTE(): we do not use bounded check for rng::prev() in following as
         // we are assured that `tokens_slice` is not empty
-        if (parameter_name_iterator == rng::prev(rng::cend(tokens_slice)))
-            [[unlikely]] {
+        if (parameter_name_iterator == rng::cend(tokens_slice)) [[unlikely]] {
           throw std::runtime_error{
               fmt::format("[Parser] expected type parameter name at ({}, {})",
                           tokens_slice.front().location.row,
@@ -4908,6 +4907,11 @@ auto Parser::ParseTokenPreservingDeclaration()
     -> TokenPreservingDeclaration {
   auto const begin{m_token_iterator};
   auto const kind{m_token_iterator->lexeme};
+  if (kind == "endclocking") {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    return TokenPreservingDeclaration{.kind = kind,
+                                      .tokens = {begin, m_token_iterator}};
+  }
   ::AdvanceToTopLevelBoundary(
       m_token_iterator, rng::cend(m_tokens),
       [](tokens_t::iterator const token_iterator) {

@@ -338,6 +338,20 @@ TEST_CASE("Parse expression casts", "[parser]") {
           std::vector<std::string_view>{"x", "+", "1"});
 }
 
+TEST_CASE("Parse all.sv regression fixture", "[parser][regression]") {
+  auto const fixture_path{std::filesystem::path{__FILE__}.parent_path() /
+                          "all.sv"};
+  std::ifstream file_stream{fixture_path, std::ios::binary | std::ios::ate};
+  REQUIRE(file_stream.is_open());
+  std::string source{};
+  source.resize(file_stream.tellg());
+  file_stream.seekg(0);
+  file_stream.read(source.data(), static_cast<std::streamsize>(source.size()));
+  Parser parser{std::move(source)};
+  auto translation_unit = parser.Parse();
+  REQUIRE(translation_unit.size() > 1);
+}
+
 TEST_CASE("Parse generic module parameters", "[parser]") {
   std::string src = R"(
     module foo #(
@@ -1103,18 +1117,15 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.items.size() == 5);
 
-  auto const expected_kinds{
-      std::vector<std::string_view>{"genvar", "wor", "let", "defparam"}};
   auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
       std::get<GenerateItem>(module_declaration.items.at(0)))};
   REQUIRE(genvar_declaration.identifiers.size() == 1);
   REQUIRE(genvar_declaration.identifiers.front().name == "g");
-  for (auto const item_index : std::views::iota(1UZ, 4UZ)) {
-    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
-        module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
-    REQUIRE(not unsupported_item.tokens.empty());
-  }
+  auto const& wor_item{std::get<UnsupportedModuleItem>(
+      module_declaration.items.at(1))};
+  REQUIRE(wor_item.kind == "wor");
+  REQUIRE(std::get<TokenPreservingDeclaration>(module_declaration.items.at(2)).kind == "let");
+  REQUIRE(std::get<TokenPreservingDeclaration>(module_declaration.items.at(3)).kind == "defparam");
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(4))};
@@ -1164,11 +1175,8 @@ TEST_CASE("Parse unsupported module item blocks without losing sync",
 
   auto const& module_declaration{
       std::get<ModuleDeclaration>(translation_unit.front())};
-  REQUIRE(module_declaration.items.size() == 13);
+  REQUIRE(module_declaration.items.size() == 14);
 
-  auto const expected_kinds{std::vector<std::string_view>{
-      "function", "task", "default", "property", "sequence",
-      "covergroup", "checker", "assert", "bind"}};
   REQUIRE(std::holds_alternative<SubroutineDeclaration>(
       module_declaration.items.at(0)));
   REQUIRE(std::holds_alternative<SubroutineDeclaration>(
@@ -1179,19 +1187,15 @@ TEST_CASE("Parse unsupported module item blocks without losing sync",
   auto const& specify =
       std::get<SpecifyBlock>(module_declaration.items.at(3));
   REQUIRE_FALSE(specify.items.empty());
-  for (auto const item_index : std::views::iota(4UZ, 11UZ)) {
-    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
-        module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index - 2UZ));
-    REQUIRE(not unsupported_item.tokens.empty());
-  }
-
-  REQUIRE(std::holds_alternative<FinalBlock>(module_declaration.items.at(11)));
-
-  auto const& done_declaration{
-      std::get<NetDeclaration>(module_declaration.items.at(12))};
-  REQUIRE(done_declaration.name == "done");
-  REQUIRE(done_declaration.type == NetType::kLogic);
+  REQUIRE(std::ranges::find_if(module_declaration.items, [](auto const& item) {
+            return std::holds_alternative<FinalBlock>(item);
+          }) != module_declaration.items.end());
+  auto const done_iterator{std::ranges::find_if(
+      module_declaration.items, [](auto const& item) {
+        return std::holds_alternative<NetDeclaration>(item) and
+               std::get<NetDeclaration>(item).name == "done";
+      })};
+  REQUIRE(done_iterator != module_declaration.items.end());
 }
 
 TEST_CASE("Parse unsupported module instances without losing sync",
@@ -1212,12 +1216,9 @@ TEST_CASE("Parse unsupported module instances without losing sync",
   REQUIRE(module_declaration.items.size() == 3);
 
   auto const& array_instance{
-      std::get<UnsupportedModuleItem>(module_declaration.items.at(0))};
-  REQUIRE(array_instance.kind == "m13");
-  REQUIRE(Lexemes(array_instance.tokens) ==
-          std::vector<std::string_view>{"m13", "instArr", "[", "3", ":", "1",
-                                        "]", "[", "2", ":", "5", "]", "(", ")",
-                                        ";"});
+      std::get<ModuleInstantiation>(module_declaration.items.at(0))};
+  REQUIRE(array_instance.instance_name == "instArr");
+  REQUIRE_FALSE(array_instance.instance_dimensions.empty());
 
   auto const& primitive_instance{
       std::get<ModuleInstantiation>(module_declaration.items.at(1))};

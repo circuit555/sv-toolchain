@@ -620,9 +620,17 @@ export struct DefaultClockingDeclaration {
 };
 
 export struct ClockingDeclaration {
+  enum class ItemDirection : std::uint8_t { kInput, kOutput, kInout, kOther };
+  struct Item {
+    ItemDirection direction{ItemDirection::kOther};
+    std::string_view name;
+    std::span<Token const> skew;
+    std::span<Token const> tokens;
+  };
   bool global{false};
   bool default_clocking{false};
   std::string_view name;
+  std::vector<Item> items;
   std::span<Token const> body;
   std::span<Token const> tokens;
 };

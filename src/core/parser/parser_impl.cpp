@@ -5534,6 +5534,27 @@ auto Parser::ParseClockingDeclaration() -> ClockingDeclaration {
     throw std::runtime_error{"[Parser] expected 'endclocking'"};
   }
   declaration.body = {body_begin, end_iterator};
+  for (auto const item_tokens : SplitTopLevelSeparatedTokens(
+           declaration.body, TokenType::kSemicolon, "clocking item", false)) {
+    if (item_tokens.empty()) continue;
+    ClockingDeclaration::Item item{.tokens = item_tokens};
+    if (item_tokens.front().lexeme == "input") {
+      item.direction = ClockingDeclaration::ItemDirection::kInput;
+    } else if (item_tokens.front().lexeme == "output") {
+      item.direction = ClockingDeclaration::ItemDirection::kOutput;
+    } else if (item_tokens.front().lexeme == "inout") {
+      item.direction = ClockingDeclaration::ItemDirection::kInout;
+    }
+    auto const name_iterator{rng::find_if(
+        item_tokens, [](Token const& token) {
+          return token.type == TokenType::kIdentifier;
+        })};
+    if (name_iterator != item_tokens.end()) item.name = name_iterator->lexeme;
+    auto const skew_begin{rng::find_if(
+        item_tokens, [](Token const& token) { return token.type == TokenType::kHash; })};
+    if (skew_begin != item_tokens.end()) item.skew = {skew_begin, name_iterator};
+    declaration.items.push_back(item);
+  }
   m_token_iterator = end_iterator;
   ExpectKeyword("endclocking", "clocking declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));

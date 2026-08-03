@@ -268,6 +268,11 @@ TEST_CASE("Parse clocking and default directives", "[parser]") {
   auto const& clocking = std::get<ClockingDeclaration>(module.items.at(0));
   REQUIRE(clocking.name == "cb");
   REQUIRE_FALSE(clocking.body.empty());
+  REQUIRE(clocking.items.size() == 2);
+  REQUIRE(clocking.items.at(0).direction == ClockingDeclaration::ItemDirection::kInput);
+  REQUIRE(clocking.items.at(0).name == "a");
+  REQUIRE(clocking.items.at(0).skew.size() == 2);
+  REQUIRE(clocking.items.at(1).direction == ClockingDeclaration::ItemDirection::kOutput);
   REQUIRE(std::get<ClockingDeclaration>(module.items.at(1)).default_clocking);
   REQUIRE(std::holds_alternative<DefaultDisableIffDeclaration>(module.items.at(2)));
 }

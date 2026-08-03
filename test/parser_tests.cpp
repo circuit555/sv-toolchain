@@ -403,6 +403,18 @@ TEST_CASE("Parse inside and matches expression operators", "[parser]") {
   REQUIRE(std::get<BinaryExpression>(matches.right_hand_side->node).operator_lexeme == "matches");
 }
 
+TEST_CASE("Model semantic delay time literals", "[parser]") {
+  Parser parser{std::string{"module m; initial #5ns x = 1; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& timing = StmtAs<TimingControlStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& delay = std::get<DelayControl>(timing.control);
+  REQUIRE(delay.semantic_time.has_value());
+  REQUIRE(delay.semantic_time->magnitude == "5");
+  REQUIRE(delay.semantic_time->unit == "ns");
+}
+
 TEST_CASE("Parse config declarations", "[parser]") {
   Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
   auto translation_unit = parser.Parse();

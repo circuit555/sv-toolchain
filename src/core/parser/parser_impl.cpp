@@ -645,6 +645,29 @@ inline auto ParsePackageScopeName(tokens_t const tokens,
       .scope = tokens[0].lexeme, .name = tokens[2].lexeme, .tokens = tokens};
 }
 
+inline auto ParseSemanticTimeLiteral(tokens_t const literal)
+    -> std::optional<TimeLiteral> {
+  static constexpr auto units{std::to_array<std::string_view>(
+      {"s", "ms", "us", "ns", "ps", "fs"})};
+  if (literal.empty()) return std::nullopt;
+  auto magnitude{literal[0].lexeme};
+  auto unit{std::string_view{}};
+  if (literal.size() == 2UZ) {
+    if (literal[0].type != TokenType::kIntegerLiteral and
+        literal[0].type != TokenType::kRealLiteral) return std::nullopt;
+    unit = literal[1].lexeme;
+  } else if (literal.size() == 1UZ) {
+    auto const unit_begin{magnitude.find_first_not_of("0123456789_.")};
+    if (unit_begin == std::string_view::npos) return std::nullopt;
+    unit = magnitude.substr(unit_begin);
+    magnitude = magnitude.substr(0, unit_begin);
+  } else {
+    return std::nullopt;
+  }
+  if (not rng::contains(units, unit)) return std::nullopt;
+  return TimeLiteral{.magnitude = magnitude, .unit = unit, .tokens = literal};
+}
+
 auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
                                  std::size_t const head_begin,
                                  std::size_t const head_end) -> std::size_t {
@@ -1432,7 +1455,8 @@ class StatementParser final : private TokenParserBase {
           TokenType::kRParen, "timing control statement")};
       if (timing_control_statement.kind == TimingControlKind::kDelay) {
         timing_control_statement.control = DelayControl{
-            .expression = ParseExpressionOrUnsupported(control_tokens)};
+            .expression = ParseExpressionOrUnsupported(control_tokens),
+            .semantic_time = ParseSemanticTimeLiteral(control_tokens)};
       } else {
         timing_control_statement.control = EventControl{
             .events =
@@ -1450,9 +1474,11 @@ class StatementParser final : private TokenParserBase {
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
 
       if (timing_control_statement.kind == TimingControlKind::kDelay) {
+        auto const delay_tokens{tokens_t{rng::prev(m_token_iterator),
+                                         m_token_iterator}};
         timing_control_statement.control =
-            DelayControl{.expression = ParseExpressionOrUnsupported(tokens_t{
-                             rng::prev(m_token_iterator), m_token_iterator})};
+            DelayControl{.expression = ParseExpressionOrUnsupported(delay_tokens),
+                         .semantic_time = ParseSemanticTimeLiteral(delay_tokens)};
       } else {
         timing_control_statement.control =
             EventControl{.events = std::vector<ExpressionPtr>{}};

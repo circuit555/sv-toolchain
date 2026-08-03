@@ -242,6 +242,15 @@ inline auto IsParameterDeclarationPrefix(tokens_t const tokens) -> bool {
          tokens.front().lexeme == "localparam";
 }
 
+inline auto IsPrimitiveGateName(std::string_view const name) -> bool {
+  static constexpr auto names{std::to_array<std::string_view>({
+      "cmos", "rcmos", "rtran", "rtranif0", "rtranif1", "tran",
+      "tranif0", "tranif1", "tri", "tri0", "tri1", "pullup",
+      "pulldown", "buf", "not", "and", "nand", "or", "nor", "xor",
+      "xnor"})};
+  return rng::contains(names, name);
+}
+
 inline auto TokenMatchesKeyword(tokens_t::iterator const token_iterator,
                                 std::string_view const lexeme) -> bool {
   return token_iterator->IsKeyword(lexeme);
@@ -5541,6 +5550,13 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("supply0"):
         case ::HashLexeme("supply1"):
         case ::HashLexeme("interconnect"):
+          if (rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+                  rng::cend(m_tokens) and
+              rng::next(m_token_iterator, 1, rng::cend(m_tokens))->type ==
+                  TokenType::kLParen) {
+            return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
+                              ParseTokenPreservingDeclaration()};
+          }
           return ModuleItem{std::in_place_type<NetDeclaration>,
                             ParseNetDeclaration()};
         case ::HashLexeme("assign"):
@@ -5577,13 +5593,17 @@ auto Parser::ParseModuleItem() -> ModuleItem {
       break;
     }
 
-    case TokenType::kIdentifier: {
+        case TokenType::kIdentifier: {
       auto const module_item_begin_iterator{m_token_iterator};
       try {
         return ModuleItem{std::in_place_type<ModuleInstantiation>,
                           ParseModuleInstantiation()};
       } catch (std::runtime_error const&) {
         m_token_iterator = module_item_begin_iterator;
+        if (::IsPrimitiveGateName(m_token_iterator->lexeme)) {
+          return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
+                            ParseTokenPreservingDeclaration()};
+        }
         return ModuleItem{std::in_place_type<UnsupportedModuleItem>,
                           ParseUnsupportedModuleItem()};
       }

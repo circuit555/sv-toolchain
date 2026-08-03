@@ -27,6 +27,8 @@ using AssertionDeclaration = ::svt::model::AssertionDeclaration;
 using AssertionStatement = ::svt::model::AssertionStatement;
 using CastExpression = ::svt::model::CastExpression;
 using MemberAccessExpression = ::svt::model::MemberAccessExpression;
+using StreamingConcatenationExpression =
+    ::svt::model::StreamingConcatenationExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -940,6 +942,30 @@ class ExpressionParser final : private TokenParserBase {
     }
 
     if (MatchToken(TokenType::kLBrace)) {
+      if (not AtEnd() and
+          (m_token_iterator->lexeme == "<<" or m_token_iterator->lexeme == ">>")) {
+        auto const direction{m_token_iterator->lexeme};
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        auto const slice_begin{m_token_iterator};
+        auto const inner_begin{rng::find_if(
+            slice_begin, rng::cend(m_tokens), [](Token const& token) {
+              return token.type == TokenType::kLBrace;
+            })};
+        if (inner_begin == rng::cend(m_tokens)) {
+          throw std::runtime_error{"[Parser] expected streaming concatenation body"};
+        }
+        auto const inner_tokens{::ConsumeBalancedDelimitedTokens(
+            inner_begin, rng::cend(m_tokens), TokenType::kLBrace,
+            TokenType::kRBrace, "streaming concatenation")};
+        m_token_iterator = rng::next(rng::cend(inner_tokens), 1,
+                                      rng::cend(m_tokens));
+        ExpectToken(TokenType::kRBrace, "streaming concatenation");
+        return std::make_unique<Expression>(
+            ExpressionNode{std::in_place_type<StreamingConcatenationExpression>,
+                           direction, tokens_t{slice_begin, inner_begin},
+                           inner_tokens},
+            tokens_t{begin_iterator, m_token_iterator});
+      }
       if (not AtEnd() and m_token_iterator->type != TokenType::kRBrace) {
         auto first_expression{ParseConditionalExpression()};
         if (MatchToken(TokenType::kLBrace)) {

@@ -105,6 +105,12 @@ export struct ConcatenationExpression {
   std::vector<ExpressionPtr> expressions;
 };
 
+export struct StreamingConcatenationExpression {
+  std::string_view direction;
+  std::span<Token const> slice_size;
+  std::span<Token const> elements;
+};
+
 export struct ReplicationExpression {
   ExpressionPtr count;
   std::vector<ExpressionPtr> expressions;
@@ -139,6 +145,7 @@ export using ExpressionNode =
                  SystemIdentifierExpression, LiteralExpression, UnaryExpression,
                  BinaryExpression, ConditionalExpression, IndexExpression,
                  RangeSelectExpression, ConcatenationExpression,
+                 StreamingConcatenationExpression,
                  ReplicationExpression, CallExpression,
                  AssignmentPatternExpression, CastExpression,
                  MemberAccessExpression,

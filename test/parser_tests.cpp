@@ -120,6 +120,7 @@ using DpiDeclaration = svt::model::DpiDeclaration;
 using MemberAccessExpression = svt::model::MemberAccessExpression;
 using StreamingConcatenationExpression = svt::model::StreamingConcatenationExpression;
 using DistributionExpression = svt::model::DistributionExpression;
+using MinTypMaxExpression = svt::model::MinTypMaxExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -490,6 +491,17 @@ TEST_CASE("Parse event triggers and randomization blocks", "[parser]") {
   REQUIRE(StmtAs<EventTriggerStatement>(*block.statements.at(1)).nonblocking);
   REQUIRE_FALSE(StmtAs<RandomizationBlockStatement>(*block.statements.at(2)).sequence);
   REQUIRE(StmtAs<RandomizationBlockStatement>(*block.statements.at(3)).sequence);
+}
+
+TEST_CASE("Parse min typ max expressions", "[parser]") {
+  Parser parser{std::string{"module m; assign y = (1:2:3); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assign = std::get<ContinuousAssign>(module.items.front());
+  auto const& min_typ_max = std::get<MinTypMaxExpression>(assign.right_hand_side->node);
+  REQUIRE(ExprAs<LiteralExpression>(*min_typ_max.minimum).value == "1");
+  REQUIRE(ExprAs<LiteralExpression>(*min_typ_max.typical).value == "2");
+  REQUIRE(ExprAs<LiteralExpression>(*min_typ_max.maximum).value == "3");
 }
 
 TEST_CASE("Parse temporal expression operators", "[parser]") {

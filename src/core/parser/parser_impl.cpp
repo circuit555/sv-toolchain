@@ -30,6 +30,7 @@ using MemberAccessExpression = ::svt::model::MemberAccessExpression;
 using StreamingConcatenationExpression =
     ::svt::model::StreamingConcatenationExpression;
 using DistributionExpression = ::svt::model::DistributionExpression;
+using MinTypMaxExpression = ::svt::model::MinTypMaxExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -964,7 +965,26 @@ class ExpressionParser final : private TokenParserBase {
           tokens_t{begin_iterator, m_token_iterator});
     }
 
-    if (MatchToken(TokenType::kLParen)) {
+    if (m_token_iterator->type == TokenType::kLParen) {
+      auto const opening{m_token_iterator};
+      auto const closing{::FindMatchingDelimiter(
+          opening, rng::cend(m_tokens), TokenType::kLParen,
+          TokenType::kRParen)};
+      if (closing != rng::cend(m_tokens)) {
+        auto const content{tokens_t{std::next(opening), closing}};
+        auto const parts{SplitTopLevelSeparatedTokens(
+            content, TokenType::kColon, "min/typ/max expression", false)};
+        if (parts.size() == 3) {
+          m_token_iterator = std::next(closing);
+          return std::make_unique<Expression>(
+              ExpressionNode{std::in_place_type<MinTypMaxExpression>,
+                             ExpressionParser{parts[0]}.Parse(),
+                             ExpressionParser{parts[1]}.Parse(),
+                             ExpressionParser{parts[2]}.Parse()},
+              tokens_t{begin_iterator, m_token_iterator});
+        }
+      }
+      MatchToken(TokenType::kLParen);
       auto expression{ParseConditionalExpression()};
       ExpectToken(TokenType::kRParen, "parenthesized expression");
       expression->tokens = tokens_t{begin_iterator, m_token_iterator};

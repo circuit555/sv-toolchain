@@ -387,6 +387,13 @@ TEST_CASE("Parse config declarations", "[parser]") {
   REQUIRE(config.items.at(0).kind == ConfigDeclaration::ItemKind::kDesign);
   REQUIRE(config.items.at(1).kind == ConfigDeclaration::ItemKind::kDefaultLiblist);
   REQUIRE(config.items.at(2).kind == ConfigDeclaration::ItemKind::kCellUse);
+  REQUIRE(config.items.at(0).subject.front().lexeme == "top");
+  REQUIRE(config.items.at(1).libraries.front().lexeme == "work");
+  REQUIRE(config.items.at(2).subject.front().lexeme == "top");
+  REQUIRE(config.items.at(2).libraries.size() == 3);
+  REQUIRE(config.items.at(2).libraries.at(0).lexeme == "work");
+  REQUIRE(config.items.at(2).libraries.at(1).lexeme == ".");
+  REQUIRE(config.items.at(2).libraries.at(2).lexeme == "top");
 }
 
 TEST_CASE("Model semantic time literals", "[parser]") {

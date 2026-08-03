@@ -664,6 +664,8 @@ export struct ConfigDeclaration : Declaration {
   };
   struct Item {
     ItemKind kind{ItemKind::kOther};
+    std::span<Token const> subject;
+    std::span<Token const> libraries;
     std::span<Token const> tokens;
   };
   std::vector<Item> items;

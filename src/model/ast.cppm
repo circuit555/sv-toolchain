@@ -553,6 +553,11 @@ export struct CheckerDeclaration : Declaration {
   std::span<Token const> tokens;
 };
 
+export struct TokenPreservingDeclaration {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
 export struct InterfaceItemDeclaration {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -624,6 +629,7 @@ export using ModuleItem =
                  AssertionStatement, ClockingDeclaration,
                  DefaultClockingDeclaration, DefaultDisableIffDeclaration,
                  CheckerDeclaration,
+                 TokenPreservingDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
@@ -660,6 +666,7 @@ export using DesignElement =
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
                  ImportDeclaration, CheckerDeclaration,
+                 TokenPreservingDeclaration,
                  UnsupportedDesignElement>;
 
 }  // namespace svt::model

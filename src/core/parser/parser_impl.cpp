@@ -27,6 +27,7 @@ using AssertionStatement = ::svt::model::AssertionStatement;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
+using TokenPreservingDeclaration = ::svt::model::TokenPreservingDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -4265,6 +4266,9 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("checker"):
         m_token_iterator = dispatch_iterator;
         return ParseCheckerDeclaration();
+      case ::HashLexeme("bind"):
+        m_token_iterator = dispatch_iterator;
+        return ParseTokenPreservingDeclaration();
       case ::HashLexeme("class"):
         m_token_iterator = dispatch_iterator;
         return ParseClassDeclaration();
@@ -4760,6 +4764,26 @@ auto Parser::ParseCheckerDeclaration() -> CheckerDeclaration {
   return declaration;
 }
 
+auto Parser::ParseTokenPreservingDeclaration()
+    -> TokenPreservingDeclaration {
+  auto const begin{m_token_iterator};
+  auto const kind{m_token_iterator->lexeme};
+  ::AdvanceToTopLevelBoundary(
+      m_token_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "declaration");
+  if (m_token_iterator->type == TokenType::kSemicolon) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  return TokenPreservingDeclaration{.kind = kind,
+                                    .tokens = {begin, m_token_iterator}};
+}
+
 auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
   auto const begin{m_token_iterator};
   ExpectKeyword("specify", "specify block");
@@ -5210,6 +5234,12 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("restrict"):
           return ModuleItem{std::in_place_type<AssertionStatement>,
                             ParseAssertionStatement()};
+        case ::HashLexeme("bind"):
+        case ::HashLexeme("alias"):
+        case ::HashLexeme("defparam"):
+        case ::HashLexeme("let"):
+          return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
+                            ParseTokenPreservingDeclaration()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
           return ModuleItem{std::in_place_type<NetDeclaration>,

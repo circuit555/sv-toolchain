@@ -99,6 +99,7 @@ using AssertionStatement = svt::model::AssertionStatement;
 using ClockingDeclaration = svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = svt::model::CheckerDeclaration;
+using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -271,6 +272,17 @@ TEST_CASE("Parse module instance arrays", "[parser]") {
   auto const& instance = std::get<ModuleInstantiation>(module.items.front());
   REQUIRE(Lexemes(instance.instance_dimensions) ==
           std::vector<std::string_view>{"[", "3", ":", "1", "]", "[", "2", ":", "0", "]"});
+}
+
+TEST_CASE("Parse bind alias defparam and let declarations", "[parser]") {
+  Parser parser{std::string{"bind target checker_inst ci(); module m; alias a = b; defparam m.W = 1; let inc(x) = x + 1; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& bind = std::get<TokenPreservingDeclaration>(translation_unit.at(0));
+  REQUIRE(bind.kind == "bind");
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.at(1));
+  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(0)).kind == "alias");
+  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(1)).kind == "defparam");
+  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(2)).kind == "let");
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

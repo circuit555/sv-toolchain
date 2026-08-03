@@ -5571,6 +5571,9 @@ auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
                std::ranges::contains(item_tokens, "liblist",
                                      &Token::lexeme)) {
       item.kind = ConfigDeclaration::ItemKind::kInstanceLiblist;
+    } else if (item_tokens.front().lexeme == "instance" and
+               std::ranges::contains(item_tokens, "use", &Token::lexeme)) {
+      item.kind = ConfigDeclaration::ItemKind::kInstanceUse;
     }
     auto const first_after{std::next(item_tokens.begin())};
     auto const liblist_iterator{rng::find_if(
@@ -5592,6 +5595,11 @@ auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
       item.subject = {first_after, liblist_iterator};
       if (liblist_iterator != item_tokens.end()) {
         item.libraries = {std::next(liblist_iterator), item_tokens.end()};
+      }
+    } else if (item.kind == ConfigDeclaration::ItemKind::kInstanceUse) {
+      item.subject = {first_after, use_iterator};
+      if (use_iterator != item_tokens.end()) {
+        item.libraries = {std::next(use_iterator), item_tokens.end()};
       }
     }
     declaration.items.push_back(item);

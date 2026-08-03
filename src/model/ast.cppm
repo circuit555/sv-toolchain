@@ -730,7 +730,7 @@ export struct CovergroupDeclaration : Declaration {
 
 export struct ConfigDeclaration : Declaration {
   enum class ItemKind : std::uint8_t {
-    kDesign, kDefaultLiblist, kCellUse, kInstanceLiblist, kOther
+    kDesign, kDefaultLiblist, kCellUse, kInstanceLiblist, kInstanceUse, kOther
   };
   struct Item {
     ItemKind kind{ItemKind::kOther};

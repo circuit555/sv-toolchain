@@ -28,6 +28,7 @@ class TokenParserBase {
 
   tokens_t m_tokens;
   tokens_t::iterator m_token_iterator;
+  bool m_parsing_macromodule{false};
 };
 
 /// @brief Lexical analyzer for SystemVerilog source text.
@@ -110,6 +111,8 @@ export class Parser final : private TokenParserBase {
   auto ParseExportDeclaration() -> ::svt::model::ExportDeclaration;
 
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
+  auto ParseProgramDeclaration() -> ::svt::model::ProgramDeclaration;
+  auto ParsePrimitiveDeclaration() -> ::svt::model::PrimitiveDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
   auto ParseTypeDeclaration() -> ::svt::model::TypeDeclaration;

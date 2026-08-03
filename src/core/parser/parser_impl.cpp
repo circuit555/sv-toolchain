@@ -16,6 +16,9 @@ using token_stream_t = ::svt::model::token_stream_t;
 using SourceLocation = ::svt::model::SourceLocation;
 using DesignElement = ::svt::model::DesignElement;
 using ModuleDeclaration = ::svt::model::ModuleDeclaration;
+using ModuleSourceKind = ::svt::model::ModuleSourceKind;
+using ProgramDeclaration = ::svt::model::ProgramDeclaration;
+using PrimitiveDeclaration = ::svt::model::PrimitiveDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -2640,10 +2643,13 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
 auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
+  auto const keyword{module_declaration.source_kind == ModuleSourceKind::kMacromodule
+                         ? "macromodule"
+                         : "module"};
   if (rng::empty(module_declaration.lifetime)) {
-    fmt::println("module {}", module_declaration.name);
+    fmt::println("{} {}", keyword, module_declaration.name);
   } else {
-    fmt::println("module {} {}", module_declaration.lifetime,
+    fmt::println("{} {} {}", keyword, module_declaration.lifetime,
                  module_declaration.name);
   }
 
@@ -2814,6 +2820,38 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
           },
           item);
     }
+  }
+}
+
+auto PrintProgram(ProgramDeclaration const& declaration) -> void {
+  if (rng::empty(declaration.lifetime)) {
+    fmt::println("program {}", declaration.name);
+  } else {
+    fmt::println("program {} {}", declaration.lifetime, declaration.name);
+  }
+  for (auto const& item : declaration.items) {
+    std::visit(
+        [](auto const& resolved_item) {
+          using Item = std::remove_cvref_t<decltype(resolved_item)>;
+          if constexpr (std::same_as<Item, TimeDeclaration>) {
+            PrintTimeDeclaration(resolved_item, "  ");
+          } else if constexpr (std::same_as<Item, UnsupportedModuleItem>) {
+            fmt::println("  {} <unsupported>", resolved_item.kind);
+          } else {
+            fmt::println("  <program item>");
+          }
+        },
+        item);
+  }
+}
+
+auto PrintPrimitive(PrimitiveDeclaration const& declaration) -> void {
+  fmt::println("primitive {}", declaration.name);
+  if (not rng::empty(declaration.table)) {
+    fmt::println("  table");
+  }
+  if (not rng::empty(declaration.initial_statement)) {
+    fmt::println("  {}", JoinLexemes(declaration.initial_statement));
   }
 }
 // NOLINTEND(readability-function-cognitive-complexity)
@@ -3631,7 +3669,7 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
       "endfunction",  "endgenerate", "endgroup",     "endinterface",
       "endmodule",    "endpackage",  "endprimitive", "endprogram",
       "endproperty",  "endsequence", "endcase",      "endspecify",
-      "endtask",      "event",       "export",       "extern",
+      "endtask",      "endtable",    "event",       "export",       "extern",
       "final",        "for",         "force",        "foreach",
       "forever",      "fork",        "function",     "generate",
       "genvar",       "global",      "if",           "import",
@@ -3639,7 +3677,7 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
       "interface",    "inout",       "join",         "join_any",
       "join_none",    "let",         "localparam",   "logic",
       "modport",      "longint",     "macromodule",  "module",
-      "nettype",      "output",      "package",      "parameter",
+      "nettype",      "output",      "package",      "parameter",     "table",
       "primitive",    "program",     "property",     "real",
       "realtime",     "ref",         "reg",          "release",
       "repeat",       "restrict",    "sequence",     "shortint",
@@ -3929,8 +3967,16 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
         [](auto const& resolved_node) -> void {
           if constexpr (std::same_as<
                             std::remove_cvref_t<decltype(resolved_node)>,
-                            ModuleDeclaration>) {
+            ModuleDeclaration>) {
             ::PrintModule(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   ProgramDeclaration>) {
+            PrintProgram(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   PrimitiveDeclaration>) {
+            PrintPrimitive(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
                                    PackageDeclaration>) {
@@ -4159,6 +4205,22 @@ auto Parser::ParseDesignElement() -> DesignElement {
         m_token_iterator = dispatch_iterator;
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
         return ParseModuleDeclaration();
+      case ::HashLexeme("macromodule"):
+        m_token_iterator = dispatch_iterator;
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        {
+          m_parsing_macromodule = true;
+          auto declaration = ParseModuleDeclaration();
+          m_parsing_macromodule = false;
+          declaration.source_kind = ModuleSourceKind::kMacromodule;
+          return declaration;
+        }
+      case ::HashLexeme("program"):
+        m_token_iterator = dispatch_iterator;
+        return ParseProgramDeclaration();
+      case ::HashLexeme("primitive"):
+        m_token_iterator = dispatch_iterator;
+        return ParsePrimitiveDeclaration();
       case ::HashLexeme("package"):
         return ParsePackageDeclaration();
       case ::HashLexeme("interface"):
@@ -4438,6 +4500,92 @@ auto Parser::ParseUnsupportedDesignElement() -> UnsupportedDesignElement {
       .tokens = std::span{element_begin_iterator, m_token_iterator}};
 }
 
+auto Parser::ParseProgramDeclaration() -> ProgramDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  ExpectKeyword("program", "program declaration");
+
+  ProgramDeclaration declaration{};
+  if (m_token_iterator->IsKeyword("automatic") or
+      m_token_iterator->IsKeyword("static")) {
+    declaration.lifetime = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  if (m_token_iterator->type != TokenType::kIdentifier) {
+    throw std::runtime_error{"[Parser] expected program name"};
+  }
+  declaration.name = m_token_iterator->lexeme;
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  if (m_token_iterator->type == TokenType::kLParen) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    declaration.ports = ParsePorts();
+  }
+  ExpectToken(TokenType::kSemicolon, "program declaration");
+
+  while (m_token_iterator->type != TokenType::kEndOfFile and
+         not m_token_iterator->IsKeyword("endprogram")) {
+    if (m_token_iterator->IsKeyword("timeunit") or
+        m_token_iterator->IsKeyword("timeprecision")) {
+      declaration.items.emplace_back(ParseTimeDeclaration());
+    } else {
+      declaration.items.emplace_back(ParseModuleItem());
+    }
+  }
+  ExpectKeyword("endprogram", "program declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParsePrimitiveDeclaration() -> PrimitiveDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  ExpectKeyword("primitive", "primitive declaration");
+  PrimitiveDeclaration declaration{};
+  if (m_token_iterator->type != TokenType::kIdentifier) {
+    throw std::runtime_error{"[Parser] expected primitive name"};
+  }
+  declaration.name = m_token_iterator->lexeme;
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  ExpectToken(TokenType::kLParen, "primitive declaration");
+  declaration.ports = ParsePorts();
+  ExpectToken(TokenType::kSemicolon, "primitive declaration");
+
+  if (m_token_iterator->IsKeyword("table")) {
+    auto const table_begin{m_token_iterator};
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    auto const table_end{rng::find_if(
+        tokens_t{m_token_iterator, rng::cend(m_tokens)},
+        [](Token const& token) { return token.IsKeyword("endtable"); })};
+    if (table_end == rng::cend(m_tokens)) {
+      throw std::runtime_error{"[Parser] expected 'endtable'"};
+    }
+    declaration.table = {table_begin, table_end};
+    m_token_iterator = rng::next(table_end, 1, rng::cend(m_tokens));
+  }
+
+  if (m_token_iterator->IsKeyword("initial")) {
+    auto const initial_begin{m_token_iterator};
+    ::AdvanceToTopLevelBoundary(
+        m_token_iterator, rng::cend(m_tokens),
+        [](tokens_t::iterator const token_iterator) {
+          return token_iterator->type == TokenType::kEndOfFile or
+                 token_iterator->IsKeyword("endprimitive");
+        },
+        [](tokens_t::iterator const token_iterator) {
+          return token_iterator->type == TokenType::kSemicolon;
+        },
+        true, BoundaryEndBehavior::kStopAtEnd, "primitive initial statement");
+    if (m_token_iterator->type == TokenType::kSemicolon) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    }
+    declaration.initial_statement = {initial_begin, m_token_iterator};
+  }
+
+  ExpectKeyword("endprimitive", "primitive declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::SkipUnsupportedElementToSemicolon(
     std::string_view const stop_keyword) -> void {
   ::AdvanceToTopLevelBoundary(
@@ -4591,7 +4739,17 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
       continue;
     }
 
-    module_declaration.items.push_back(ParseModuleItem());
+    if (m_parsing_macromodule) {
+      auto const module_item_begin_iterator{m_token_iterator};
+      try {
+        module_declaration.items.push_back(ParseModuleItem());
+      } catch (std::runtime_error const&) {
+        m_token_iterator = module_item_begin_iterator;
+        module_declaration.items.emplace_back(ParseUnsupportedModuleItem());
+      }
+    } else {
+      module_declaration.items.push_back(ParseModuleItem());
+    }
   }
 
   if (m_token_iterator->lexeme == "endmodule") {

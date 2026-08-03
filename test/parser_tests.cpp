@@ -88,6 +88,9 @@ using WaitKind = svt::model::WaitKind;
 using ForkJoinKind = svt::model::ForkJoinKind;
 using ProceduralContinuousAssignKind =
     svt::model::ProceduralContinuousAssignKind;
+using ProgramDeclaration = svt::model::ProgramDeclaration;
+using PrimitiveDeclaration = svt::model::PrimitiveDeclaration;
+using ModuleSourceKind = svt::model::ModuleSourceKind;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -138,6 +141,45 @@ auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
   return source;
 }
 }  // namespace
+
+TEST_CASE("Parse program and primitive declarations", "[parser]") {
+  std::string src = R"(
+    program automatic p(input clk);
+      timeunit 1ns;
+      integer value;
+      initial value = 1;
+    endprogram : p
+    primitive udp(output y, input a);
+      table
+        0 : 1;
+      endtable
+      initial y = 0;
+    endprimitive : udp
+  )";
+
+  Parser parser{std::move(src)};
+  auto translation_unit = parser.Parse();
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& program = std::get<ProgramDeclaration>(translation_unit.at(0));
+  REQUIRE(program.name == "p");
+  REQUIRE(program.lifetime == "automatic");
+  REQUIRE(program.ports.size() == 1);
+  REQUIRE(program.items.size() == 3);
+
+  auto const& primitive =
+      std::get<PrimitiveDeclaration>(translation_unit.at(1));
+  REQUIRE(primitive.name == "udp");
+  REQUIRE(primitive.ports.size() == 2);
+  REQUIRE_FALSE(primitive.table.empty());
+  REQUIRE_FALSE(primitive.initial_statement.empty());
+
+  Parser macro_parser{"macromodule legacy; endmodule : legacy"};
+  auto macro_translation_unit = macro_parser.Parse();
+  auto const& macromodule = std::get<svt::model::ModuleDeclaration>(
+      macro_translation_unit.front());
+  REQUIRE(macromodule.source_kind == ModuleSourceKind::kMacromodule);
+}
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
   std::string src = R"(

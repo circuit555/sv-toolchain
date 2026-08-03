@@ -99,6 +99,7 @@ using AssertionStatement = svt::model::AssertionStatement;
 using ClockingDeclaration = svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = svt::model::CheckerDeclaration;
+using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -252,6 +253,15 @@ TEST_CASE("Parse checker declarations", "[parser]") {
   REQUIRE(checker.name == "c");
   REQUIRE(checker.ports.size() == 1);
   REQUIRE_FALSE(checker.body.empty());
+}
+
+TEST_CASE("Parse null generate items", "[parser]") {
+  Parser parser{std::string{"module m; generate ; if (1) ; endgenerate endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& region = GenItemAs<GenerateRegion>(
+      std::get<GenerateItem>(module.items.front()));
+  REQUIRE(std::holds_alternative<NullGenerateItem>(region.items.front()->node));
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

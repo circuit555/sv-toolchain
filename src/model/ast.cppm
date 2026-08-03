@@ -495,10 +495,12 @@ export struct UnsupportedGenerateItem {
   std::string_view kind;
 };
 
+export struct NullGenerateItem {};
+
 export using GenerateItemNode =
     std::variant<GenvarDeclaration, GenerateFor, GenerateIf, GenerateCase,
                  GenerateRegion, ContinuousAssign, NetDeclaration,
-                 ModuleInstantiation, UnsupportedGenerateItem>;
+                 ModuleInstantiation, NullGenerateItem, UnsupportedGenerateItem>;
 
 export struct GenerateItem {
   GenerateItemNode node;

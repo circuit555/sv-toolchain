@@ -5343,6 +5343,28 @@ auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
                                      &Token::lexeme)) {
       item.kind = ConfigDeclaration::ItemKind::kInstanceLiblist;
     }
+    auto const first_after{std::next(item_tokens.begin())};
+    auto const liblist_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.lexeme == "liblist"; })};
+    auto const use_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.lexeme == "use"; })};
+    if (item.kind == ConfigDeclaration::ItemKind::kDesign) {
+      item.subject = {first_after, item_tokens.end()};
+    } else if (item.kind == ConfigDeclaration::ItemKind::kDefaultLiblist) {
+      if (liblist_iterator != item_tokens.end()) {
+        item.libraries = {std::next(liblist_iterator), item_tokens.end()};
+      }
+    } else if (item.kind == ConfigDeclaration::ItemKind::kCellUse) {
+      item.subject = {first_after, use_iterator};
+      if (use_iterator != item_tokens.end()) {
+        item.libraries = {std::next(use_iterator), item_tokens.end()};
+      }
+    } else if (item.kind == ConfigDeclaration::ItemKind::kInstanceLiblist) {
+      item.subject = {first_after, liblist_iterator};
+      if (liblist_iterator != item_tokens.end()) {
+        item.libraries = {std::next(liblist_iterator), item_tokens.end()};
+      }
+    }
     declaration.items.push_back(item);
   }
   m_token_iterator = end_iterator;

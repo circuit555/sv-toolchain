@@ -405,6 +405,16 @@ export struct ClassDeclaration : Declaration {
   std::span<Token const> tokens;
 };
 
+export struct SubroutineDeclaration : Declaration {
+  bool task{false};
+  bool extern_declaration{false};
+  std::string_view lifetime;
+  std::span<Token const> return_type;
+  std::span<Token const> ports;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct AlwaysBlock {
   ProceduralBlockKind kind{ProceduralBlockKind::kAlways};
   StatementPtr statement;
@@ -571,6 +581,7 @@ export using ModuleItem =
                  UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
                  InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
                  TimeDeclaration, ImportDeclaration, ClassDeclaration,
+                 SubroutineDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
@@ -605,7 +616,8 @@ export struct UnsupportedDesignElement {
 export using DesignElement =
     std::variant<ModuleDeclaration, ProgramDeclaration, PrimitiveDeclaration,
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
-                 TypeDeclaration, TimeDeclaration, ImportDeclaration,
+                 SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
+                 ImportDeclaration,
                  UnsupportedDesignElement>;
 
 }  // namespace svt::model

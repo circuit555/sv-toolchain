@@ -92,6 +92,7 @@ using ProgramDeclaration = svt::model::ProgramDeclaration;
 using PrimitiveDeclaration = svt::model::PrimitiveDeclaration;
 using ModuleSourceKind = svt::model::ModuleSourceKind;
 using ClassDeclaration = svt::model::ClassDeclaration;
+using SubroutineDeclaration = svt::model::SubroutineDeclaration;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -180,6 +181,29 @@ TEST_CASE("Parse program and primitive declarations", "[parser]") {
   auto const& macromodule = std::get<svt::model::ModuleDeclaration>(
       macro_translation_unit.front());
   REQUIRE(macromodule.source_kind == ModuleSourceKind::kMacromodule);
+}
+
+TEST_CASE("Parse subroutine declarations", "[parser]") {
+  Parser parser{std::string{R"(
+    function int top(input int value); endfunction : top
+    module m;
+      task automatic work(input int value); endtask
+      extern function void declared(input int value);
+    endmodule
+  )"}};
+  auto translation_unit = parser.Parse();
+  auto const& function_declaration =
+      std::get<SubroutineDeclaration>(translation_unit.at(0));
+  REQUIRE_FALSE(function_declaration.task);
+  REQUIRE(function_declaration.name == "top");
+  REQUIRE_FALSE(function_declaration.body.empty());
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.at(1));
+  REQUIRE(std::holds_alternative<SubroutineDeclaration>(module.items.at(0)));
+  auto const& task = std::get<SubroutineDeclaration>(module.items.at(0));
+  REQUIRE(task.task);
+  REQUIRE(task.lifetime == "automatic");
+  REQUIRE(std::get<SubroutineDeclaration>(module.items.at(1))
+              .extern_declaration);
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

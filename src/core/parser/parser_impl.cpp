@@ -20,6 +20,7 @@ using ModuleSourceKind = ::svt::model::ModuleSourceKind;
 using ProgramDeclaration = ::svt::model::ProgramDeclaration;
 using PrimitiveDeclaration = ::svt::model::PrimitiveDeclaration;
 using ClassDeclaration = ::svt::model::ClassDeclaration;
+using SubroutineDeclaration = ::svt::model::SubroutineDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -3988,6 +3989,15 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             PrintInterface(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   ClassDeclaration>) {
+            fmt::println("class {}", resolved_node.name);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   SubroutineDeclaration>) {
+            fmt::println("{} {}", resolved_node.task ? "task" : "function",
+                         resolved_node.name);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    TypeDeclaration>) {
             PrintTypeDeclaration(resolved_node);
           } else if constexpr (std::same_as<
@@ -4229,6 +4239,10 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("class"):
         m_token_iterator = dispatch_iterator;
         return ParseClassDeclaration();
+      case ::HashLexeme("function"):
+      case ::HashLexeme("task"):
+        m_token_iterator = dispatch_iterator;
+        return ParseSubroutineDeclaration();
       case ::HashLexeme("package"):
         return ParsePackageDeclaration();
       case ::HashLexeme("interface"):
@@ -4632,6 +4646,62 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
   return declaration;
 }
 
+auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  SubroutineDeclaration declaration{};
+  declaration.task = m_token_iterator->IsKeyword("task");
+  declaration.extern_declaration = m_token_iterator->IsKeyword("extern");
+  if (declaration.extern_declaration) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  ExpectKeyword(declaration.task ? "task" : "function", "subroutine declaration");
+  if (m_token_iterator->IsKeyword("automatic") or
+      m_token_iterator->IsKeyword("static")) {
+    declaration.lifetime = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const header_begin{m_token_iterator};
+  auto name_iterator{m_token_iterator};
+  while (name_iterator != rng::cend(m_tokens) and
+         name_iterator->type != TokenType::kLParen and
+         name_iterator->type != TokenType::kSemicolon) {
+    if (name_iterator->type == TokenType::kIdentifier) {
+      declaration.name = name_iterator->lexeme;
+    }
+    rng::advance(name_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const header_end{name_iterator};
+  declaration.return_type = {header_begin, header_end};
+  if (m_token_iterator->type == TokenType::kLParen) {
+    auto const ports_begin{m_token_iterator};
+    auto const ports_end{FindMatchingDelimiter(
+        m_token_iterator, rng::cend(m_tokens), TokenType::kLParen,
+        TokenType::kRParen)};
+    declaration.ports = {ports_begin, ports_end};
+    m_token_iterator = rng::next(ports_end, 1, rng::cend(m_tokens));
+  }
+  if (m_token_iterator->type == TokenType::kSemicolon) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  if (declaration.extern_declaration) {
+    declaration.tokens = {declaration_begin_iterator, m_token_iterator};
+    return declaration;
+  }
+  auto const body_begin{m_token_iterator};
+  auto const end_keyword{declaration.task ? "endtask" : "endfunction"};
+  ::AdvanceToMatchingEndKeyword(
+      m_token_iterator, rng::cend(m_tokens), declaration.task ? "task" : "function",
+      end_keyword, 0UZ,
+      [](tokens_t::iterator const iterator, std::string_view keyword) {
+        return iterator->IsKeyword(keyword);
+      });
+  declaration.body = {body_begin, m_token_iterator};
+  ExpectKeyword(end_keyword, "subroutine declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::SkipUnsupportedElementToSemicolon(
     std::string_view const stop_keyword) -> void {
   ::AdvanceToTopLevelBoundary(
@@ -4911,6 +4981,14 @@ auto Parser::ParseModuleItem() -> ModuleItem {
 
   switch (m_token_iterator->type) {
     case TokenType::kKeyword: {
+      if (m_token_iterator->IsKeyword("extern") and
+          rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+              rng::cend(m_tokens) and
+          (rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("function") or
+           rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("task"))) {
+        return ModuleItem{std::in_place_type<SubroutineDeclaration>,
+                          ParseSubroutineDeclaration()};
+      }
       switch (::HashLexeme(m_token_iterator->lexeme)) {
         case ::HashLexeme("timeunit"):
         case ::HashLexeme("timeprecision"):
@@ -4919,6 +4997,10 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("class"):
           return ModuleItem{std::in_place_type<ClassDeclaration>,
                             ParseClassDeclaration()};
+        case ::HashLexeme("function"):
+        case ::HashLexeme("task"):
+          return ModuleItem{std::in_place_type<SubroutineDeclaration>,
+                            ParseSubroutineDeclaration()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
           return ModuleItem{std::in_place_type<NetDeclaration>,

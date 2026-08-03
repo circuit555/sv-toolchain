@@ -610,6 +610,16 @@ TEST_CASE("Parse expression casts", "[parser]") {
           std::vector<std::string_view>{"x", "+", "1"});
 }
 
+TEST_CASE("Parse scoped type casts", "[parser]") {
+  Parser parser{std::string{"module m; assign y = pkg::T'(x); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& assign = std::get<ContinuousAssign>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  auto const& cast = ExprAs<CastExpression>(*assign.right_hand_side);
+  REQUIRE(Lexemes(cast.type_specifier) ==
+          std::vector<std::string_view>{"pkg", "::", "T"});
+}
+
 TEST_CASE("Parse DPI declarations and subroutine defaults", "[parser]") {
   Parser parser{std::string{"import \"DPI-C\" function void dpi(input int x); export \"DPI-C\" function void dpo(input int x); function void f(input int x = 1); endfunction"}};
   auto translation_unit = parser.Parse();

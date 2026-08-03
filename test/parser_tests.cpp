@@ -254,9 +254,11 @@ TEST_CASE("Parse assertion declarations and statements", "[parser]") {
   auto const& property = std::get<AssertionDeclaration>(module.items.at(0));
   REQUIRE_FALSE(property.sequence);
   REQUIRE(property.name == "p");
+  REQUIRE_FALSE(property.header.empty());
   auto const& sequence = std::get<AssertionDeclaration>(module.items.at(1));
   REQUIRE(sequence.sequence);
   REQUIRE(sequence.name == "s");
+  REQUIRE(sequence.ports.empty());
   auto const& assertion = std::get<AssertionStatement>(module.items.at(2));
   REQUIRE(assertion.kind == "assert");
   REQUIRE_FALSE(assertion.expression.empty());

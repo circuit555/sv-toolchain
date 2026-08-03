@@ -5480,6 +5480,7 @@ auto Parser::ParseAssertionDeclaration() -> AssertionDeclaration {
   auto const start_keyword{declaration.sequence ? "sequence" : "property"};
   auto const end_keyword{declaration.sequence ? "endsequence" : "endproperty"};
   ExpectKeyword(start_keyword, "assertion declaration");
+  auto const header_begin{m_token_iterator};
   while (m_token_iterator->type != TokenType::kSemicolon and
          m_token_iterator->type != TokenType::kEndOfFile) {
     if (m_token_iterator->type == TokenType::kIdentifier and
@@ -5487,6 +5488,19 @@ auto Parser::ParseAssertionDeclaration() -> AssertionDeclaration {
       declaration.name = m_token_iterator->lexeme;
     }
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const header_end{m_token_iterator};
+  declaration.header = {header_begin, header_end};
+  auto const ports_begin{rng::find_if(
+      declaration.header,
+      [](Token const& token) { return token.type == TokenType::kLParen; })};
+  if (ports_begin != declaration.header.end()) {
+    auto const ports_end{rng::find_if(
+        std::next(ports_begin), declaration.header.end(),
+        [](Token const& token) { return token.type == TokenType::kRParen; })};
+    if (ports_end != declaration.header.end()) {
+      declaration.ports = {std::next(ports_begin), ports_end};
+    }
   }
   ExpectToken(TokenType::kSemicolon, "assertion declaration");
   auto const body_begin{m_token_iterator};

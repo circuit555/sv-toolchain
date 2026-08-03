@@ -26,6 +26,7 @@ using SpecifyBlock = ::svt::model::SpecifyBlock;
 using AssertionDeclaration = ::svt::model::AssertionDeclaration;
 using AssertionStatement = ::svt::model::AssertionStatement;
 using CastExpression = ::svt::model::CastExpression;
+using MemberAccessExpression = ::svt::model::MemberAccessExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -782,6 +783,22 @@ class ExpressionParser final : private TokenParserBase {
 
     while (not AtEnd()) {
       auto const begin_iterator{rng::cbegin(expression->tokens)};
+
+      if (m_token_iterator->lexeme == "." or
+          m_token_iterator->lexeme == "::") {
+        auto const separator{m_token_iterator->lexeme};
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        if (AtEnd() or (m_token_iterator->type != TokenType::kIdentifier and
+                        m_token_iterator->type != TokenType::kKeyword)) {
+          throw std::runtime_error{"[Parser] expected member name"};
+        }
+        auto const member{m_token_iterator->lexeme};
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        expression = std::make_unique<Expression>(
+            ExpressionNode{std::in_place_type<MemberAccessExpression>,
+                           std::move(expression), separator, member},
+            tokens_t{begin_iterator, m_token_iterator});
+      } else
 
       if (MatchToken(TokenType::kLBracket)) {
         auto left{ParseConditionalExpression()};

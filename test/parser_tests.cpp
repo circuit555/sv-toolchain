@@ -105,6 +105,7 @@ using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
 using CastExpression = svt::model::CastExpression;
 using DpiDeclaration = svt::model::DpiDeclaration;
+using MemberAccessExpression = svt::model::MemberAccessExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -375,6 +376,19 @@ TEST_CASE("Parse DPI declarations and subroutine defaults", "[parser]") {
   REQUIRE(function.default_arguments.size() == 1);
   REQUIRE(Lexemes(function.default_arguments.front()) ==
           std::vector<std::string_view>{"1"});
+}
+
+TEST_CASE("Parse member and scoped expression access", "[parser]") {
+  Parser parser{std::string{"module m; assign y = obj.field + pkg::value; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& assign = std::get<ContinuousAssign>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  auto const& binary = ExprAs<BinaryExpression>(*assign.right_hand_side);
+  auto const& member = ExprAs<MemberAccessExpression>(*binary.left);
+  REQUIRE(member.member == "field");
+  auto const& scoped = ExprAs<MemberAccessExpression>(*binary.right);
+  REQUIRE(scoped.separator == "::");
+  REQUIRE(scoped.member == "value");
 }
 
 TEST_CASE("Parse all.sv regression fixture", "[parser][regression]") {

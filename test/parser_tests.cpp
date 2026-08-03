@@ -351,6 +351,21 @@ TEST_CASE("Parse covergroup declarations", "[parser]") {
   REQUIRE(covergroup.items.front().name == "cp");
 }
 
+TEST_CASE("Parse covergroup conditions and transition bins", "[parser]") {
+  Parser parser{std::string{"module m; covergroup cg; c: coverpoint x iff (en) { bins t = (1 => 2); bins w = x with (item > 0); } endgroup endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
+  REQUIRE(covergroup.items.size() == 1);
+  auto const& item = covergroup.items.front();
+  REQUIRE(item.name == "c");
+  REQUIRE_FALSE(item.expression.empty());
+  REQUIRE_FALSE(item.iff_condition.empty());
+  REQUIRE(item.transition);
+  REQUIRE_FALSE(item.with_clause.empty());
+  REQUIRE(item.bins.size() == 2);
+}
+
 TEST_CASE("Parse config declarations", "[parser]") {
   Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
   auto translation_unit = parser.Parse();

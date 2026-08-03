@@ -5255,6 +5255,33 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
         std::prev(colon_iterator)->type == TokenType::kIdentifier) {
       item.name = std::prev(colon_iterator)->lexeme;
     }
+    auto const coverpoint_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.lexeme == "coverpoint"; })};
+    if (coverpoint_iterator != item_tokens.end()) {
+      auto expression_begin{std::next(coverpoint_iterator)};
+      auto expression_end{item_tokens.end()};
+      for (auto iterator{expression_begin}; iterator != item_tokens.end(); ++iterator) {
+        if (iterator->lexeme == "iff" or iterator->lexeme == "{") {
+          expression_end = iterator;
+          break;
+        }
+      }
+      item.expression = {expression_begin, expression_end};
+    }
+    auto const iff_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.lexeme == "iff"; })};
+    if (iff_iterator != item_tokens.end()) {
+      item.iff_condition = {std::next(iff_iterator), item_tokens.end()};
+    }
+    auto const with_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.lexeme == "with"; })};
+    if (with_iterator != item_tokens.end()) {
+      item.with_clause = {with_iterator, item_tokens.end()};
+    }
+    item.transition = rng::find_if(item_tokens, [](Token const& token) {
+      return token.lexeme == "=>" or token.lexeme == "->" or
+             token.lexeme == "[->" or token.lexeme == "[=";
+    }) != item_tokens.end();
     for (auto iterator{item_tokens.begin()}; iterator != item_tokens.end();
          ++iterator) {
       if (iterator->lexeme != "bins" and iterator->lexeme != "ignore_bins") {

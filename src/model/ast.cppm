@@ -504,6 +504,8 @@ export struct SpecifyBlock {
 export struct AssertionDeclaration {
   bool sequence{false};
   std::string_view name;
+  std::span<Token const> header;
+  std::span<Token const> ports;
   std::span<Token const> body;
   std::span<Token const> tokens;
 };

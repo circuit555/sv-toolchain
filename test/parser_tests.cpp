@@ -115,6 +115,7 @@ using CastExpression = svt::model::CastExpression;
 using DpiDeclaration = svt::model::DpiDeclaration;
 using MemberAccessExpression = svt::model::MemberAccessExpression;
 using StreamingConcatenationExpression = svt::model::StreamingConcatenationExpression;
+using DistributionExpression = svt::model::DistributionExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -452,6 +453,24 @@ TEST_CASE("Parse keyed assignment patterns", "[parser]") {
   REQUIRE(pattern.entries.size() == 2);
   REQUIRE(pattern.entries.at(0).key.front().lexeme == "key");
   REQUIRE(pattern.entries.at(1).key.front().lexeme == "default");
+}
+
+TEST_CASE("Parse distribution expressions", "[parser]") {
+  Parser parser{std::string{"module m; initial value = a dist { [1:2] :/ 3, 4 }; endmodule"}};
+  auto translation_unit = parser.Parse();
+  REQUIRE_FALSE(translation_unit.empty());
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assignment = StmtAs<AssignmentStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(std::holds_alternative<DistributionExpression>(
+      assignment.right_hand_side->node));
+  auto const& distribution = std::get<DistributionExpression>(
+      assignment.right_hand_side->node);
+  REQUIRE(ExprAs<IdentifierExpression>(*distribution.value).name == "a");
+  REQUIRE(distribution.distributions.front().lexeme == "[");
+  REQUIRE(std::ranges::find_if(distribution.distributions, [](auto const& token) {
+            return token.lexeme == ":/";
+          }) != distribution.distributions.end());
 }
 
 TEST_CASE("Parse config declarations", "[parser]") {

@@ -29,6 +29,7 @@ using CastExpression = ::svt::model::CastExpression;
 using MemberAccessExpression = ::svt::model::MemberAccessExpression;
 using StreamingConcatenationExpression =
     ::svt::model::StreamingConcatenationExpression;
+using DistributionExpression = ::svt::model::DistributionExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -241,6 +242,7 @@ auto constexpr kBinaryOperatorPrecedences{
         {.lexeme = "!=?", .precedence = 7},
         {.lexeme = "inside", .precedence = 7},
         {.lexeme = "matches", .precedence = 7},
+        {.lexeme = "dist", .precedence = 7},
         {.lexeme = "<", .precedence = 8},
         {.lexeme = ">", .precedence = 8},   {.lexeme = "<=", .precedence = 8},
         {.lexeme = ">=", .precedence = 8},  {.lexeme = "<<", .precedence = 9},
@@ -768,6 +770,21 @@ class ExpressionParser final : private TokenParserBase {
       }
 
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      if (operator_token.lexeme == "dist" and
+          m_token_iterator != rng::cend(m_tokens) and
+          m_token_iterator->type == TokenType::kLBrace) {
+        auto const distributions{::ConsumeBalancedDelimitedTokens(
+            m_token_iterator, rng::cend(m_tokens), TokenType::kLBrace,
+            TokenType::kRBrace, "distribution expression")};
+        m_token_iterator = rng::next(rng::cend(distributions), 1,
+                                      rng::cend(m_tokens));
+        auto const begin_iterator{rng::cbegin(expression->tokens)};
+        expression = std::make_unique<Expression>(
+            ExpressionNode{std::in_place_type<DistributionExpression>,
+                           std::move(expression), distributions},
+            tokens_t{begin_iterator, m_token_iterator});
+        return expression;
+      }
       auto const next_minimum_precedence{
           (operator_token.lexeme == "**" or
            operator_token.type == TokenType::kEquals)

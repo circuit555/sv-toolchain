@@ -111,6 +111,11 @@ export struct StreamingConcatenationExpression {
   std::span<Token const> elements;
 };
 
+export struct DistributionExpression {
+  ExpressionPtr value;
+  std::span<Token const> distributions;
+};
+
 export struct ReplicationExpression {
   ExpressionPtr count;
   std::vector<ExpressionPtr> expressions;
@@ -151,6 +156,7 @@ export using ExpressionNode =
                  BinaryExpression, ConditionalExpression, IndexExpression,
                  RangeSelectExpression, ConcatenationExpression,
                  StreamingConcatenationExpression,
+                 DistributionExpression,
                  ReplicationExpression, CallExpression,
                  AssignmentPatternExpression, CastExpression,
                  MemberAccessExpression,

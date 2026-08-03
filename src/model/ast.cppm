@@ -116,6 +116,12 @@ export struct DistributionExpression {
   std::span<Token const> distributions;
 };
 
+export struct MinTypMaxExpression {
+  ExpressionPtr minimum;
+  ExpressionPtr typical;
+  ExpressionPtr maximum;
+};
+
 export struct ReplicationExpression {
   ExpressionPtr count;
   std::vector<ExpressionPtr> expressions;
@@ -157,6 +163,7 @@ export using ExpressionNode =
                  RangeSelectExpression, ConcatenationExpression,
                  StreamingConcatenationExpression,
                  DistributionExpression,
+                 MinTypMaxExpression,
                  ReplicationExpression, CallExpression,
                  AssignmentPatternExpression, CastExpression,
                  MemberAccessExpression,

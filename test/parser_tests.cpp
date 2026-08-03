@@ -40,6 +40,7 @@ using InterfaceSubroutineDeclaration =
 using DefaultClockingDeclaration = svt::model::DefaultClockingDeclaration;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
+using UnsupportedGenerateItem = svt::model::UnsupportedGenerateItem;
 using TimeDeclaration = svt::model::TimeDeclaration;
 using TimeDeclarationKind = svt::model::TimeDeclarationKind;
 using PackageDeclaration = svt::model::PackageDeclaration;
@@ -2288,4 +2289,41 @@ TEST_CASE("Parse all SystemVerilog fixture as compilation unit", "[parser]") {
         std::get_if<ModuleDeclaration>(&design_element)};
     return module_declaration != nullptr and module_declaration->name == "m9";
   }));
+}
+
+TEST_CASE("all.sv has no unsupported AST variants", "[parser][regression]") {
+  Parser parser{ReadFixture("all.sv")};
+  auto translation_unit = parser.Parse();
+  std::size_t unsupported = 0;
+  for (auto const& element : translation_unit) {
+    std::visit(
+        [&unsupported](auto const& value) {
+          using Value = std::remove_cvref_t<decltype(value)>;
+          if constexpr (std::same_as<Value, UnsupportedDesignElement>) {
+            ++unsupported;
+          } else if constexpr (std::same_as<Value, ModuleDeclaration>) {
+            for (auto const& item : value.items) {
+              std::visit(
+                  [&unsupported](auto const& module_item) {
+                    using Item = std::remove_cvref_t<decltype(module_item)>;
+                    if constexpr (std::same_as<Item, UnsupportedModuleItem>) {
+                      ++unsupported;
+                    } else if constexpr (std::same_as<Item, GenerateItem>) {
+                      std::visit(
+                          [&unsupported](auto const& generate_item) {
+                            using Generate = std::remove_cvref_t<decltype(generate_item)>;
+                            if constexpr (std::same_as<Generate, UnsupportedGenerateItem>) {
+                              ++unsupported;
+                            }
+                          },
+                          module_item.node);
+                    }
+                  },
+                  item);
+            }
+          }
+        },
+        element);
+  }
+  REQUIRE(unsupported == 0);
 }

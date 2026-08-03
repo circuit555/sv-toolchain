@@ -24,6 +24,7 @@ using SubroutineDeclaration = ::svt::model::SubroutineDeclaration;
 using SpecifyBlock = ::svt::model::SpecifyBlock;
 using AssertionDeclaration = ::svt::model::AssertionDeclaration;
 using AssertionStatement = ::svt::model::AssertionStatement;
+using CastExpression = ::svt::model::CastExpression;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
@@ -819,6 +820,28 @@ class ExpressionParser final : private TokenParserBase {
     }
 
     auto const begin_iterator{m_token_iterator};
+
+    if (m_token_iterator->type == TokenType::kKeyword and
+        rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+            rng::cend(m_tokens) and
+        rng::next(m_token_iterator, 1, rng::cend(m_tokens))->lexeme == "'" and
+        rng::next(m_token_iterator, 2, rng::cend(m_tokens)) !=
+            rng::cend(m_tokens) and
+        rng::next(m_token_iterator, 2, rng::cend(m_tokens))->type ==
+            TokenType::kLParen) {
+      auto const type_end{rng::next(m_token_iterator, 1, rng::cend(m_tokens))};
+      rng::advance(m_token_iterator, 2, rng::cend(m_tokens));
+      auto const expression_tokens{::ConsumeBalancedDelimitedTokens(
+          m_token_iterator, rng::cend(m_tokens), TokenType::kLParen,
+          TokenType::kRParen, "cast expression")};
+      m_token_iterator = rng::next(expression_tokens.end(), 1,
+                                    rng::cend(m_tokens));
+      return std::make_unique<Expression>(
+          ExpressionNode{std::in_place_type<CastExpression>,
+                         tokens_t{begin_iterator, type_end},
+                         ExpressionParser{expression_tokens}.Parse()},
+          tokens_t{begin_iterator, m_token_iterator});
+    }
 
     if (m_token_iterator->type == TokenType::kIdentifier) {
       auto const name{m_token_iterator->lexeme};

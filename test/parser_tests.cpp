@@ -103,6 +103,7 @@ using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
 using TokenPreservingStatement = svt::model::TokenPreservingStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
+using CastExpression = svt::model::CastExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -324,6 +325,17 @@ TEST_CASE("Model semantic time literals", "[parser]") {
   REQUIRE(time.semantic_time_value->unit == "ns");
   REQUIRE(time.semantic_precision_value->magnitude == "1");
   REQUIRE(time.semantic_precision_value->unit == "ps");
+}
+
+TEST_CASE("Parse expression casts", "[parser]") {
+  Parser parser{std::string{"module m; assign y = int'(x + 1); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assign = std::get<ContinuousAssign>(module.items.front());
+  auto const& cast = ExprAs<CastExpression>(*assign.right_hand_side);
+  REQUIRE(Lexemes(cast.type_specifier) == std::vector<std::string_view>{"int"});
+  REQUIRE(Lexemes(cast.expression->tokens) ==
+          std::vector<std::string_view>{"x", "+", "1"});
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

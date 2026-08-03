@@ -910,16 +910,19 @@ class ExpressionParser final : private TokenParserBase {
 
     auto const begin_iterator{m_token_iterator};
 
-    if (m_token_iterator->type == TokenType::kKeyword and
-        rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
-            rng::cend(m_tokens) and
-        rng::next(m_token_iterator, 1, rng::cend(m_tokens))->lexeme == "'" and
-        rng::next(m_token_iterator, 2, rng::cend(m_tokens)) !=
-            rng::cend(m_tokens) and
-        rng::next(m_token_iterator, 2, rng::cend(m_tokens))->type ==
-            TokenType::kLParen) {
-      auto const type_end{rng::next(m_token_iterator, 1, rng::cend(m_tokens))};
-      rng::advance(m_token_iterator, 2, rng::cend(m_tokens));
+    auto type_end{m_token_iterator};
+    while (type_end != rng::cend(m_tokens) and
+           (type_end->type == TokenType::kIdentifier or
+            type_end->type == TokenType::kKeyword or type_end->lexeme == "::")) {
+      rng::advance(type_end, 1, rng::cend(m_tokens));
+    }
+    if (type_end != m_token_iterator and type_end != rng::cend(m_tokens) and
+        type_end->lexeme == "'" and
+        rng::next(type_end, 1, rng::cend(m_tokens)) != rng::cend(m_tokens) and
+        rng::next(type_end, 1, rng::cend(m_tokens))->type == TokenType::kLParen) {
+      rng::advance(m_token_iterator,
+                   static_cast<std::ptrdiff_t>(std::distance(m_token_iterator, type_end) + 1),
+                   rng::cend(m_tokens));
       auto const expression_tokens{::ConsumeBalancedDelimitedTokens(
           m_token_iterator, rng::cend(m_tokens), TokenType::kLParen,
           TokenType::kRParen, "cast expression")};

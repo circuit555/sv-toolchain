@@ -634,7 +634,8 @@ export struct UnsupportedPackageItem {
 
 export using PackageItem =
     std::variant<TimeDeclaration, ParameterDeclaration, TypeDeclaration,
-                 ImportDeclaration, ExportDeclaration, UnsupportedPackageItem>;
+                 ImportDeclaration, ExportDeclaration, TokenPreservingDeclaration,
+                 UnsupportedPackageItem>;
 
 export struct PackageDeclaration : Declaration {
   // TODO(): maybe std::optional<std::string_view> lifetime{};

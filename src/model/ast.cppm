@@ -415,6 +415,11 @@ export struct SubroutineDeclaration : Declaration {
   std::span<Token const> tokens;
 };
 
+export struct SpecifyBlock {
+  std::span<Token const> items;
+  std::span<Token const> tokens;
+};
+
 export struct AlwaysBlock {
   ProceduralBlockKind kind{ProceduralBlockKind::kAlways};
   StatementPtr statement;
@@ -581,7 +586,7 @@ export using ModuleItem =
                  UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
                  InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
                  TimeDeclaration, ImportDeclaration, ClassDeclaration,
-                 SubroutineDeclaration,
+                 SubroutineDeclaration, SpecifyBlock,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {

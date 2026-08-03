@@ -93,6 +93,7 @@ using PrimitiveDeclaration = svt::model::PrimitiveDeclaration;
 using ModuleSourceKind = svt::model::ModuleSourceKind;
 using ClassDeclaration = svt::model::ClassDeclaration;
 using SubroutineDeclaration = svt::model::SubroutineDeclaration;
+using SpecifyBlock = svt::model::SpecifyBlock;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -204,6 +205,15 @@ TEST_CASE("Parse subroutine declarations", "[parser]") {
   REQUIRE(task.lifetime == "automatic");
   REQUIRE(std::get<SubroutineDeclaration>(module.items.at(1))
               .extern_declaration);
+}
+
+TEST_CASE("Parse specify blocks as isolated module items", "[parser]") {
+  Parser parser{std::string{"module m; specify specparam t = 1; endspecify endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& specify = std::get<SpecifyBlock>(module.items.front());
+  REQUIRE_FALSE(specify.items.empty());
+  REQUIRE(specify.tokens.front().lexeme == "specify");
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
@@ -1035,21 +1045,22 @@ TEST_CASE("Parse unsupported module item blocks without losing sync",
   REQUIRE(module_declaration.items.size() == 13);
 
   auto const expected_kinds{std::vector<std::string_view>{
-      "function", "task", "specify", "default", "property", "sequence",
+      "function", "task", "default", "property", "sequence",
       "covergroup", "checker", "assert", "bind"}};
-  for (auto const item_index : std::views::iota(0UZ, 2UZ)) {
-    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
-        module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
-    REQUIRE(not unsupported_item.tokens.empty());
-  }
+  REQUIRE(std::holds_alternative<SubroutineDeclaration>(
+      module_declaration.items.at(0)));
+  REQUIRE(std::holds_alternative<SubroutineDeclaration>(
+      module_declaration.items.at(1)));
   auto const& nested_class =
       std::get<ClassDeclaration>(module_declaration.items.at(2));
   REQUIRE(nested_class.name == "C");
-  for (auto const item_index : std::views::iota(3UZ, expected_kinds.size() + 1UZ)) {
+  auto const& specify =
+      std::get<SpecifyBlock>(module_declaration.items.at(3));
+  REQUIRE_FALSE(specify.items.empty());
+  for (auto const item_index : std::views::iota(4UZ, 11UZ)) {
     auto const& unsupported_item{std::get<UnsupportedModuleItem>(
         module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index - 1UZ));
+    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index - 2UZ));
     REQUIRE(not unsupported_item.tokens.empty());
   }
 

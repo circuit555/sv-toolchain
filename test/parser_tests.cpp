@@ -255,7 +255,9 @@ TEST_CASE("Parse assertion declarations and statements", "[parser]") {
   auto const& sequence = std::get<AssertionDeclaration>(module.items.at(1));
   REQUIRE(sequence.sequence);
   REQUIRE(sequence.name == "s");
-  REQUIRE(std::get<AssertionStatement>(module.items.at(2)).kind == "assert");
+  auto const& assertion = std::get<AssertionStatement>(module.items.at(2));
+  REQUIRE(assertion.kind == "assert");
+  REQUIRE_FALSE(assertion.expression.empty());
 }
 
 TEST_CASE("Parse clocking and default directives", "[parser]") {

@@ -4462,7 +4462,15 @@ auto Parser::ParseDesignElement() -> DesignElement {
                 rng::cend(m_tokens) and
             rng::next(dispatch_iterator, 1, rng::cend(m_tokens))->lexeme ==
                 "class") {
-          break;
+          m_token_iterator = dispatch_iterator;
+          auto const begin{m_token_iterator};
+          SkipUnsupportedElementToMatchingEnd(
+              "interface", "endclass",
+              {.match_keyword_tokens_only = false,
+               .require_end_keyword = true,
+               .context = "interface class"});
+          return TokenPreservingDeclaration{.kind = "interface class",
+                                            .tokens = {begin, m_token_iterator}};
         }
         m_token_iterator = dispatch_iterator;
         return ParseInterfaceDeclaration();
@@ -4494,7 +4502,9 @@ auto Parser::ParseDesignElement() -> DesignElement {
     }
   }
 
-  return ParseUnsupportedDesignElement();
+  auto const unsupported{ParseUnsupportedDesignElement()};
+  return TokenPreservingDeclaration{.kind = unsupported.kind,
+                                    .tokens = unsupported.tokens};
 }
 
 auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
@@ -5349,7 +5359,10 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
         module_declaration.items.push_back(ParseModuleItem());
       } catch (std::runtime_error const&) {
         m_token_iterator = module_item_begin_iterator;
-        module_declaration.items.emplace_back(ParseUnsupportedModuleItem());
+        auto const unsupported{ParseUnsupportedModuleItem()};
+        module_declaration.items.emplace_back(
+            TokenPreservingDeclaration{.kind = unsupported.kind,
+                                        .tokens = unsupported.tokens});
       }
     } else {
       module_declaration.items.push_back(ParseModuleItem());
@@ -5358,6 +5371,7 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
 
   if (m_token_iterator->lexeme == "endmodule") {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
   }
   // TODO(): if not shouldn't we throw here i.e. why dont we have
   // ExpectKeyword for endmodule before?
@@ -5604,8 +5618,10 @@ auto Parser::ParseModuleItem() -> ModuleItem {
           return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
                             ParseTokenPreservingDeclaration()};
         }
-        return ModuleItem{std::in_place_type<UnsupportedModuleItem>,
-                          ParseUnsupportedModuleItem()};
+        auto const unsupported{ParseUnsupportedModuleItem()};
+        return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
+                          TokenPreservingDeclaration{.kind = unsupported.kind,
+                                                      .tokens = unsupported.tokens}};
       }
     }
 
@@ -5634,8 +5650,10 @@ auto Parser::ParseModuleItem() -> ModuleItem {
       rng::contains(kUnsupportedModuleItemKeywords, m_token_iterator->lexeme) or
       rng::contains(kUnsupportedModuleItemNetTypes, m_token_iterator->lexeme) or
       m_token_iterator->IsKeyword("begin")) {
-    return ModuleItem{std::in_place_type<UnsupportedModuleItem>,
-                      ParseUnsupportedModuleItem()};
+    auto const unsupported{ParseUnsupportedModuleItem()};
+    return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
+                      TokenPreservingDeclaration{.kind = unsupported.kind,
+                                                  .tokens = unsupported.tokens}};
   }
 
   throw std::runtime_error{

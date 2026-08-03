@@ -1948,7 +1948,7 @@ TEST_CASE("Parse module-scope generate constructs", "[parser]") {
   REQUIRE(generate_case.items.at(1).body.size() == 1);
 }
 
-TEST_CASE("Treat bare begin-end blocks in module body as unsupported",
+TEST_CASE("Preserve bare begin-end blocks in module body",
           "[parser]") {
   std::string src = R"(
     module foo ();
@@ -1965,10 +1965,9 @@ TEST_CASE("Treat bare begin-end blocks in module body as unsupported",
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.items.size() == 1);
 
-  auto const& unsupported_item{
-      std::get<UnsupportedModuleItem>(module_declaration.items.front())};
-  REQUIRE(unsupported_item.kind == "begin");
-  REQUIRE(not unsupported_item.tokens.empty());
+  auto const& preserved_item{
+      std::get<TokenPreservingDeclaration>(module_declaration.items.front())};
+  REQUIRE(preserved_item.kind == "begin");
 }
 
 TEST_CASE("Parse module instantiations", "[parser]") {

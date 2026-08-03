@@ -234,7 +234,10 @@ auto constexpr kBinaryOperatorPrecedences{
         {.lexeme = "&", .precedence = 6},   {.lexeme = "==", .precedence = 7},
         {.lexeme = "!=", .precedence = 7},  {.lexeme = "===", .precedence = 7},
         {.lexeme = "!==", .precedence = 7}, {.lexeme = "==?", .precedence = 7},
-        {.lexeme = "!=?", .precedence = 7}, {.lexeme = "<", .precedence = 8},
+        {.lexeme = "!=?", .precedence = 7},
+        {.lexeme = "inside", .precedence = 7},
+        {.lexeme = "matches", .precedence = 7},
+        {.lexeme = "<", .precedence = 8},
         {.lexeme = ">", .precedence = 8},   {.lexeme = "<=", .precedence = 8},
         {.lexeme = ">=", .precedence = 8},  {.lexeme = "<<", .precedence = 9},
         {.lexeme = ">>", .precedence = 9},  {.lexeme = "<<<", .precedence = 9},
@@ -664,10 +667,6 @@ auto FindValueParameterNameIndex(std::vector<Token> const& tokens,
 auto BinaryPrecedence(Token const& token) -> std::size_t {
   if (token.type == TokenType::kEquals) {
     return 1;
-  }
-
-  if (token.type != TokenType::kOperator) {
-    return 0;
   }
 
   // NOLINTBEGIN(readability-qualified-auto)

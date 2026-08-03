@@ -379,6 +379,18 @@ TEST_CASE("Parse covergroup conditions and transition bins", "[parser]") {
   REQUIRE(item.bins.size() == 2);
 }
 
+TEST_CASE("Parse inside and matches expression operators", "[parser]") {
+  Parser parser{std::string{"module m; initial begin x = a inside {1, 2}; y = a matches b; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& inside = StmtAs<AssignmentStatement>(*block.statements.at(0));
+  REQUIRE(std::get<BinaryExpression>(inside.right_hand_side->node).operator_lexeme == "inside");
+  auto const& matches = StmtAs<AssignmentStatement>(*block.statements.at(1));
+  REQUIRE(std::get<BinaryExpression>(matches.right_hand_side->node).operator_lexeme == "matches");
+}
+
 TEST_CASE("Parse config declarations", "[parser]") {
   Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
   auto translation_unit = parser.Parse();

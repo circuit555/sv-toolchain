@@ -115,12 +115,14 @@ using EventTriggerStatement = svt::model::EventTriggerStatement;
 using RandomizationBlockStatement = svt::model::RandomizationBlockStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
+using CallExpression = svt::model::CallExpression;
 using CastExpression = svt::model::CastExpression;
 using DpiDeclaration = svt::model::DpiDeclaration;
 using MemberAccessExpression = svt::model::MemberAccessExpression;
 using StreamingConcatenationExpression = svt::model::StreamingConcatenationExpression;
 using DistributionExpression = svt::model::DistributionExpression;
 using MinTypMaxExpression = svt::model::MinTypMaxExpression;
+using TypeExpression = svt::model::TypeExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -618,6 +620,17 @@ TEST_CASE("Parse scoped type casts", "[parser]") {
   auto const& cast = ExprAs<CastExpression>(*assign.right_hand_side);
   REQUIRE(Lexemes(cast.type_specifier) ==
           std::vector<std::string_view>{"pkg", "::", "T"});
+}
+
+TEST_CASE("Parse type expressions", "[parser]") {
+  Parser parser{std::string{"module m; assign y = type(b); assign z = $bits(int); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& type_assign = std::get<ContinuousAssign>(module.items.at(0));
+  REQUIRE(std::holds_alternative<TypeExpression>(type_assign.right_hand_side->node));
+  auto const& bits_assign = std::get<ContinuousAssign>(module.items.at(1));
+  auto const& call = ExprAs<CallExpression>(*bits_assign.right_hand_side);
+  REQUIRE(ExprAs<IdentifierExpression>(*call.arguments.front()).name == "int");
 }
 
 TEST_CASE("Parse DPI declarations and subroutine defaults", "[parser]") {

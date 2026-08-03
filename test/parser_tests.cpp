@@ -965,6 +965,16 @@ TEST_CASE("Parse compilation-unit class declarations", "[parser]") {
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(3)).name == "foo");
 }
 
+TEST_CASE("Model class member qualifiers and bodies", "[parser]") {
+  Parser parser{std::string{"class C; rand int value; constraint limits { value > 0; } endclass"}};
+  auto translation_unit = parser.Parse();
+  auto const& class_declaration = std::get<ClassDeclaration>(translation_unit.front());
+  REQUIRE(class_declaration.members.size() == 2);
+  REQUIRE(class_declaration.members.at(0).random);
+  REQUIRE(class_declaration.members.at(1).kind == ClassDeclaration::MemberKind::kConstraint);
+  REQUIRE_FALSE(class_declaration.members.at(1).body.empty());
+}
+
 TEST_CASE("Parse module ports", "[parser]") {
   std::string src = R"(
     module foo (

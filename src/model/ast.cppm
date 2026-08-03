@@ -497,6 +497,10 @@ export struct ClassDeclaration : Declaration {
   struct Member {
     MemberKind kind{MemberKind::kOther};
     std::string_view name;
+    bool random{false};
+    bool extern_declaration{false};
+    std::span<Token const> header;
+    std::span<Token const> body;
     std::span<Token const> tokens;
   };
   std::string_view lifetime;

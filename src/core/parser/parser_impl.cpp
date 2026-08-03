@@ -5235,6 +5235,24 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
     } else {
       member.kind = ClassDeclaration::MemberKind::kField;
     }
+    member.random = std::ranges::contains(member_tokens, "rand", &Token::lexeme) or
+                    std::ranges::contains(member_tokens, "randc", &Token::lexeme) or
+                    std::ranges::contains(member_tokens, "rands", &Token::lexeme);
+    member.extern_declaration =
+        std::ranges::contains(member_tokens, "extern", &Token::lexeme);
+    auto const body_begin{rng::find_if(
+        member_tokens, [](Token const& token) { return token.type == TokenType::kLBrace; })};
+    if (body_begin != member_tokens.end()) {
+      auto const body_end{::FindMatchingDelimiter(
+          body_begin, member_tokens.end(), TokenType::kLBrace,
+          TokenType::kRBrace)};
+      member.header = {member_tokens.begin(), body_begin};
+      if (body_end != member_tokens.end()) {
+        member.body = {std::next(body_begin), body_end};
+      }
+    } else {
+      member.header = member_tokens;
+    }
     auto const name_iterator{rng::find_if(
         member_tokens, [](Token const& token) {
           return token.type == TokenType::kIdentifier;

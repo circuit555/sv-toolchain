@@ -301,12 +301,35 @@ export struct TokenPreservingStatement {
   std::span<Token const> tokens;
 };
 
+export struct ReturnStatement {
+  ExpressionPtr expression;
+};
+
+export struct BreakStatement {
+  std::string_view label;
+};
+
+export struct ContinueStatement {
+  std::string_view label;
+};
+
+export struct DisableStatement {
+  std::span<Token const> target;
+};
+
+export struct ExpectStatement {
+  std::span<Token const> condition;
+  std::span<Token const> action;
+};
+
 export using StatementNode =
     std::variant<std::monostate, BeginEndBlockStatement, AssignmentStatement,
                  IfElseStatement, CaseStatement, LoopStatement,
                  TimingControlStatement, WaitStatement, ForkJoinStatement,
                  ProceduralContinuousAssignStatement, SystemTaskCallStatement,
-                 TokenPreservingStatement, UnsupportedStatement>;
+                 ReturnStatement, BreakStatement, ContinueStatement,
+                 DisableStatement, ExpectStatement, TokenPreservingStatement,
+                 UnsupportedStatement>;
 
 export struct Statement {
   StatementNode node;

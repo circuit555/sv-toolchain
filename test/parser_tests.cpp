@@ -101,6 +101,11 @@ using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
 using TokenPreservingStatement = svt::model::TokenPreservingStatement;
+using ReturnStatement = svt::model::ReturnStatement;
+using BreakStatement = svt::model::BreakStatement;
+using ContinueStatement = svt::model::ContinueStatement;
+using DisableStatement = svt::model::DisableStatement;
+using ExpectStatement = svt::model::ExpectStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
 using CastExpression = svt::model::CastExpression;
@@ -315,9 +320,23 @@ TEST_CASE("Parse token-preserving procedural controls", "[parser]") {
   auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
   auto const& initial = std::get<InitialBlock>(module.items.front());
   auto const& block = StmtAs<BeginEndBlockStatement>(*initial.statement);
-  REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(0)).kind == "return");
-  REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(1)).kind == "break");
-  REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(2)).kind == "continue");
+  REQUIRE(StmtAs<ReturnStatement>(*block.statements.at(0)).expression == nullptr);
+  REQUIRE(StmtAs<BreakStatement>(*block.statements.at(1)).label.empty());
+  REQUIRE(StmtAs<ContinueStatement>(*block.statements.at(2)).label.empty());
+  REQUIRE(StmtAs<DisableStatement>(*block.statements.at(3)).target.front().lexeme == "fork");
+}
+
+TEST_CASE("Parse structured procedural control statements", "[parser]") {
+  Parser parser{std::string{"module m; initial begin return count; break: done; continue: next; expect (a) else b; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(*std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(StmtAs<ReturnStatement>(*block.statements.at(0)).expression != nullptr);
+  REQUIRE(StmtAs<BreakStatement>(*block.statements.at(1)).label == "done");
+  REQUIRE(StmtAs<ContinueStatement>(*block.statements.at(2)).label == "next");
+  auto const& expect = StmtAs<ExpectStatement>(*block.statements.at(3));
+  REQUIRE(expect.condition.front().lexeme == "(");
+  REQUIRE(expect.condition.size() >= 3);
 }
 
 TEST_CASE("Parse covergroup declarations", "[parser]") {

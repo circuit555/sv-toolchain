@@ -96,6 +96,8 @@ using SubroutineDeclaration = svt::model::SubroutineDeclaration;
 using SpecifyBlock = svt::model::SpecifyBlock;
 using AssertionDeclaration = svt::model::AssertionDeclaration;
 using AssertionStatement = svt::model::AssertionStatement;
+using ClockingDeclaration = svt::model::ClockingDeclaration;
+using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -229,6 +231,17 @@ TEST_CASE("Parse assertion declarations and statements", "[parser]") {
   REQUIRE(sequence.sequence);
   REQUIRE(sequence.name == "s");
   REQUIRE(std::get<AssertionStatement>(module.items.at(2)).kind == "assert");
+}
+
+TEST_CASE("Parse clocking and default directives", "[parser]") {
+  Parser parser{std::string{"module m; clocking cb @(posedge clk); input #1 a; output b; endclocking default clocking cb; default disable iff (reset); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& clocking = std::get<ClockingDeclaration>(module.items.at(0));
+  REQUIRE(clocking.name == "cb");
+  REQUIRE_FALSE(clocking.body.empty());
+  REQUIRE(std::get<ClockingDeclaration>(module.items.at(1)).default_clocking);
+  REQUIRE(std::holds_alternative<DefaultDisableIffDeclaration>(module.items.at(2)));
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

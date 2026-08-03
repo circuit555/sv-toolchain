@@ -532,6 +532,18 @@ export struct DefaultClockingDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct ClockingDeclaration {
+  bool global{false};
+  bool default_clocking{false};
+  std::string_view name;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct DefaultDisableIffDeclaration {
+  std::span<Token const> tokens;
+};
+
 export struct InterfaceItemDeclaration {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -541,7 +553,8 @@ export using InterfaceItem =
     std::variant<TimeDeclaration, ModulePort, VariableDeclaration,
                  TypeDeclaration, StructuredVariableDeclaration,
                  ModportDeclaration, InterfaceSubroutineDeclaration,
-                 DefaultClockingDeclaration, InterfaceItemDeclaration>;
+                 DefaultClockingDeclaration, ClockingDeclaration,
+                 DefaultDisableIffDeclaration, InterfaceItemDeclaration>;
 
 export struct InterfaceDeclaration : Declaration {
   std::string_view lifetime;
@@ -599,7 +612,8 @@ export using ModuleItem =
                  InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
                  TimeDeclaration, ImportDeclaration, ClassDeclaration,
                  SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
-                 AssertionStatement,
+                 AssertionStatement, ClockingDeclaration,
+                 DefaultClockingDeclaration, DefaultDisableIffDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {

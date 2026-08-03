@@ -118,6 +118,9 @@ export class Parser final : private TokenParserBase {
   auto ParseSpecifyBlock() -> ::svt::model::SpecifyBlock;
   auto ParseAssertionDeclaration() -> ::svt::model::AssertionDeclaration;
   auto ParseAssertionStatement() -> ::svt::model::AssertionStatement;
+  auto ParseClockingDeclaration() -> ::svt::model::ClockingDeclaration;
+  auto ParseDefaultDisableIffDeclaration()
+      -> ::svt::model::DefaultDisableIffDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
   auto ParseTypeDeclaration() -> ::svt::model::TypeDeclaration;

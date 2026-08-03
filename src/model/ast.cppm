@@ -116,6 +116,11 @@ export struct AssignmentPatternExpression {
   std::vector<ExpressionPtr> expressions;
 };
 
+export struct CastExpression {
+  std::span<Token const> type_specifier;
+  ExpressionPtr expression;
+};
+
 export struct UnsupportedExpression {
   std::span<Token const> tokens;
 };
@@ -126,7 +131,8 @@ export using ExpressionNode =
                  BinaryExpression, ConditionalExpression, IndexExpression,
                  RangeSelectExpression, ConcatenationExpression,
                  ReplicationExpression, CallExpression,
-                 AssignmentPatternExpression, UnsupportedExpression>;
+                 AssignmentPatternExpression, CastExpression,
+                 UnsupportedExpression>;
 
 export struct Expression {
   ExpressionNode node;

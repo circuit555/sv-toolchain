@@ -24,6 +24,8 @@ using SubroutineDeclaration = ::svt::model::SubroutineDeclaration;
 using SpecifyBlock = ::svt::model::SpecifyBlock;
 using AssertionDeclaration = ::svt::model::AssertionDeclaration;
 using AssertionStatement = ::svt::model::AssertionStatement;
+using ClockingDeclaration = ::svt::model::ClockingDeclaration;
+using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -4762,6 +4764,66 @@ auto Parser::ParseAssertionStatement() -> AssertionStatement {
   return statement;
 }
 
+auto Parser::ParseClockingDeclaration() -> ClockingDeclaration {
+  auto const begin{m_token_iterator};
+  ClockingDeclaration declaration{};
+  if (m_token_iterator->IsKeyword("global")) {
+    declaration.global = true;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  declaration.default_clocking = m_token_iterator->IsKeyword("default");
+  if (declaration.default_clocking) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  ExpectKeyword("clocking", "clocking declaration");
+  if (m_token_iterator->type == TokenType::kIdentifier) {
+    declaration.name = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const header_end{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.type == TokenType::kSemicolon; })};
+  if (header_end == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected ';' while parsing clocking"};
+  }
+  m_token_iterator = rng::next(header_end, 1, rng::cend(m_tokens));
+  if (declaration.default_clocking) {
+    declaration.tokens = {begin, m_token_iterator};
+    return declaration;
+  }
+  auto const body_begin{m_token_iterator};
+  auto const end_iterator{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.IsKeyword("endclocking"); })};
+  if (end_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected 'endclocking'"};
+  }
+  declaration.body = {body_begin, end_iterator};
+  m_token_iterator = end_iterator;
+  ExpectKeyword("endclocking", "clocking declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseDefaultDisableIffDeclaration()
+    -> DefaultDisableIffDeclaration {
+  auto const begin{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      m_token_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const token_iterator) {
+        return token_iterator->type == TokenType::kEndOfFile;
+      },
+      [](tokens_t::iterator const token_iterator) {
+        return token_iterator->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "default disable iff");
+  if (m_token_iterator->type == TokenType::kSemicolon) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  return DefaultDisableIffDeclaration{.tokens = {begin, m_token_iterator}};
+}
+
 auto Parser::SkipUnsupportedElementToSemicolon(
     std::string_view const stop_keyword) -> void {
   ::AdvanceToTopLevelBoundary(
@@ -5041,6 +5103,13 @@ auto Parser::ParseModuleItem() -> ModuleItem {
 
   switch (m_token_iterator->type) {
     case TokenType::kKeyword: {
+      if (m_token_iterator->IsKeyword("default") and
+          rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+              rng::cend(m_tokens) and
+          rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("disable")) {
+        return ModuleItem{std::in_place_type<DefaultDisableIffDeclaration>,
+                          ParseDefaultDisableIffDeclaration()};
+      }
       if (m_token_iterator->IsKeyword("extern") and
           rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
               rng::cend(m_tokens) and
@@ -5064,6 +5133,18 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("specify"):
           return ModuleItem{std::in_place_type<SpecifyBlock>,
                             ParseSpecifyBlock()};
+        case ::HashLexeme("clocking"):
+        case ::HashLexeme("global"):
+          return ModuleItem{std::in_place_type<ClockingDeclaration>,
+                            ParseClockingDeclaration()};
+        case ::HashLexeme("default"):
+          if (rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+                  rng::cend(m_tokens) and
+              rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("clocking")) {
+            return ModuleItem{std::in_place_type<ClockingDeclaration>,
+                              ParseClockingDeclaration()};
+          }
+          break;
         case ::HashLexeme("property"):
         case ::HashLexeme("sequence"):
           return ModuleItem{std::in_place_type<AssertionDeclaration>,

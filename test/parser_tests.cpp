@@ -487,6 +487,16 @@ TEST_CASE("Parse event triggers and randomization blocks", "[parser]") {
   REQUIRE(StmtAs<RandomizationBlockStatement>(*block.statements.at(3)).sequence);
 }
 
+TEST_CASE("Parse temporal expression operators", "[parser]") {
+  Parser parser{std::string{"module m; assign y = a throughout b; assign z = a until_with b; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& throughout = std::get<ContinuousAssign>(module.items.at(0));
+  REQUIRE(std::get<BinaryExpression>(throughout.right_hand_side->node).operator_lexeme == "throughout");
+  auto const& until_with = std::get<ContinuousAssign>(module.items.at(1));
+  REQUIRE(std::get<BinaryExpression>(until_with.right_hand_side->node).operator_lexeme == "until_with");
+}
+
 TEST_CASE("Parse config declarations", "[parser]") {
   Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
   auto translation_unit = parser.Parse();

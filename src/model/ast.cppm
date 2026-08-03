@@ -544,6 +544,12 @@ export struct DefaultDisableIffDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct CheckerDeclaration : Declaration {
+  std::vector<ModulePort> ports;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct InterfaceItemDeclaration {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -614,6 +620,7 @@ export using ModuleItem =
                  SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
                  AssertionStatement, ClockingDeclaration,
                  DefaultClockingDeclaration, DefaultDisableIffDeclaration,
+                 CheckerDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
@@ -649,7 +656,7 @@ export using DesignElement =
     std::variant<ModuleDeclaration, ProgramDeclaration, PrimitiveDeclaration,
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
-                 ImportDeclaration,
+                 ImportDeclaration, CheckerDeclaration,
                  UnsupportedDesignElement>;
 
 }  // namespace svt::model

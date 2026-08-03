@@ -26,6 +26,7 @@ using AssertionDeclaration = ::svt::model::AssertionDeclaration;
 using AssertionStatement = ::svt::model::AssertionStatement;
 using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
+using CheckerDeclaration = ::svt::model::CheckerDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -4239,9 +4240,12 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("program"):
         m_token_iterator = dispatch_iterator;
         return ParseProgramDeclaration();
-          case ::HashLexeme("primitive"):
+      case ::HashLexeme("primitive"):
         m_token_iterator = dispatch_iterator;
         return ParsePrimitiveDeclaration();
+      case ::HashLexeme("checker"):
+        m_token_iterator = dispatch_iterator;
+        return ParseCheckerDeclaration();
       case ::HashLexeme("class"):
         m_token_iterator = dispatch_iterator;
         return ParseClassDeclaration();
@@ -4708,6 +4712,35 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   return declaration;
 }
 
+auto Parser::ParseCheckerDeclaration() -> CheckerDeclaration {
+  auto const begin{m_token_iterator};
+  ExpectKeyword("checker", "checker declaration");
+  CheckerDeclaration declaration{};
+  if (m_token_iterator->type != TokenType::kIdentifier) {
+    throw std::runtime_error{"[Parser] expected checker name"};
+  }
+  declaration.name = m_token_iterator->lexeme;
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  if (m_token_iterator->type == TokenType::kLParen) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    declaration.ports = ParsePorts();
+  }
+  ExpectToken(TokenType::kSemicolon, "checker declaration");
+  auto const body_begin{m_token_iterator};
+  auto const end_iterator{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.IsKeyword("endchecker"); })};
+  if (end_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected 'endchecker'"};
+  }
+  declaration.body = {body_begin, end_iterator};
+  m_token_iterator = end_iterator;
+  ExpectKeyword("endchecker", "checker declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
   auto const begin{m_token_iterator};
   ExpectKeyword("specify", "specify block");
@@ -5126,6 +5159,9 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("class"):
           return ModuleItem{std::in_place_type<ClassDeclaration>,
                             ParseClassDeclaration()};
+        case ::HashLexeme("checker"):
+          return ModuleItem{std::in_place_type<CheckerDeclaration>,
+                            ParseCheckerDeclaration()};
         case ::HashLexeme("function"):
         case ::HashLexeme("task"):
           return ModuleItem{std::in_place_type<SubroutineDeclaration>,

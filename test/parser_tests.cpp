@@ -98,6 +98,7 @@ using AssertionDeclaration = svt::model::AssertionDeclaration;
 using AssertionStatement = svt::model::AssertionStatement;
 using ClockingDeclaration = svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
+using CheckerDeclaration = svt::model::CheckerDeclaration;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -242,6 +243,15 @@ TEST_CASE("Parse clocking and default directives", "[parser]") {
   REQUIRE_FALSE(clocking.body.empty());
   REQUIRE(std::get<ClockingDeclaration>(module.items.at(1)).default_clocking);
   REQUIRE(std::holds_alternative<DefaultDisableIffDeclaration>(module.items.at(2)));
+}
+
+TEST_CASE("Parse checker declarations", "[parser]") {
+  Parser parser{std::string{"checker c(input clk); default clocking cb; assert property (p); endchecker : c"}};
+  auto translation_unit = parser.Parse();
+  auto const& checker = std::get<CheckerDeclaration>(translation_unit.front());
+  REQUIRE(checker.name == "c");
+  REQUIRE(checker.ports.size() == 1);
+  REQUIRE_FALSE(checker.body.empty());
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

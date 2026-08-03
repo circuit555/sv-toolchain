@@ -5185,6 +5185,16 @@ auto Parser::ParsePrimitiveDeclaration() -> PrimitiveDeclaration {
         [](Token const& token) { return token.IsKeyword("endtable"); })};
     if (table_end != body_end) {
       declaration.table = {table_begin, table_end};
+      auto row_begin{std::next(table_begin)};
+      while (row_begin != table_end) {
+        auto const row{row_begin->location.row};
+        auto row_end{row_begin};
+        while (row_end != table_end and row_end->location.row == row) {
+          rng::advance(row_end, 1, table_end);
+        }
+        if (row_begin != row_end) declaration.table_rows.push_back({row_begin, row_end});
+        row_begin = row_end;
+      }
     }
   }
   auto const initial_begin{rng::find_if(

@@ -543,6 +543,16 @@ TEST_CASE("Reject invalid time declaration forms", "[parser]") {
   REQUIRE_THROWS(Parser{std::string{"timeprecision 1ns / 1ps;"}}.Parse());
 }
 
+TEST_CASE("Parse config instance use clauses", "[parser]") {
+  Parser parser{std::string{"config cfg; instance top use work.top; endconfig"}};
+  auto translation_unit = parser.Parse();
+  auto const& config = std::get<ConfigDeclaration>(translation_unit.front());
+  REQUIRE(config.items.size() == 1);
+  REQUIRE(config.items.front().kind == ConfigDeclaration::ItemKind::kInstanceUse);
+  REQUIRE(config.items.front().subject.front().lexeme == "top");
+  REQUIRE(config.items.front().libraries.front().lexeme == "work");
+}
+
 TEST_CASE("Parse expression casts", "[parser]") {
   Parser parser{std::string{"module m; assign y = int'(x + 1); endmodule"}};
   auto translation_unit = parser.Parse();

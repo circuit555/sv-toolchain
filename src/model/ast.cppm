@@ -720,10 +720,13 @@ export struct CovergroupDeclaration : Declaration {
     std::span<Token const> expression;
     std::span<Token const> iff_condition;
     std::span<Token const> with_clause;
+    std::span<Token const> sample_signature;
     bool transition{false};
     std::span<Token const> tokens;
   };
   std::vector<Item> items;
+  std::span<Token const> header;
+  std::span<Token const> event;
   std::span<Token const> body;
   std::span<Token const> tokens;
 };

@@ -122,6 +122,8 @@ export class Parser final : private TokenParserBase {
   auto ParseDefaultDisableIffDeclaration()
       -> ::svt::model::DefaultDisableIffDeclaration;
   auto ParseCheckerDeclaration() -> ::svt::model::CheckerDeclaration;
+  auto ParseTokenPreservingDeclaration()
+      -> ::svt::model::TokenPreservingDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
   auto ParseTypeDeclaration() -> ::svt::model::TypeDeclaration;

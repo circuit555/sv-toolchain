@@ -325,6 +325,9 @@ TEST_CASE("Parse covergroup declarations", "[parser]") {
   auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
   REQUIRE(covergroup.name == "cg");
   REQUIRE_FALSE(covergroup.body.empty());
+  REQUIRE(covergroup.items.size() == 1);
+  REQUIRE(covergroup.items.front().kind == CovergroupDeclaration::ItemKind::kCoverpoint);
+  REQUIRE(covergroup.items.front().name == "cp");
 }
 
 TEST_CASE("Parse config declarations", "[parser]") {

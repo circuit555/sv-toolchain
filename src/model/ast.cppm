@@ -582,6 +582,21 @@ export struct TokenPreservingDeclaration {
 };
 
 export struct CovergroupDeclaration : Declaration {
+  enum class ItemKind : std::uint8_t {
+    kCoverpoint, kCross, kOption, kBin, kSample, kOther
+  };
+  struct Bin {
+    std::string_view kind;
+    std::string_view name;
+    std::span<Token const> tokens;
+  };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::string_view name;
+    std::vector<Bin> bins;
+    std::span<Token const> tokens;
+  };
+  std::vector<Item> items;
   std::span<Token const> body;
   std::span<Token const> tokens;
 };

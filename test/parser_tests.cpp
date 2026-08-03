@@ -316,6 +316,16 @@ TEST_CASE("Parse config declarations", "[parser]") {
   REQUIRE_FALSE(config.body.empty());
 }
 
+TEST_CASE("Model semantic time literals", "[parser]") {
+  Parser parser{std::string{"timeunit 10ns / 1ps;"}};
+  auto translation_unit = parser.Parse();
+  auto const& time = std::get<TimeDeclaration>(translation_unit.front());
+  REQUIRE(time.semantic_time_value->magnitude == "10");
+  REQUIRE(time.semantic_time_value->unit == "ns");
+  REQUIRE(time.semantic_precision_value->magnitude == "1");
+  REQUIRE(time.semantic_precision_value->unit == "ps");
+}
+
 TEST_CASE("Parse generic module parameters", "[parser]") {
   std::string src = R"(
     module foo #(

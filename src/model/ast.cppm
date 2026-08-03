@@ -518,10 +518,18 @@ export enum class TimeDeclarationKind : std::uint8_t {
   kTimePrecision
 };
 
+export struct TimeLiteral {
+  std::string_view magnitude;
+  std::string_view unit;
+  std::span<Token const> tokens;
+};
+
 export struct TimeDeclaration {
   TimeDeclarationKind kind{};
   std::span<Token const> time_value;
   std::span<Token const> precision_value;
+  std::optional<TimeLiteral> semantic_time_value;
+  std::optional<TimeLiteral> semantic_precision_value;
   std::span<Token const> tokens;
 };
 

@@ -436,7 +436,15 @@ export struct SubroutineDeclaration : Declaration {
   std::string_view lifetime;
   std::span<Token const> return_type;
   std::span<Token const> ports;
+  std::vector<std::span<Token const>> default_arguments;
   std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct DpiDeclaration {
+  bool export_declaration{false};
+  std::string_view language;
+  std::span<Token const> declaration;
   std::span<Token const> tokens;
 };
 
@@ -694,6 +702,7 @@ export using ModuleItem =
                  SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
                  AssertionStatement, ClockingDeclaration,
                  DefaultClockingDeclaration, DefaultDisableIffDeclaration,
+                 DpiDeclaration,
                  CheckerDeclaration,
                  TokenPreservingDeclaration,
                  CovergroupDeclaration,
@@ -734,7 +743,7 @@ export using DesignElement =
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
                  ImportDeclaration, ExportDeclaration, CheckerDeclaration,
-                 TokenPreservingDeclaration,
+                 TokenPreservingDeclaration, DpiDeclaration,
                  ConfigDeclaration,
                  UnsupportedDesignElement>;
 

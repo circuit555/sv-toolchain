@@ -21,6 +21,7 @@ using ProgramDeclaration = ::svt::model::ProgramDeclaration;
 using PrimitiveDeclaration = ::svt::model::PrimitiveDeclaration;
 using ClassDeclaration = ::svt::model::ClassDeclaration;
 using SubroutineDeclaration = ::svt::model::SubroutineDeclaration;
+using DpiDeclaration = ::svt::model::DpiDeclaration;
 using SpecifyBlock = ::svt::model::SpecifyBlock;
 using AssertionDeclaration = ::svt::model::AssertionDeclaration;
 using AssertionStatement = ::svt::model::AssertionStatement;
@@ -2951,6 +2952,13 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
               fmt::println("    {}", JoinLexemes(resolved_item.tokens));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
+                                              DpiDeclaration>) {
+              fmt::println("    {} DPI {}", resolved_item.export_declaration
+                               ? "export"
+                               : "import",
+                           JoinLexemes(resolved_item.declaration));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
                                               UnsupportedModuleItem>) {
               fmt::println("    {} <unsupported>", resolved_item.kind);
             }
@@ -4198,6 +4206,13 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             PrintExportDeclaration(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   DpiDeclaration>) {
+            fmt::println("{} DPI {}", resolved_node.export_declaration
+                             ? "export"
+                             : "import",
+                         JoinLexemes(resolved_node.declaration));
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    CheckerDeclaration>) {
             fmt::println("checker {}", resolved_node.name);
           } else if constexpr (std::same_as<
@@ -4483,6 +4498,13 @@ auto Parser::ParseDesignElement() -> DesignElement {
         m_token_iterator = dispatch_iterator;
         return ParseTypeDeclaration();
       case ::HashLexeme("import"):
+        if (rng::next(dispatch_iterator, 1, rng::cend(m_tokens)) !=
+                rng::cend(m_tokens) and
+            rng::next(dispatch_iterator, 1, rng::cend(m_tokens))->type ==
+                TokenType::kStringLiteral) {
+          m_token_iterator = dispatch_iterator;
+          return ParseDpiDeclaration();
+        }
         if (::IsPackageScopeImportStart(dispatch_iterator,
                                         rng::cend(m_tokens))) {
           m_token_iterator = dispatch_iterator;
@@ -4490,6 +4512,13 @@ auto Parser::ParseDesignElement() -> DesignElement {
         }
         break;
       case ::HashLexeme("export"):
+        if (rng::next(dispatch_iterator, 1, rng::cend(m_tokens)) !=
+                rng::cend(m_tokens) and
+            rng::next(dispatch_iterator, 1, rng::cend(m_tokens))->type ==
+                TokenType::kStringLiteral) {
+          m_token_iterator = dispatch_iterator;
+          return ParseDpiDeclaration();
+        }
         if (::IsPackageScopeExportStart(dispatch_iterator,
                                         rng::cend(m_tokens))) {
           m_token_iterator = dispatch_iterator;
@@ -4945,6 +4974,28 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
   return declaration;
 }
 
+auto Parser::ParseDpiDeclaration() -> DpiDeclaration {
+  auto const begin{m_token_iterator};
+  DpiDeclaration declaration{};
+  declaration.export_declaration = m_token_iterator->IsKeyword("export");
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  if (m_token_iterator->type == TokenType::kStringLiteral) {
+    declaration.language = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const declaration_begin{m_token_iterator};
+  auto const semicolon{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.type == TokenType::kSemicolon; })};
+  if (semicolon == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected ';' while parsing DPI declaration"};
+  }
+  declaration.declaration = {declaration_begin, semicolon};
+  m_token_iterator = rng::next(semicolon, 1, rng::cend(m_tokens));
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   auto const declaration_begin_iterator{m_token_iterator};
   SubroutineDeclaration declaration{};
@@ -4971,6 +5022,7 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   }
   auto const header_end{name_iterator};
   declaration.return_type = {header_begin, header_end};
+  m_token_iterator = header_end;
   if (m_token_iterator->type == TokenType::kLParen) {
     auto const ports_begin{m_token_iterator};
     auto const ports_end{FindMatchingDelimiter(
@@ -4981,6 +5033,20 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   }
   if (m_token_iterator->type == TokenType::kSemicolon) {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const port_body{declaration.ports.empty()
+                           ? tokens_t{}
+                           : tokens_t{rng::next(declaration.ports.begin()),
+                                      declaration.ports.end()}};
+  for (auto const port_tokens : SplitTopLevelSeparatedTokens(
+           port_body, TokenType::kComma, "subroutine ports", false)) {
+    auto const equals{rng::find_if(
+        port_tokens, [](Token const& token) { return token.type == TokenType::kEquals; })};
+    if (equals != port_tokens.end()) {
+      declaration.default_arguments.push_back(
+          {rng::next(equals, 1, rng::cend(port_tokens)),
+           rng::cend(port_tokens)});
+    }
   }
   if (declaration.extern_declaration) {
     declaration.tokens = {declaration_begin_iterator, m_token_iterator};
@@ -5674,10 +5740,26 @@ auto Parser::ParseModuleItem() -> ModuleItem {
           return ModuleItem{std::in_place_type<ContinuousAssign>,
                             ParseContinuousAssign()};
         case ::HashLexeme("import"):
+          if (rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+                  rng::cend(m_tokens) and
+              rng::next(m_token_iterator, 1, rng::cend(m_tokens))->type ==
+                  TokenType::kStringLiteral) {
+            return ModuleItem{std::in_place_type<DpiDeclaration>,
+                              ParseDpiDeclaration()};
+          }
           if (::IsPackageScopeImportStart(m_token_iterator,
                                           rng::cend(m_tokens))) {
             return ModuleItem{std::in_place_type<ImportDeclaration>,
                               ParseImportDeclaration()};
+          }
+          break;
+        case ::HashLexeme("export"):
+          if (rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
+                  rng::cend(m_tokens) and
+              rng::next(m_token_iterator, 1, rng::cend(m_tokens))->type ==
+                  TokenType::kStringLiteral) {
+            return ModuleItem{std::in_place_type<DpiDeclaration>,
+                              ParseDpiDeclaration()};
           }
           break;
         case ::HashLexeme("always"):

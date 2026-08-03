@@ -104,6 +104,7 @@ using TokenPreservingStatement = svt::model::TokenPreservingStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
 using CastExpression = svt::model::CastExpression;
+using DpiDeclaration = svt::model::DpiDeclaration;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -208,7 +209,7 @@ TEST_CASE("Parse subroutine declarations", "[parser]") {
       std::get<SubroutineDeclaration>(translation_unit.at(0));
   REQUIRE_FALSE(function_declaration.task);
   REQUIRE(function_declaration.name == "top");
-  REQUIRE_FALSE(function_declaration.body.empty());
+  REQUIRE(function_declaration.body.empty());
   auto const& module = std::get<ModuleDeclaration>(translation_unit.at(1));
   REQUIRE(std::holds_alternative<SubroutineDeclaration>(module.items.at(0)));
   auto const& task = std::get<SubroutineDeclaration>(module.items.at(0));
@@ -361,6 +362,19 @@ TEST_CASE("Parse expression casts", "[parser]") {
   REQUIRE(Lexemes(cast.type_specifier) == std::vector<std::string_view>{"int"});
   REQUIRE(Lexemes(cast.expression->tokens) ==
           std::vector<std::string_view>{"x", "+", "1"});
+}
+
+TEST_CASE("Parse DPI declarations and subroutine defaults", "[parser]") {
+  Parser parser{std::string{"import \"DPI-C\" function void dpi(input int x); export \"DPI-C\" function void dpo(input int x); function void f(input int x = 1); endfunction"}};
+  auto translation_unit = parser.Parse();
+  REQUIRE(std::get<DpiDeclaration>(translation_unit.at(0)).language == "DPI-C");
+  REQUIRE(std::get<DpiDeclaration>(translation_unit.at(1)).export_declaration);
+  auto const& function = std::get<SubroutineDeclaration>(translation_unit.at(2));
+  REQUIRE(Lexemes(function.ports) ==
+          std::vector<std::string_view>{"(", "input", "int", "x", "=", "1"});
+  REQUIRE(function.default_arguments.size() == 1);
+  REQUIRE(Lexemes(function.default_arguments.front()) ==
+          std::vector<std::string_view>{"1"});
 }
 
 TEST_CASE("Parse all.sv regression fixture", "[parser][regression]") {

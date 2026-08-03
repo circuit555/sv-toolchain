@@ -2850,6 +2850,47 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
               PrintImportDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
+                                              TokenPreservingDeclaration>) {
+              fmt::println("    {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              CovergroupDeclaration>) {
+              fmt::println("    covergroup {}", resolved_item.name);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ConfigDeclaration>) {
+              fmt::println("    config {}", resolved_item.name);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              CheckerDeclaration>) {
+              fmt::println("    checker {}", resolved_item.name);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              ClockingDeclaration>) {
+              fmt::println("    clocking {}", resolved_item.name);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              DefaultClockingDeclaration>) {
+              fmt::println("    {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              DefaultDisableIffDeclaration>) {
+              fmt::println("    {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              SpecifyBlock>) {
+              fmt::println("    specify {}", JoinLexemes(resolved_item.items));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              AssertionDeclaration>) {
+              fmt::println("    {} {}", resolved_item.sequence ? "sequence" : "property",
+                           resolved_item.name);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              AssertionStatement>) {
+              fmt::println("    {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
                                               UnsupportedModuleItem>) {
               fmt::println("    {} <unsupported>", resolved_item.kind);
             }
@@ -4058,6 +4099,18 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             PrintImportDeclaration(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   CheckerDeclaration>) {
+            fmt::println("checker {}", resolved_node.name);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   ConfigDeclaration>) {
+            fmt::println("config {}", resolved_node.name);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   TokenPreservingDeclaration>) {
+            fmt::println("{}", JoinLexemes(resolved_node.tokens));
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    ClassDeclaration>) {
             fmt::println("class {}", resolved_node.name);
           } else if constexpr (std::same_as<
@@ -4628,37 +4681,35 @@ auto Parser::ParsePrimitiveDeclaration() -> PrimitiveDeclaration {
   declaration.ports = ParsePorts();
   ExpectToken(TokenType::kSemicolon, "primitive declaration");
 
-  if (m_token_iterator->IsKeyword("table")) {
-    auto const table_begin{m_token_iterator};
-    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  auto const body_end{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.IsKeyword("endprimitive"); })};
+  if (body_end == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected 'endprimitive'"};
+  }
+  auto const table_begin{rng::find_if(
+      tokens_t{m_token_iterator, body_end},
+      [](Token const& token) { return token.IsKeyword("table"); })};
+  if (table_begin != body_end) {
     auto const table_end{rng::find_if(
-        tokens_t{m_token_iterator, rng::cend(m_tokens)},
+        tokens_t{table_begin, body_end},
         [](Token const& token) { return token.IsKeyword("endtable"); })};
-    if (table_end == rng::cend(m_tokens)) {
-      throw std::runtime_error{"[Parser] expected 'endtable'"};
+    if (table_end != body_end) {
+      declaration.table = {table_begin, table_end};
     }
-    declaration.table = {table_begin, table_end};
-    m_token_iterator = rng::next(table_end, 1, rng::cend(m_tokens));
   }
-
-  if (m_token_iterator->IsKeyword("initial")) {
-    auto const initial_begin{m_token_iterator};
-    ::AdvanceToTopLevelBoundary(
-        m_token_iterator, rng::cend(m_tokens),
-        [](tokens_t::iterator const token_iterator) {
-          return token_iterator->type == TokenType::kEndOfFile or
-                 token_iterator->IsKeyword("endprimitive");
-        },
-        [](tokens_t::iterator const token_iterator) {
-          return token_iterator->type == TokenType::kSemicolon;
-        },
-        true, BoundaryEndBehavior::kStopAtEnd, "primitive initial statement");
-    if (m_token_iterator->type == TokenType::kSemicolon) {
-      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
-    }
-    declaration.initial_statement = {initial_begin, m_token_iterator};
+  auto const initial_begin{rng::find_if(
+      tokens_t{m_token_iterator, body_end},
+      [](Token const& token) { return token.IsKeyword("initial"); })};
+  if (initial_begin != body_end) {
+    auto const initial_end{rng::find_if(
+        tokens_t{initial_begin, body_end},
+        [](Token const& token) { return token.type == TokenType::kSemicolon; })};
+    declaration.initial_statement =
+        {initial_begin, initial_end == body_end ? body_end
+                                                 : rng::next(initial_end, 1, rng::cend(m_tokens))};
   }
-
+  m_token_iterator = body_end;
   ExpectKeyword("endprimitive", "primitive declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
   declaration.tokens = {declaration_begin_iterator, m_token_iterator};
@@ -4926,7 +4977,9 @@ auto Parser::ParseClockingDeclaration() -> ClockingDeclaration {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
   declaration.default_clocking = m_token_iterator->IsKeyword("default");
-  if (declaration.default_clocking) {
+  if (declaration.default_clocking and
+      (m_token_iterator == rng::cend(m_tokens) or
+       not m_token_iterator->IsKeyword("endclocking"))) {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
   ExpectKeyword("clocking", "clocking declaration");
@@ -5319,6 +5372,9 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("alias"):
         case ::HashLexeme("defparam"):
         case ::HashLexeme("let"):
+          return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
+                            ParseTokenPreservingDeclaration()};
+        case ::HashLexeme("endclocking"):
           return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
                             ParseTokenPreservingDeclaration()};
         case ::HashLexeme("wire"):

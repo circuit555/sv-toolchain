@@ -2975,6 +2975,10 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
               fmt::println("    {}", JoinLexemes(resolved_item.tokens));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
+                                              DirectiveDeclaration>) {
+              fmt::println("    directive {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
                                               UnsupportedPackageItem>) {
               fmt::println("    {} <unsupported>", resolved_item.kind);
             }
@@ -5022,6 +5026,15 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
     if (::IsPackageScopeExportStart(m_token_iterator, rng::cend(m_tokens))) {
       items.emplace_back(std::in_place_type<ExportDeclaration>,
                          ParseExportDeclaration());
+      continue;
+    }
+
+    if (m_token_iterator->lexeme == "alias" or
+        m_token_iterator->lexeme == "defparam" or
+        m_token_iterator->lexeme == "let" or
+        m_token_iterator->lexeme == "bind") {
+      items.emplace_back(std::in_place_type<DirectiveDeclaration>,
+                         ParseDirectiveDeclaration());
       continue;
     }
 

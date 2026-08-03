@@ -794,6 +794,7 @@ export struct UnsupportedPackageItem {
 export using PackageItem =
     std::variant<TimeDeclaration, ParameterDeclaration, TypeDeclaration,
                  ImportDeclaration, ExportDeclaration, TokenPreservingDeclaration,
+                 DirectiveDeclaration,
                  UnsupportedPackageItem>;
 
 export struct PackageDeclaration : Declaration {

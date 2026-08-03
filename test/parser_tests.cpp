@@ -555,6 +555,15 @@ TEST_CASE("Parse config instance use clauses", "[parser]") {
   REQUIRE(config.items.front().libraries.front().lexeme == "work");
 }
 
+TEST_CASE("Parse package directives", "[parser]") {
+  Parser parser{std::string{"package p; let inc(x) = x + 1; endpackage"}};
+  auto translation_unit = parser.Parse();
+  auto const& package = std::get<PackageDeclaration>(translation_unit.front());
+  REQUIRE(package.items.size() == 1);
+  REQUIRE(std::get<DirectiveDeclaration>(package.items.front()).kind ==
+          DirectiveDeclaration::Kind::kLet);
+}
+
 TEST_CASE("Parse covergroup sample signatures", "[parser]") {
   Parser parser{std::string{"module m; covergroup cg with function sample(int value); endgroup endmodule"}};
   auto translation_unit = parser.Parse();

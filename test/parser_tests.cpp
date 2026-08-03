@@ -264,6 +264,15 @@ TEST_CASE("Parse null generate items", "[parser]") {
   REQUIRE(std::holds_alternative<NullGenerateItem>(region.items.front()->node));
 }
 
+TEST_CASE("Parse module instance arrays", "[parser]") {
+  Parser parser{std::string{"module m; child inst[3:1][2:0](.a(), .b()); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& instance = std::get<ModuleInstantiation>(module.items.front());
+  REQUIRE(Lexemes(instance.instance_dimensions) ==
+          std::vector<std::string_view>{"[", "3", ":", "1", "]", "[", "2", ":", "0", "]"});
+}
+
 TEST_CASE("Parse generic module parameters", "[parser]") {
   std::string src = R"(
     module foo #(

@@ -393,6 +393,7 @@ export struct ContinuousAssign {
 export struct ModuleInstantiation {
   std::string_view module_name;
   std::string_view instance_name;
+  std::span<Token const> instance_dimensions;
   std::span<Token const> parameter_overrides;
   std::span<Token const> port_connections;
 };

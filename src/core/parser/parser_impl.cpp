@@ -3431,6 +3431,17 @@ auto TokenParserBase::ParseModuleInstantiation() -> ModuleInstantiation {
 
   auto const instance_name_token{*m_token_iterator};
   ExpectToken(TokenType::kIdentifier, "module instantiation instance name");
+  auto const dimensions_begin{m_token_iterator};
+  while (m_token_iterator->type == TokenType::kLBracket) {
+    auto const close_iterator{FindMatchingDelimiter(
+        m_token_iterator, rng::cend(m_tokens), TokenType::kLBracket,
+        TokenType::kRBracket)};
+    if (close_iterator == rng::cend(m_tokens)) {
+      throw std::runtime_error{"[Parser] expected ']' while parsing instance array"};
+    }
+    m_token_iterator = rng::next(close_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const dimensions_end{m_token_iterator};
   auto const port_connections = ::ConsumeBalancedDelimitedTokens(
       m_token_iterator, rng::cend(m_tokens), TokenType::kLParen,
       TokenType::kRParen, "module instantiation port connections");
@@ -3439,6 +3450,8 @@ auto TokenParserBase::ParseModuleInstantiation() -> ModuleInstantiation {
 
   return ModuleInstantiation{.module_name = module_name_token.lexeme,
                              .instance_name = instance_name_token.lexeme,
+                             .instance_dimensions = {dimensions_begin,
+                                                      dimensions_end},
                              .parameter_overrides = parameter_overrides,
                              .port_connections = port_connections};
 }

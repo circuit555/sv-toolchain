@@ -101,6 +101,7 @@ using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
 using TokenPreservingStatement = svt::model::TokenPreservingStatement;
+using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -295,6 +296,15 @@ TEST_CASE("Parse token-preserving procedural controls", "[parser]") {
   REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(0)).kind == "return");
   REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(1)).kind == "break");
   REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(2)).kind == "continue");
+}
+
+TEST_CASE("Parse covergroup declarations", "[parser]") {
+  Parser parser{std::string{"module m; covergroup cg @(posedge clk); cp: coverpoint data; endgroup : cg endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
+  REQUIRE(covergroup.name == "cg");
+  REQUIRE_FALSE(covergroup.body.empty());
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

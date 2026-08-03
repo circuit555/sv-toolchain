@@ -28,6 +28,7 @@ using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = ::svt::model::TokenPreservingDeclaration;
+using CovergroupDeclaration = ::svt::model::CovergroupDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -4803,6 +4804,36 @@ auto Parser::ParseTokenPreservingDeclaration()
                                     .tokens = {begin, m_token_iterator}};
 }
 
+auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
+  auto const begin{m_token_iterator};
+  ExpectKeyword("covergroup", "covergroup declaration");
+  CovergroupDeclaration declaration{};
+  if (m_token_iterator->type == TokenType::kIdentifier) {
+    declaration.name = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  auto const header_end{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.type == TokenType::kSemicolon; })};
+  if (header_end == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected ';' while parsing covergroup"};
+  }
+  m_token_iterator = rng::next(header_end, 1, rng::cend(m_tokens));
+  auto const body_begin{m_token_iterator};
+  auto const end_iterator{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.IsKeyword("endgroup"); })};
+  if (end_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected 'endgroup'"};
+  }
+  declaration.body = {body_begin, end_iterator};
+  m_token_iterator = end_iterator;
+  ExpectKeyword("endgroup", "covergroup declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
   auto const begin{m_token_iterator};
   ExpectKeyword("specify", "specify block");
@@ -5224,6 +5255,9 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("checker"):
           return ModuleItem{std::in_place_type<CheckerDeclaration>,
                             ParseCheckerDeclaration()};
+        case ::HashLexeme("covergroup"):
+          return ModuleItem{std::in_place_type<CovergroupDeclaration>,
+                            ParseCovergroupDeclaration()};
         case ::HashLexeme("function"):
         case ::HashLexeme("task"):
           return ModuleItem{std::in_place_type<SubroutineDeclaration>,

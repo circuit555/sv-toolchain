@@ -563,6 +563,11 @@ export struct TokenPreservingDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct CovergroupDeclaration : Declaration {
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct InterfaceItemDeclaration {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -635,6 +640,7 @@ export using ModuleItem =
                  DefaultClockingDeclaration, DefaultDisableIffDeclaration,
                  CheckerDeclaration,
                  TokenPreservingDeclaration,
+                 CovergroupDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {

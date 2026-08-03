@@ -29,6 +29,7 @@ using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = ::svt::model::TokenPreservingDeclaration;
 using CovergroupDeclaration = ::svt::model::CovergroupDeclaration;
+using ConfigDeclaration = ::svt::model::ConfigDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -4286,6 +4287,9 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("checker"):
         m_token_iterator = dispatch_iterator;
         return ParseCheckerDeclaration();
+      case ::HashLexeme("config"):
+        m_token_iterator = dispatch_iterator;
+        return ParseConfigDeclaration();
       case ::HashLexeme("bind"):
         m_token_iterator = dispatch_iterator;
         return ParseTokenPreservingDeclaration();
@@ -4829,6 +4833,30 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
   declaration.body = {body_begin, end_iterator};
   m_token_iterator = end_iterator;
   ExpectKeyword("endgroup", "covergroup declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
+  auto const begin{m_token_iterator};
+  ExpectKeyword("config", "config declaration");
+  ConfigDeclaration declaration{};
+  if (m_token_iterator->type == TokenType::kIdentifier) {
+    declaration.name = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  ExpectToken(TokenType::kSemicolon, "config declaration");
+  auto const body_begin{m_token_iterator};
+  auto const end_iterator{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.IsKeyword("endconfig"); })};
+  if (end_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected 'endconfig'"};
+  }
+  declaration.body = {body_begin, end_iterator};
+  m_token_iterator = end_iterator;
+  ExpectKeyword("endconfig", "config declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
   declaration.tokens = {begin, m_token_iterator};
   return declaration;

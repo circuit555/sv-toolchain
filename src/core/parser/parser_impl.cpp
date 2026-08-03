@@ -75,6 +75,7 @@ using ModuleItem = ::svt::model::ModuleItem;
 using UnsupportedModuleItem = ::svt::model::UnsupportedModuleItem;
 using TimeDeclaration = ::svt::model::TimeDeclaration;
 using TimeDeclarationKind = ::svt::model::TimeDeclarationKind;
+using TimeLiteral = ::svt::model::TimeLiteral;
 using PackageDeclaration = ::svt::model::PackageDeclaration;
 using PackageItem = ::svt::model::PackageItem;
 using PackageImportDeclaration = ::svt::model::PackageImportDeclaration;
@@ -4424,12 +4425,53 @@ auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
 
   m_token_iterator = rng::next(semicolon_iterator, 1, rng::cend(m_tokens));
 
+  auto parse_literal{[](tokens_t const literal) -> std::optional<TimeLiteral> {
+    static constexpr auto units{std::to_array<std::string_view>(
+        {"s", "ms", "us", "ns", "ps", "fs"})};
+    if (literal.empty()) {
+      return std::nullopt;
+    }
+    auto magnitude{literal[0].lexeme};
+    auto unit{std::string_view{}};
+    if (literal.size() == 2UZ) {
+      if (literal[0].type != TokenType::kIntegerLiteral and
+          literal[0].type != TokenType::kRealLiteral) {
+        return std::nullopt;
+      }
+      unit = literal[1].lexeme;
+    } else if (literal.size() == 1UZ) {
+      auto const unit_begin{magnitude.find_first_not_of("0123456789_.")};
+      if (unit_begin == std::string_view::npos) {
+        return std::nullopt;
+      }
+      unit = magnitude.substr(unit_begin);
+      magnitude = magnitude.substr(0, unit_begin);
+    } else {
+      return std::nullopt;
+    }
+    if (not rng::contains(units, unit)) {
+      return std::nullopt;
+    }
+    return TimeLiteral{.magnitude = magnitude,
+                       .unit = unit,
+                       .tokens = literal};
+  }};
+  auto const time_value{slash_iterator != semicolon_iterator
+                            ? tokens_t{time_begin_iterator, slash_iterator}
+                            : tokens_t{time_begin_iterator, semicolon_iterator}};
+  auto const semantic_time_value{parse_literal(time_value)};
+  auto const semantic_precision_value{parse_literal(precision_value)};
+  if (not semantic_time_value.has_value() or
+      (not rng::empty(precision_value) and
+       not semantic_precision_value.has_value())) {
+    throw std::runtime_error{"[Parser] invalid time literal"};
+  }
   return TimeDeclaration{
       .kind = kind,
-      .time_value = slash_iterator != semicolon_iterator
-                        ? tokens_t{time_begin_iterator, slash_iterator}
-                        : tokens_t{time_begin_iterator, semicolon_iterator},
+      .time_value = time_value,
       .precision_value = precision_value,
+      .semantic_time_value = semantic_time_value,
+      .semantic_precision_value = semantic_precision_value,
       .tokens = {declaration_begin_iterator, m_token_iterator}};
 }
 

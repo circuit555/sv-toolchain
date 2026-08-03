@@ -611,9 +611,9 @@ TEST_CASE("Parse package declarations", "[parser]") {
   REQUIRE(export_declaration.names.front().scope == "*");
   REQUIRE(export_declaration.names.front().name == "*");
 
-  auto const& unsupported_item{
-      std::get<UnsupportedPackageItem>(package_declaration.items.at(5))};
-  REQUIRE(unsupported_item.kind == "program");
+  auto const& preserved_item{
+      std::get<TokenPreservingDeclaration>(package_declaration.items.at(5))};
+  REQUIRE(preserved_item.kind == "program");
 
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(1)).name == "foo");
 }

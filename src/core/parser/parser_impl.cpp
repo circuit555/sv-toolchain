@@ -21,6 +21,7 @@ using ProgramDeclaration = ::svt::model::ProgramDeclaration;
 using PrimitiveDeclaration = ::svt::model::PrimitiveDeclaration;
 using ClassDeclaration = ::svt::model::ClassDeclaration;
 using SubroutineDeclaration = ::svt::model::SubroutineDeclaration;
+using SpecifyBlock = ::svt::model::SpecifyBlock;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -4702,6 +4703,23 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   return declaration;
 }
 
+auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
+  auto const begin{m_token_iterator};
+  ExpectKeyword("specify", "specify block");
+  auto const items_begin{m_token_iterator};
+  auto const end_iterator{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [](Token const& token) { return token.IsKeyword("endspecify"); })};
+  if (end_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{"[Parser] expected 'endspecify'"};
+  }
+  m_token_iterator = end_iterator;
+  SpecifyBlock block{.items = {items_begin, m_token_iterator}};
+  ExpectKeyword("endspecify", "specify block");
+  block.tokens = {begin, m_token_iterator};
+  return block;
+}
+
 auto Parser::SkipUnsupportedElementToSemicolon(
     std::string_view const stop_keyword) -> void {
   ::AdvanceToTopLevelBoundary(
@@ -5001,6 +5019,9 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("task"):
           return ModuleItem{std::in_place_type<SubroutineDeclaration>,
                             ParseSubroutineDeclaration()};
+        case ::HashLexeme("specify"):
+          return ModuleItem{std::in_place_type<SpecifyBlock>,
+                            ParseSpecifyBlock()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
           return ModuleItem{std::in_place_type<NetDeclaration>,

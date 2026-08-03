@@ -414,8 +414,17 @@ export struct ModuleInstantiation {
 };
 
 export struct ClassDeclaration : Declaration {
+  enum class MemberKind : std::uint8_t {
+    kField, kMethod, kConstraint, kType, kOther
+  };
+  struct Member {
+    MemberKind kind{MemberKind::kOther};
+    std::string_view name;
+    std::span<Token const> tokens;
+  };
   std::string_view lifetime;
   std::vector<ParameterDeclaration> parameters;
+  std::vector<Member> members;
   std::span<Token const> extends;
   std::span<Token const> body;
   std::span<Token const> tokens;

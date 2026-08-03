@@ -15,8 +15,20 @@ export enum class PortDirection : std::uint8_t {
 };
 
 export enum class NetType : std::uint8_t {
-  kWire, kLogic, kTri, kTri0, kTri1, kTriand, kTrior, kTrireg, kUwire,
-  kWand, kWor, kSupply0, kSupply1, kInterconnect
+  kWire,
+  kLogic,
+  kTri,
+  kTri0,
+  kTri1,
+  kTriand,
+  kTrior,
+  kTrireg,
+  kUwire,
+  kWand,
+  kWor,
+  kSupply0,
+  kSupply1,
+  kInterconnect
 };
 
 export enum class VariableType : std::uint8_t {
@@ -166,19 +178,14 @@ export struct UnsupportedExpression {
   std::span<Token const> tokens;
 };
 
-export using ExpressionNode =
-    std::variant<std::monostate, IdentifierExpression,
-                 SystemIdentifierExpression, LiteralExpression, UnaryExpression,
-                 BinaryExpression, ConditionalExpression, IndexExpression,
-                 RangeSelectExpression, ConcatenationExpression,
-                 StreamingConcatenationExpression,
-                 DistributionExpression,
-                 MinTypMaxExpression,
-                 ReplicationExpression, CallExpression,
-                 AssignmentPatternExpression, CastExpression,
-                 TypeExpression, EventExpression,
-                 MemberAccessExpression,
-                 UnsupportedExpression>;
+export using ExpressionNode = std::variant<
+    std::monostate, IdentifierExpression, SystemIdentifierExpression,
+    LiteralExpression, UnaryExpression, BinaryExpression, ConditionalExpression,
+    IndexExpression, RangeSelectExpression, ConcatenationExpression,
+    StreamingConcatenationExpression, DistributionExpression,
+    MinTypMaxExpression, ReplicationExpression, CallExpression,
+    AssignmentPatternExpression, CastExpression, TypeExpression,
+    EventExpression, MemberAccessExpression, UnsupportedExpression>;
 
 export struct Expression {
   ExpressionNode node;
@@ -385,11 +392,10 @@ export using StatementNode =
                  IfElseStatement, CaseStatement, LoopStatement,
                  TimingControlStatement, WaitStatement, ForkJoinStatement,
                  ProceduralContinuousAssignStatement, SystemTaskCallStatement,
-                 ProceduralDeclarationStatement,
-                 EventTriggerStatement, RandomizationBlockStatement,
-                 ReturnStatement, BreakStatement, ContinueStatement,
-                 DisableStatement, ExpectStatement, TokenPreservingStatement,
-                 UnsupportedStatement>;
+                 ProceduralDeclarationStatement, EventTriggerStatement,
+                 RandomizationBlockStatement, ReturnStatement, BreakStatement,
+                 ContinueStatement, DisableStatement, ExpectStatement,
+                 TokenPreservingStatement, UnsupportedStatement>;
 
 export struct Statement {
   StatementNode node;
@@ -510,7 +516,11 @@ export struct PrimitiveGateInstantiation {
 
 export struct ClassDeclaration : Declaration {
   enum class MemberKind : std::uint8_t {
-    kField, kMethod, kConstraint, kType, kOther
+    kField,
+    kMethod,
+    kConstraint,
+    kType,
+    kOther
   };
   struct Member {
     MemberKind kind{MemberKind::kOther};
@@ -646,7 +656,8 @@ export struct NullGenerateItem {};
 export using GenerateItemNode =
     std::variant<GenvarDeclaration, GenerateFor, GenerateIf, GenerateCase,
                  GenerateRegion, ContinuousAssign, NetDeclaration,
-                 ModuleInstantiation, NullGenerateItem, UnsupportedGenerateItem>;
+                 ModuleInstantiation, NullGenerateItem,
+                 UnsupportedGenerateItem>;
 
 export struct GenerateItem {
   GenerateItemNode node;
@@ -704,7 +715,12 @@ export struct DefaultDisableIffDeclaration {
 
 export struct CheckerDeclaration : Declaration {
   enum class ItemKind : std::uint8_t {
-    kDeclaration, kClocking, kDefaultDisable, kAssertion, kGenerate, kOther
+    kDeclaration,
+    kClocking,
+    kDefaultDisable,
+    kAssertion,
+    kGenerate,
+    kOther
   };
   struct Item {
     ItemKind kind{ItemKind::kOther};
@@ -732,7 +748,12 @@ export struct DirectiveDeclaration {
 
 export struct CovergroupDeclaration : Declaration {
   enum class ItemKind : std::uint8_t {
-    kCoverpoint, kCross, kOption, kBin, kSample, kOther
+    kCoverpoint,
+    kCross,
+    kOption,
+    kBin,
+    kSample,
+    kOther
   };
   struct Bin {
     std::string_view kind;
@@ -759,7 +780,12 @@ export struct CovergroupDeclaration : Declaration {
 
 export struct ConfigDeclaration : Declaration {
   enum class ItemKind : std::uint8_t {
-    kDesign, kDefaultLiblist, kCellUse, kInstanceLiblist, kInstanceUse, kOther
+    kDesign,
+    kDefaultLiblist,
+    kCellUse,
+    kInstanceLiblist,
+    kInstanceUse,
+    kOther
   };
   struct Item {
     ItemKind kind{ItemKind::kOther};
@@ -819,8 +845,8 @@ export struct UnsupportedPackageItem {
 
 export using PackageItem =
     std::variant<TimeDeclaration, ParameterDeclaration, TypeDeclaration,
-                 ImportDeclaration, ExportDeclaration, TokenPreservingDeclaration,
-                 DirectiveDeclaration,
+                 ImportDeclaration, ExportDeclaration,
+                 TokenPreservingDeclaration, DirectiveDeclaration,
                  UnsupportedPackageItem>;
 
 export struct PackageDeclaration : Declaration {
@@ -835,23 +861,16 @@ export struct UnsupportedModuleItem {
   std::span<Token const> tokens;
 };
 
-export using ModuleItem =
-    std::variant<NetDeclaration, VariableDeclaration, ParameterDeclaration,
-                 TypeDeclaration, StructuredVariableDeclaration,
-                 UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
-                 InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
-                 PrimitiveGateInstantiation,
-                 TimeDeclaration, ImportDeclaration, ClassDeclaration,
-                 SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
-                 AssertionStatement, ClockingDeclaration,
-                 DefaultClockingDeclaration, DefaultDisableIffDeclaration,
-                 DpiDeclaration,
-                 CheckerDeclaration,
-                 DirectiveDeclaration,
-                 TokenPreservingDeclaration,
-                 CovergroupDeclaration,
-                 ConfigDeclaration,
-                 UnsupportedModuleItem>;
+export using ModuleItem = std::variant<
+    NetDeclaration, VariableDeclaration, ParameterDeclaration, TypeDeclaration,
+    StructuredVariableDeclaration, UserDefinedNetDeclaration, ContinuousAssign,
+    AlwaysBlock, InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
+    PrimitiveGateInstantiation, TimeDeclaration, ImportDeclaration,
+    ClassDeclaration, SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
+    AssertionStatement, ClockingDeclaration, DefaultClockingDeclaration,
+    DefaultDisableIffDeclaration, DpiDeclaration, CheckerDeclaration,
+    DirectiveDeclaration, TokenPreservingDeclaration, CovergroupDeclaration,
+    ConfigDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   ModuleSourceKind source_kind{ModuleSourceKind::kModule};
@@ -888,9 +907,7 @@ export using DesignElement =
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
                  ImportDeclaration, ExportDeclaration, CheckerDeclaration,
-                 DirectiveDeclaration,
-                 TokenPreservingDeclaration, DpiDeclaration,
-                 ConfigDeclaration,
-                 UnsupportedDesignElement>;
+                 DirectiveDeclaration, TokenPreservingDeclaration,
+                 DpiDeclaration, ConfigDeclaration, UnsupportedDesignElement>;
 
 }  // namespace svt::model

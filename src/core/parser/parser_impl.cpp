@@ -151,8 +151,7 @@ using SystemTaskCallStatement = ::svt::model::SystemTaskCallStatement;
 using ProceduralDeclarationStatement =
     ::svt::model::ProceduralDeclarationStatement;
 using EventTriggerStatement = ::svt::model::EventTriggerStatement;
-using RandomizationBlockStatement =
-    ::svt::model::RandomizationBlockStatement;
+using RandomizationBlockStatement = ::svt::model::RandomizationBlockStatement;
 using UnsupportedStatement = ::svt::model::UnsupportedStatement;
 using TokenPreservingStatement = ::svt::model::TokenPreservingStatement;
 using ReturnStatement = ::svt::model::ReturnStatement;
@@ -241,12 +240,18 @@ auto constexpr kKeywordEndPairs{std::to_array<KeywordEndPair>({
 
 auto constexpr kBinaryOperatorPrecedences{
     std::to_array<BinaryOperatorPrecedence>({
-        {.lexeme = "||", .precedence = 2},  {.lexeme = "&&", .precedence = 3},
-        {.lexeme = "|", .precedence = 4},   {.lexeme = "^", .precedence = 5},
-        {.lexeme = "^~", .precedence = 5},  {.lexeme = "~^", .precedence = 5},
-        {.lexeme = "&", .precedence = 6},   {.lexeme = "==", .precedence = 7},
-        {.lexeme = "!=", .precedence = 7},  {.lexeme = "===", .precedence = 7},
-        {.lexeme = "!==", .precedence = 7}, {.lexeme = "==?", .precedence = 7},
+        {.lexeme = "||", .precedence = 2},
+        {.lexeme = "&&", .precedence = 3},
+        {.lexeme = "|", .precedence = 4},
+        {.lexeme = "^", .precedence = 5},
+        {.lexeme = "^~", .precedence = 5},
+        {.lexeme = "~^", .precedence = 5},
+        {.lexeme = "&", .precedence = 6},
+        {.lexeme = "==", .precedence = 7},
+        {.lexeme = "!=", .precedence = 7},
+        {.lexeme = "===", .precedence = 7},
+        {.lexeme = "!==", .precedence = 7},
+        {.lexeme = "==?", .precedence = 7},
         {.lexeme = "!=?", .precedence = 7},
         {.lexeme = "inside", .precedence = 7},
         {.lexeme = "matches", .precedence = 7},
@@ -260,12 +265,18 @@ auto constexpr kBinaryOperatorPrecedences{
         {.lexeme = "iff", .precedence = 2},
         {.lexeme = "implies", .precedence = 2},
         {.lexeme = "<", .precedence = 8},
-        {.lexeme = ">", .precedence = 8},   {.lexeme = "<=", .precedence = 8},
-        {.lexeme = ">=", .precedence = 8},  {.lexeme = "<<", .precedence = 9},
-        {.lexeme = ">>", .precedence = 9},  {.lexeme = "<<<", .precedence = 9},
-        {.lexeme = ">>>", .precedence = 9}, {.lexeme = "+", .precedence = 10},
-        {.lexeme = "-", .precedence = 10},  {.lexeme = "*", .precedence = 11},
-        {.lexeme = "/", .precedence = 11},  {.lexeme = "%", .precedence = 11},
+        {.lexeme = ">", .precedence = 8},
+        {.lexeme = "<=", .precedence = 8},
+        {.lexeme = ">=", .precedence = 8},
+        {.lexeme = "<<", .precedence = 9},
+        {.lexeme = ">>", .precedence = 9},
+        {.lexeme = "<<<", .precedence = 9},
+        {.lexeme = ">>>", .precedence = 9},
+        {.lexeme = "+", .precedence = 10},
+        {.lexeme = "-", .precedence = 10},
+        {.lexeme = "*", .precedence = 11},
+        {.lexeme = "/", .precedence = 11},
+        {.lexeme = "%", .precedence = 11},
         {.lexeme = "**", .precedence = 12},
     })};
 
@@ -275,11 +286,11 @@ inline auto IsParameterDeclarationPrefix(tokens_t const tokens) -> bool {
 }
 
 inline auto IsPrimitiveGateName(std::string_view const name) -> bool {
-  static constexpr auto names{std::to_array<std::string_view>({
-      "cmos", "rcmos", "rtran", "rtranif0", "rtranif1", "tran",
-      "tranif0", "tranif1", "tri", "tri0", "tri1", "pullup",
-      "pulldown", "buf", "not", "and", "nand", "or", "nor", "xor",
-      "xnor"})};
+  static constexpr auto names{std::to_array<std::string_view>(
+      {"cmos",     "rcmos",   "rtran", "rtranif0", "rtranif1", "tran",
+       "tranif0",  "tranif1", "tri",   "tri0",     "tri1",     "pullup",
+       "pulldown", "buf",     "not",   "and",      "nand",     "or",
+       "nor",      "xor",     "xnor"})};
   return rng::contains(names, name);
 }
 
@@ -667,14 +678,15 @@ inline auto ParsePackageScopeName(tokens_t const tokens,
 
 inline auto ParseSemanticTimeLiteral(tokens_t const literal)
     -> std::optional<TimeLiteral> {
-  static constexpr auto units{std::to_array<std::string_view>(
-      {"s", "ms", "us", "ns", "ps", "fs"})};
+  static constexpr auto units{
+      std::to_array<std::string_view>({"s", "ms", "us", "ns", "ps", "fs"})};
   if (literal.empty()) return std::nullopt;
   auto magnitude{literal[0].lexeme};
   auto unit{std::string_view{}};
   if (literal.size() == 2UZ) {
     if (literal[0].type != TokenType::kIntegerLiteral and
-        literal[0].type != TokenType::kRealLiteral) return std::nullopt;
+        literal[0].type != TokenType::kRealLiteral)
+      return std::nullopt;
     unit = literal[1].lexeme;
   } else if (literal.size() == 1UZ) {
     auto const unit_begin{magnitude.find_first_not_of("0123456789_.")};
@@ -792,8 +804,8 @@ class ExpressionParser final : private TokenParserBase {
         auto const distributions{::ConsumeBalancedDelimitedTokens(
             m_token_iterator, rng::cend(m_tokens), TokenType::kLBrace,
             TokenType::kRBrace, "distribution expression")};
-        m_token_iterator = rng::next(rng::cend(distributions), 1,
-                                      rng::cend(m_tokens));
+        m_token_iterator =
+            rng::next(rng::cend(distributions), 1, rng::cend(m_tokens));
         auto const begin_iterator{rng::cbegin(expression->tokens)};
         expression = std::make_unique<Expression>(
             ExpressionNode{std::in_place_type<DistributionExpression>,
@@ -848,8 +860,7 @@ class ExpressionParser final : private TokenParserBase {
     while (not AtEnd()) {
       auto const begin_iterator{rng::cbegin(expression->tokens)};
 
-      if (m_token_iterator->lexeme == "." or
-          m_token_iterator->lexeme == "::") {
+      if (m_token_iterator->lexeme == "." or m_token_iterator->lexeme == "::") {
         auto const separator{m_token_iterator->lexeme};
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
         if (AtEnd() or (m_token_iterator->type != TokenType::kIdentifier and
@@ -864,7 +875,7 @@ class ExpressionParser final : private TokenParserBase {
             tokens_t{begin_iterator, m_token_iterator});
       } else
 
-      if (MatchToken(TokenType::kLBracket)) {
+          if (MatchToken(TokenType::kLBracket)) {
         auto left{ParseConditionalExpression()};
         if (MatchToken(TokenType::kColon)) {
           auto right{ParseConditionalExpression()};
@@ -948,11 +959,12 @@ class ExpressionParser final : private TokenParserBase {
         throw std::runtime_error{"[Parser] expected event expression"};
       }
       auto const opening{m_token_iterator};
-      auto const closing{::FindMatchingDelimiter(
-          opening, rng::cend(m_tokens), TokenType::kLParen,
-          TokenType::kRParen)};
+      auto const closing{::FindMatchingDelimiter(opening, rng::cend(m_tokens),
+                                                 TokenType::kLParen,
+                                                 TokenType::kRParen)};
       if (closing == rng::cend(m_tokens)) {
-        throw std::runtime_error{"[Parser] expected event expression delimiter"};
+        throw std::runtime_error{
+            "[Parser] expected event expression delimiter"};
       }
       m_token_iterator = rng::next(closing, 1, rng::cend(m_tokens));
       return std::make_unique<Expression>(
@@ -964,21 +976,24 @@ class ExpressionParser final : private TokenParserBase {
     auto type_end{m_token_iterator};
     while (type_end != rng::cend(m_tokens) and
            (type_end->type == TokenType::kIdentifier or
-            type_end->type == TokenType::kKeyword or type_end->lexeme == "::")) {
+            type_end->type == TokenType::kKeyword or
+            type_end->lexeme == "::")) {
       rng::advance(type_end, 1, rng::cend(m_tokens));
     }
     if (type_end != m_token_iterator and type_end != rng::cend(m_tokens) and
         type_end->lexeme == "'" and
         rng::next(type_end, 1, rng::cend(m_tokens)) != rng::cend(m_tokens) and
-        rng::next(type_end, 1, rng::cend(m_tokens))->type == TokenType::kLParen) {
+        rng::next(type_end, 1, rng::cend(m_tokens))->type ==
+            TokenType::kLParen) {
       rng::advance(m_token_iterator,
-                   static_cast<std::ptrdiff_t>(std::distance(m_token_iterator, type_end) + 1),
+                   static_cast<std::ptrdiff_t>(
+                       std::distance(m_token_iterator, type_end) + 1),
                    rng::cend(m_tokens));
       auto const expression_tokens{::ConsumeBalancedDelimitedTokens(
           m_token_iterator, rng::cend(m_tokens), TokenType::kLParen,
           TokenType::kRParen, "cast expression")};
-      m_token_iterator = rng::next(expression_tokens.end(), 1,
-                                    rng::cend(m_tokens));
+      m_token_iterator =
+          rng::next(expression_tokens.end(), 1, rng::cend(m_tokens));
       return std::make_unique<Expression>(
           ExpressionNode{std::in_place_type<CastExpression>,
                          tokens_t{begin_iterator, type_end},
@@ -993,10 +1008,9 @@ class ExpressionParser final : private TokenParserBase {
             TokenType::kLParen) {
       auto const opening{rng::next(m_token_iterator, 1, rng::cend(m_tokens))};
       auto const contents{::ConsumeBalancedDelimitedTokens(
-          opening, rng::cend(m_tokens), TokenType::kLParen,
-          TokenType::kRParen, "type expression")};
-      m_token_iterator = rng::next(rng::cend(contents), 1,
-                                   rng::cend(m_tokens));
+          opening, rng::cend(m_tokens), TokenType::kLParen, TokenType::kRParen,
+          "type expression")};
+      m_token_iterator = rng::next(rng::cend(contents), 1, rng::cend(m_tokens));
       return std::make_unique<Expression>(
           ExpressionNode{std::in_place_type<TypeExpression>, contents},
           tokens_t{begin_iterator, m_token_iterator});
@@ -1045,9 +1059,9 @@ class ExpressionParser final : private TokenParserBase {
 
     if (m_token_iterator->type == TokenType::kLParen) {
       auto const opening{m_token_iterator};
-      auto const closing{::FindMatchingDelimiter(
-          opening, rng::cend(m_tokens), TokenType::kLParen,
-          TokenType::kRParen)};
+      auto const closing{::FindMatchingDelimiter(opening, rng::cend(m_tokens),
+                                                 TokenType::kLParen,
+                                                 TokenType::kRParen)};
       if (closing != rng::cend(m_tokens)) {
         auto const content{tokens_t{std::next(opening), closing}};
         auto const parts{SplitTopLevelSeparatedTokens(
@@ -1070,8 +1084,8 @@ class ExpressionParser final : private TokenParserBase {
     }
 
     if (MatchToken(TokenType::kLBrace)) {
-      if (not AtEnd() and
-          (m_token_iterator->lexeme == "<<" or m_token_iterator->lexeme == ">>")) {
+      if (not AtEnd() and (m_token_iterator->lexeme == "<<" or
+                           m_token_iterator->lexeme == ">>")) {
         auto const direction{m_token_iterator->lexeme};
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
         auto const slice_begin{m_token_iterator};
@@ -1080,13 +1094,14 @@ class ExpressionParser final : private TokenParserBase {
               return token.type == TokenType::kLBrace;
             })};
         if (inner_begin == rng::cend(m_tokens)) {
-          throw std::runtime_error{"[Parser] expected streaming concatenation body"};
+          throw std::runtime_error{
+              "[Parser] expected streaming concatenation body"};
         }
         auto const inner_tokens{::ConsumeBalancedDelimitedTokens(
             inner_begin, rng::cend(m_tokens), TokenType::kLBrace,
             TokenType::kRBrace, "streaming concatenation")};
-        m_token_iterator = rng::next(rng::cend(inner_tokens), 1,
-                                      rng::cend(m_tokens));
+        m_token_iterator =
+            rng::next(rng::cend(inner_tokens), 1, rng::cend(m_tokens));
         ExpectToken(TokenType::kRBrace, "streaming concatenation");
         return std::make_unique<Expression>(
             ExpressionNode{std::in_place_type<StreamingConcatenationExpression>,
@@ -1254,16 +1269,16 @@ class StatementParser final : private TokenParserBase {
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
       }
       auto const event_begin{m_token_iterator};
-      auto const end{::FindTopLevelStatementEnd(m_token_iterator,
-                                                rng::cend(m_tokens))};
+      auto const end{
+          ::FindTopLevelStatementEnd(m_token_iterator, rng::cend(m_tokens))};
       m_token_iterator = end;
       if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
       }
       return std::make_unique<Statement>(
-          StatementNode{std::in_place_type<EventTriggerStatement>,
-                        EventTriggerStatement{nonblocking,
-                                               tokens_t{event_begin, end}}},
+          StatementNode{
+              std::in_place_type<EventTriggerStatement>,
+              EventTriggerStatement{nonblocking, tokens_t{event_begin, end}}},
           tokens_t{begin, m_token_iterator});
     }
     if (m_token_iterator->lexeme == "randcase" or
@@ -1272,24 +1287,26 @@ class StatementParser final : private TokenParserBase {
       auto const sequence{m_token_iterator->lexeme == "randsequence"};
       auto const end_keyword{sequence ? "endsequence" : "endcase"};
       auto const body_begin{std::next(begin)};
-      auto const end{rng::find_if(
-          body_begin, rng::cend(m_tokens), [end_keyword](Token const& token) {
-            return token.lexeme == end_keyword;
-          })};
+      auto const end{rng::find_if(body_begin, rng::cend(m_tokens),
+                                  [end_keyword](Token const& token) {
+                                    return token.lexeme == end_keyword;
+                                  })};
       if (end == rng::cend(m_tokens)) {
-        throw std::runtime_error{"[StatementParser] expected randomization block end"};
+        throw std::runtime_error{
+            "[StatementParser] expected randomization block end"};
       }
       m_token_iterator = std::next(end);
       return std::make_unique<Statement>(
-          StatementNode{std::in_place_type<RandomizationBlockStatement>,
-                        RandomizationBlockStatement{sequence,
-                                                    tokens_t{body_begin, end}}},
+          StatementNode{
+              std::in_place_type<RandomizationBlockStatement>,
+              RandomizationBlockStatement{sequence, tokens_t{body_begin, end}}},
           tokens_t{begin, m_token_iterator});
     }
-    static constexpr auto declaration_keywords = std::to_array<std::string_view>({
-        "bit", "logic", "reg", "int", "integer", "shortint", "longint",
-        "byte", "real", "shortreal", "time", "realtime", "string", "event",
-        "var", "const", "static", "automatic"});
+    static constexpr auto declaration_keywords =
+        std::to_array<std::string_view>(
+            {"bit", "logic", "reg", "int", "integer", "shortint", "longint",
+             "byte", "real", "shortreal", "time", "realtime", "string", "event",
+             "var", "const", "static", "automatic"});
     if (rng::contains(declaration_keywords, m_token_iterator->lexeme)) {
       auto const begin{m_token_iterator};
       auto const end{::FindTopLevelStatementEnd(begin, rng::cend(m_tokens))};
@@ -1298,8 +1315,9 @@ class StatementParser final : private TokenParserBase {
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
       }
       return std::make_unique<Statement>(
-          StatementNode{std::in_place_type<ProceduralDeclarationStatement>,
-                        ProceduralDeclarationStatement{{begin, m_token_iterator}}},
+          StatementNode{
+              std::in_place_type<ProceduralDeclarationStatement>,
+              ProceduralDeclarationStatement{{begin, m_token_iterator}}},
           tokens_t{begin, m_token_iterator});
     }
     if (m_token_iterator->IsKeyword("return") or
@@ -1315,10 +1333,10 @@ class StatementParser final : private TokenParserBase {
           ::FindTopLevelStatementEnd(body_begin, rng::cend(m_tokens))};
       auto const body_end{statement_end_iterator};
       if (kind == "return") {
-        auto expression = body_begin == body_end
-                              ? ExpressionPtr{}
-                              : ParseExpressionOrUnsupported(
-                                    tokens_t{body_begin, body_end});
+        auto expression =
+            body_begin == body_end
+                ? ExpressionPtr{}
+                : ParseExpressionOrUnsupported(tokens_t{body_begin, body_end});
         m_token_iterator = statement_end_iterator;
         if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
           rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
@@ -1361,9 +1379,8 @@ class StatementParser final : private TokenParserBase {
             tokens_t{begin, m_token_iterator});
       }
       auto const action_begin{std::find_if(
-          body_begin, body_end, [](Token const& token) {
-            return token.lexeme == "else";
-          })};
+          body_begin, body_end,
+          [](Token const& token) { return token.lexeme == "else"; })};
       auto const condition_end{action_begin};
       m_token_iterator = statement_end_iterator;
       if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
@@ -1371,10 +1388,11 @@ class StatementParser final : private TokenParserBase {
       }
       return std::make_unique<Statement>(
           StatementNode{std::in_place_type<ExpectStatement>,
-                        ExpectStatement{tokens_t{body_begin, condition_end},
-                                         action_begin == body_end
-                                             ? tokens_t{}
-                                             : tokens_t{std::next(action_begin), body_end}}},
+                        ExpectStatement{
+                            tokens_t{body_begin, condition_end},
+                            action_begin == body_end
+                                ? tokens_t{}
+                                : tokens_t{std::next(action_begin), body_end}}},
           tokens_t{begin, m_token_iterator});
     }
     if (m_token_iterator->IsKeyword("assign") or
@@ -1696,11 +1714,11 @@ class StatementParser final : private TokenParserBase {
       rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
 
       if (timing_control_statement.kind == TimingControlKind::kDelay) {
-        auto const delay_tokens{tokens_t{rng::prev(m_token_iterator),
-                                         m_token_iterator}};
-        timing_control_statement.control =
-            DelayControl{.expression = ParseExpressionOrUnsupported(delay_tokens),
-                         .semantic_time = ParseSemanticTimeLiteral(delay_tokens)};
+        auto const delay_tokens{
+            tokens_t{rng::prev(m_token_iterator), m_token_iterator}};
+        timing_control_statement.control = DelayControl{
+            .expression = ParseExpressionOrUnsupported(delay_tokens),
+            .semantic_time = ParseSemanticTimeLiteral(delay_tokens)};
       } else {
         timing_control_statement.control =
             EventControl{.events = std::vector<ExpressionPtr>{}};
@@ -3074,7 +3092,8 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               DirectiveDeclaration>) {
-              fmt::println("    directive {}", JoinLexemes(resolved_item.tokens));
+              fmt::println("    directive {}",
+                           JoinLexemes(resolved_item.tokens));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               UnsupportedPackageItem>) {
@@ -3088,7 +3107,8 @@ auto PrintPackage(PackageDeclaration const& package_declaration) -> void {
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
 auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
-  auto const keyword{module_declaration.source_kind == ModuleSourceKind::kMacromodule
+  auto const keyword{module_declaration.source_kind ==
+                             ModuleSourceKind::kMacromodule
                          ? "macromodule"
                          : "module"};
   if (rng::empty(module_declaration.lifetime)) {
@@ -3268,7 +3288,8 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               DirectiveDeclaration>) {
-              fmt::println("    directive {}", JoinLexemes(resolved_item.tokens));
+              fmt::println("    directive {}",
+                           JoinLexemes(resolved_item.tokens));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               CovergroupDeclaration>) {
@@ -3301,7 +3322,8 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               AssertionDeclaration>) {
-              fmt::println("    {} {}", resolved_item.sequence ? "sequence" : "property",
+              fmt::println("    {} {}",
+                           resolved_item.sequence ? "sequence" : "property",
                            resolved_item.name);
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
@@ -3310,10 +3332,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               DpiDeclaration>) {
-              fmt::println("    {} DPI {}", resolved_item.export_declaration
-                               ? "export"
-                               : "import",
-                           JoinLexemes(resolved_item.declaration));
+              fmt::println(
+                  "    {} DPI {}",
+                  resolved_item.export_declaration ? "export" : "import",
+                  JoinLexemes(resolved_item.declaration));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               UnsupportedModuleItem>) {
@@ -3779,14 +3801,14 @@ auto TokenParserBase::ParseNetDeclaration() -> NetDeclaration {
       return NetType::kLogic;
     }
 
-    static constexpr auto names{std::to_array<std::string_view>({
-        "tri", "tri0", "tri1", "triand", "trior", "trireg", "uwire",
-        "wand", "wor", "supply0", "supply1", "interconnect"})};
-    static constexpr auto values{std::to_array<NetType>({
-        NetType::kTri, NetType::kTri0, NetType::kTri1, NetType::kTriand,
-        NetType::kTrior, NetType::kTrireg, NetType::kUwire, NetType::kWand,
-        NetType::kWor, NetType::kSupply0, NetType::kSupply1,
-        NetType::kInterconnect})};
+    static constexpr auto names{std::to_array<std::string_view>(
+        {"tri", "tri0", "tri1", "triand", "trior", "trireg", "uwire", "wand",
+         "wor", "supply0", "supply1", "interconnect"})};
+    static constexpr auto values{std::to_array<NetType>(
+        {NetType::kTri, NetType::kTri0, NetType::kTri1, NetType::kTriand,
+         NetType::kTrior, NetType::kTrireg, NetType::kUwire, NetType::kWand,
+         NetType::kWor, NetType::kSupply0, NetType::kSupply1,
+         NetType::kInterconnect})};
     for (std::size_t index{}; index < names.size(); ++index) {
       if (token_iterator->lexeme == names[index]) {
         return values[index];
@@ -3845,13 +3867,16 @@ auto TokenParserBase::ParseNetDeclaration() -> NetDeclaration {
   net_declaration.type = net_type;
   net_declaration.name = name_iterator->lexeme;
   auto bracket_depth{0UZ};
-  for (auto iterator{declaration_begin_iterator}; iterator != declaration_end_iterator;
+  for (auto iterator{declaration_begin_iterator};
+       iterator != declaration_end_iterator;
        rng::advance(iterator, 1, declaration_end_iterator)) {
     if (iterator->type == TokenType::kLBracket) {
       ++bracket_depth;
-    } else if (iterator->type == TokenType::kRBracket and bracket_depth != 0UZ) {
+    } else if (iterator->type == TokenType::kRBracket and
+               bracket_depth != 0UZ) {
       --bracket_depth;
-    } else if (iterator->type == TokenType::kIdentifier and bracket_depth == 0UZ) {
+    } else if (iterator->type == TokenType::kIdentifier and
+               bracket_depth == 0UZ) {
       auto const previous{iterator == declaration_begin_iterator
                               ? declaration_end_iterator
                               : rng::prev(iterator)};
@@ -3953,11 +3978,12 @@ auto TokenParserBase::ParseModuleInstantiation() -> ModuleInstantiation {
   ExpectToken(TokenType::kIdentifier, "module instantiation instance name");
   auto const dimensions_begin{m_token_iterator};
   while (m_token_iterator->type == TokenType::kLBracket) {
-    auto const close_iterator{FindMatchingDelimiter(
-        m_token_iterator, rng::cend(m_tokens), TokenType::kLBracket,
-        TokenType::kRBracket)};
+    auto const close_iterator{
+        FindMatchingDelimiter(m_token_iterator, rng::cend(m_tokens),
+                              TokenType::kLBracket, TokenType::kRBracket)};
     if (close_iterator == rng::cend(m_tokens)) {
-      throw std::runtime_error{"[Parser] expected ']' while parsing instance array"};
+      throw std::runtime_error{
+          "[Parser] expected ']' while parsing instance array"};
     }
     m_token_iterator = rng::next(close_iterator, 1, rng::cend(m_tokens));
   }
@@ -3968,12 +3994,12 @@ auto TokenParserBase::ParseModuleInstantiation() -> ModuleInstantiation {
   m_token_iterator = rng::next(port_connections.end(), 1, rng::cend(m_tokens));
   ExpectToken(TokenType::kSemicolon, "module instantiation");
 
-  return ModuleInstantiation{.module_name = module_name_token.lexeme,
-                             .instance_name = instance_name_token.lexeme,
-                             .instance_dimensions = {dimensions_begin,
-                                                      dimensions_end},
-                             .parameter_overrides = parameter_overrides,
-                             .port_connections = port_connections};
+  return ModuleInstantiation{
+      .module_name = module_name_token.lexeme,
+      .instance_name = instance_name_token.lexeme,
+      .instance_dimensions = {dimensions_begin, dimensions_end},
+      .parameter_overrides = parameter_overrides,
+      .port_connections = port_connections};
 }
 
 Lexer::Lexer(std::string&& sv_source_code)
@@ -4205,38 +4231,39 @@ auto Lexer::ScanNumber(SourceLocation const& token_source_location) -> Token {
 auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
   static constexpr auto kKeywords{std::to_array<std::string_view>({
-      "alias",        "always",      "always_comb",  "always_ff",
-      "assert",
-      "always_latch", "assign",      "assume",       "automatic",
-      "begin",        "bind",        "bit",          "break",       "case",
-      "casex",        "casez",       "chandle",      "checker",
-      "class",        "clocking",    "config",       "constraint",
-      "cover",        "covergroup",  "deassign",     "default",
-      "continue",     "defparam",     "disable",     "else",         "end",
-      "endchecker",   "endclass",    "endclocking",  "endconfig",
-      "endfunction",  "endgenerate", "endgroup",     "endinterface",
-      "endmodule",    "endpackage",  "endprimitive", "endprogram",
-      "endproperty",  "endsequence", "endcase",      "endspecify",
-      "endtask",      "endtable",    "event",       "expect",       "export",       "extern",
-      "final",        "for",         "force",        "foreach",
-      "forever",      "fork",        "function",     "generate",
-      "genvar",       "global",      "if",           "import",
-      "initial",      "input",       "int",          "integer",
-      "interface",    "inout",       "join",         "join_any",
-      "join_none",    "let",         "localparam",   "logic",
-      "modport",      "longint",     "macromodule",  "module",
-      "nettype",      "output",      "package",      "parameter",     "table",
-      "primitive",    "program",     "property",     "real",
-      "realtime",     "ref",         "reg",          "release",
-      "repeat",       "restrict",    "return",       "sequence",     "shortint",
-      "shortreal",    "specify",     "static",       "struct",
-      "tagged",       "task",        "time",         "timeprecision",
-      "timeunit",     "typedef",     "union",        "wait",
-      "wait_order",   "wand",        "while",        "with",
-      "wire",         "wor",         "enum",         "packed",
-      "tri",          "tri0",        "tri1",         "triand",
-      "trior",        "trireg",      "uwire",        "supply0",
-      "supply1",      "interconnect",
+      "alias",        "always",       "always_comb",   "always_ff",
+      "assert",       "always_latch", "assign",        "assume",
+      "automatic",    "begin",        "bind",          "bit",
+      "break",        "case",         "casex",         "casez",
+      "chandle",      "checker",      "class",         "clocking",
+      "config",       "constraint",   "cover",         "covergroup",
+      "deassign",     "default",      "continue",      "defparam",
+      "disable",      "else",         "end",           "endchecker",
+      "endclass",     "endclocking",  "endconfig",     "endfunction",
+      "endgenerate",  "endgroup",     "endinterface",  "endmodule",
+      "endpackage",   "endprimitive", "endprogram",    "endproperty",
+      "endsequence",  "endcase",      "endspecify",    "endtask",
+      "endtable",     "event",        "expect",        "export",
+      "extern",       "final",        "for",           "force",
+      "foreach",      "forever",      "fork",          "function",
+      "generate",     "genvar",       "global",        "if",
+      "import",       "initial",      "input",         "int",
+      "integer",      "interface",    "inout",         "join",
+      "join_any",     "join_none",    "let",           "localparam",
+      "logic",        "modport",      "longint",       "macromodule",
+      "module",       "nettype",      "output",        "package",
+      "parameter",    "table",        "primitive",     "program",
+      "property",     "real",         "realtime",      "ref",
+      "reg",          "release",      "repeat",        "restrict",
+      "return",       "sequence",     "shortint",      "shortreal",
+      "specify",      "static",       "struct",        "tagged",
+      "task",         "time",         "timeprecision", "timeunit",
+      "typedef",      "union",        "wait",          "wait_order",
+      "wand",         "while",        "with",          "wire",
+      "wor",          "enum",         "packed",        "tri",
+      "tri0",         "tri1",         "triand",        "trior",
+      "trireg",       "uwire",        "supply0",       "supply1",
+      "interconnect",
   })};
 
   auto const start_position{m_position - 1};
@@ -4518,7 +4545,7 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
         [](auto const& resolved_node) -> void {
           if constexpr (std::same_as<
                             std::remove_cvref_t<decltype(resolved_node)>,
-            ModuleDeclaration>) {
+                            ModuleDeclaration>) {
             ::PrintModule(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
@@ -4564,9 +4591,8 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
                                    DpiDeclaration>) {
-            fmt::println("{} DPI {}", resolved_node.export_declaration
-                             ? "export"
-                             : "import",
+            fmt::println("{} DPI {}",
+                         resolved_node.export_declaration ? "export" : "import",
                          JoinLexemes(resolved_node.declaration));
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
@@ -4845,8 +4871,8 @@ auto Parser::ParseDesignElement() -> DesignElement {
               {.match_keyword_tokens_only = false,
                .require_end_keyword = true,
                .context = "interface class"});
-          return TokenPreservingDeclaration{.kind = "interface class",
-                                            .tokens = {begin, m_token_iterator}};
+          return TokenPreservingDeclaration{
+              .kind = "interface class", .tokens = {begin, m_token_iterator}};
         }
         m_token_iterator = dispatch_iterator;
         return ParseInterfaceDeclaration();
@@ -4920,7 +4946,8 @@ auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
       [](Token const& token) -> bool { return token.lexeme == "/"; })};
   if (kind == TimeDeclarationKind::kTimePrecision and
       slash_iterator != semicolon_iterator) {
-    throw std::runtime_error{"[Parser] timeprecision cannot specify a timeunit"};
+    throw std::runtime_error{
+        "[Parser] timeprecision cannot specify a timeunit"};
   }
   if (time_begin_iterator == slash_iterator) {
     throw std::runtime_error{"[Parser] expected time value"};
@@ -4939,8 +4966,8 @@ auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
   m_token_iterator = rng::next(semicolon_iterator, 1, rng::cend(m_tokens));
 
   auto parse_literal{[](tokens_t const literal) -> std::optional<TimeLiteral> {
-    static constexpr auto units{std::to_array<std::string_view>(
-        {"s", "ms", "us", "ns", "ps", "fs"})};
+    static constexpr auto units{
+        std::to_array<std::string_view>({"s", "ms", "us", "ns", "ps", "fs"})};
     if (literal.empty()) {
       return std::nullopt;
     }
@@ -4965,13 +4992,12 @@ auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
     if (not rng::contains(units, unit)) {
       return std::nullopt;
     }
-    return TimeLiteral{.magnitude = magnitude,
-                       .unit = unit,
-                       .tokens = literal};
+    return TimeLiteral{.magnitude = magnitude, .unit = unit, .tokens = literal};
   }};
-  auto const time_value{slash_iterator != semicolon_iterator
-                            ? tokens_t{time_begin_iterator, slash_iterator}
-                            : tokens_t{time_begin_iterator, semicolon_iterator}};
+  auto const time_value{
+      slash_iterator != semicolon_iterator
+          ? tokens_t{time_begin_iterator, slash_iterator}
+          : tokens_t{time_begin_iterator, semicolon_iterator}};
   auto const semantic_time_value{parse_literal(time_value)};
   auto const semantic_precision_value{parse_literal(precision_value)};
   if (not semantic_time_value.has_value() or
@@ -5140,7 +5166,7 @@ auto Parser::ParsePackageItems() -> std::vector<PackageItem> {
     items.emplace_back(
         std::in_place_type<TokenPreservingDeclaration>,
         TokenPreservingDeclaration{.kind = unsupported.kind,
-                                    .tokens = unsupported.tokens});
+                                   .tokens = unsupported.tokens});
   }
 
   return items;
@@ -5270,7 +5296,8 @@ auto Parser::ParsePrimitiveDeclaration() -> PrimitiveDeclaration {
         while (row_end != table_end and row_end->location.row == row) {
           rng::advance(row_end, 1, table_end);
         }
-        if (row_begin != row_end) declaration.table_rows.push_back({row_begin, row_end});
+        if (row_begin != row_end)
+          declaration.table_rows.push_back({row_begin, row_end});
         row_begin = row_end;
       }
     }
@@ -5279,12 +5306,14 @@ auto Parser::ParsePrimitiveDeclaration() -> PrimitiveDeclaration {
       tokens_t{m_token_iterator, body_end},
       [](Token const& token) { return token.IsKeyword("initial"); })};
   if (initial_begin != body_end) {
-    auto const initial_end{rng::find_if(
-        tokens_t{initial_begin, body_end},
-        [](Token const& token) { return token.type == TokenType::kSemicolon; })};
-    declaration.initial_statement =
-        {initial_begin, initial_end == body_end ? body_end
-                                                 : rng::next(initial_end, 1, rng::cend(m_tokens))};
+    auto const initial_end{
+        rng::find_if(tokens_t{initial_begin, body_end}, [](Token const& token) {
+          return token.type == TokenType::kSemicolon;
+        })};
+    declaration.initial_statement = {
+        initial_begin, initial_end == body_end
+                           ? body_end
+                           : rng::next(initial_end, 1, rng::cend(m_tokens))};
   }
   m_token_iterator = body_end;
   ExpectKeyword("endprimitive", "primitive declaration");
@@ -5330,9 +5359,10 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
   std::vector<tokens_t> member_slices{};
   for (auto const member_tokens : raw_members) {
     auto const constraint_iterator{rng::find_if(
-        member_tokens, [](Token const& token) { return token.lexeme == "constraint"; })};
-    auto const method_iterator{rng::find_if(
-        member_tokens, [](Token const& token) {
+        member_tokens,
+        [](Token const& token) { return token.lexeme == "constraint"; })};
+    auto const method_iterator{
+        rng::find_if(member_tokens, [](Token const& token) {
           return token.lexeme == "function" or token.lexeme == "task" or
                  token.lexeme == "extern";
         })};
@@ -5357,22 +5387,25 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
     } else if (std::ranges::contains(member_tokens, "constraint",
                                      &Token::lexeme)) {
       member.kind = ClassDeclaration::MemberKind::kConstraint;
-    } else if (std::ranges::contains(member_tokens, "typedef", &Token::lexeme)) {
+    } else if (std::ranges::contains(member_tokens, "typedef",
+                                     &Token::lexeme)) {
       member.kind = ClassDeclaration::MemberKind::kType;
     } else {
       member.kind = ClassDeclaration::MemberKind::kField;
     }
-    member.random = std::ranges::contains(member_tokens, "rand", &Token::lexeme) or
-                    std::ranges::contains(member_tokens, "randc", &Token::lexeme) or
-                    std::ranges::contains(member_tokens, "rands", &Token::lexeme);
+    member.random =
+        std::ranges::contains(member_tokens, "rand", &Token::lexeme) or
+        std::ranges::contains(member_tokens, "randc", &Token::lexeme) or
+        std::ranges::contains(member_tokens, "rands", &Token::lexeme);
     member.extern_declaration =
         std::ranges::contains(member_tokens, "extern", &Token::lexeme);
-    auto const body_begin{rng::find_if(
-        member_tokens, [](Token const& token) { return token.type == TokenType::kLBrace; })};
+    auto const body_begin{rng::find_if(member_tokens, [](Token const& token) {
+      return token.type == TokenType::kLBrace;
+    })};
     if (body_begin != member_tokens.end()) {
-      auto const body_end{::FindMatchingDelimiter(
-          body_begin, member_tokens.end(), TokenType::kLBrace,
-          TokenType::kRBrace)};
+      auto const body_end{
+          ::FindMatchingDelimiter(body_begin, member_tokens.end(),
+                                  TokenType::kLBrace, TokenType::kRBrace)};
       member.header = {member_tokens.begin(), body_begin};
       if (body_end != member_tokens.end()) {
         member.body = {std::next(body_begin), body_end};
@@ -5380,8 +5413,8 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
     } else {
       member.header = member_tokens;
     }
-    auto const name_iterator{rng::find_if(
-        member_tokens, [](Token const& token) {
+    auto const name_iterator{
+        rng::find_if(member_tokens, [](Token const& token) {
           return token.type == TokenType::kIdentifier;
         })};
     if (name_iterator != member_tokens.end()) {
@@ -5409,7 +5442,8 @@ auto Parser::ParseDpiDeclaration() -> DpiDeclaration {
       tokens_t{m_token_iterator, rng::cend(m_tokens)},
       [](Token const& token) { return token.type == TokenType::kSemicolon; })};
   if (semicolon == rng::cend(m_tokens)) {
-    throw std::runtime_error{"[Parser] expected ';' while parsing DPI declaration"};
+    throw std::runtime_error{
+        "[Parser] expected ';' while parsing DPI declaration"};
   }
   declaration.declaration = {declaration_begin, semicolon};
   m_token_iterator = rng::next(semicolon, 1, rng::cend(m_tokens));
@@ -5425,7 +5459,8 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   if (declaration.extern_declaration) {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
   }
-  ExpectKeyword(declaration.task ? "task" : "function", "subroutine declaration");
+  ExpectKeyword(declaration.task ? "task" : "function",
+                "subroutine declaration");
   if (m_token_iterator->IsKeyword("automatic") or
       m_token_iterator->IsKeyword("static")) {
     declaration.lifetime = m_token_iterator->lexeme;
@@ -5446,9 +5481,9 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   m_token_iterator = header_end;
   if (m_token_iterator->type == TokenType::kLParen) {
     auto const ports_begin{m_token_iterator};
-    auto const ports_end{FindMatchingDelimiter(
-        m_token_iterator, rng::cend(m_tokens), TokenType::kLParen,
-        TokenType::kRParen)};
+    auto const ports_end{
+        FindMatchingDelimiter(m_token_iterator, rng::cend(m_tokens),
+                              TokenType::kLParen, TokenType::kRParen)};
     declaration.ports = {ports_begin, ports_end};
     m_token_iterator = rng::next(ports_end, 1, rng::cend(m_tokens));
   }
@@ -5461,8 +5496,9 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
                                       declaration.ports.end()}};
   for (auto const port_tokens : SplitTopLevelSeparatedTokens(
            port_body, TokenType::kComma, "subroutine ports", false)) {
-    auto const equals{rng::find_if(
-        port_tokens, [](Token const& token) { return token.type == TokenType::kEquals; })};
+    auto const equals{rng::find_if(port_tokens, [](Token const& token) {
+      return token.type == TokenType::kEquals;
+    })};
     if (equals != port_tokens.end()) {
       declaration.default_arguments.push_back(
           {rng::next(equals, 1, rng::cend(port_tokens)),
@@ -5476,8 +5512,8 @@ auto Parser::ParseSubroutineDeclaration() -> SubroutineDeclaration {
   auto const body_begin{m_token_iterator};
   auto const end_keyword{declaration.task ? "endtask" : "endfunction"};
   ::AdvanceToMatchingEndKeyword(
-      m_token_iterator, rng::cend(m_tokens), declaration.task ? "task" : "function",
-      end_keyword, 0UZ,
+      m_token_iterator, rng::cend(m_tokens),
+      declaration.task ? "task" : "function", end_keyword, 0UZ,
       [](tokens_t::iterator const iterator, std::string_view keyword) {
         return iterator->IsKeyword(keyword);
       });
@@ -5528,10 +5564,9 @@ auto Parser::ParseCheckerDeclaration() -> CheckerDeclaration {
     } else {
       item.kind = CheckerDeclaration::ItemKind::kDeclaration;
     }
-    auto const name_iterator{rng::find_if(
-        item_tokens, [](Token const& token) {
-          return token.type == TokenType::kIdentifier;
-        })};
+    auto const name_iterator{rng::find_if(item_tokens, [](Token const& token) {
+      return token.type == TokenType::kIdentifier;
+    })};
     if (name_iterator != item_tokens.end()) item.name = name_iterator->lexeme;
     declaration.items.push_back(item);
   }
@@ -5542,8 +5577,7 @@ auto Parser::ParseCheckerDeclaration() -> CheckerDeclaration {
   return declaration;
 }
 
-auto Parser::ParseTokenPreservingDeclaration()
-    -> TokenPreservingDeclaration {
+auto Parser::ParseTokenPreservingDeclaration() -> TokenPreservingDeclaration {
   auto const begin{m_token_iterator};
   auto const kind{m_token_iterator->lexeme};
   if (kind == "endclocking") {
@@ -5570,9 +5604,12 @@ auto Parser::ParseTokenPreservingDeclaration()
 auto Parser::ParseDirectiveDeclaration() -> DirectiveDeclaration {
   auto const begin{m_token_iterator};
   auto const kind{[this]() {
-    if (m_token_iterator->lexeme == "bind") return DirectiveDeclaration::Kind::kBind;
-    if (m_token_iterator->lexeme == "alias") return DirectiveDeclaration::Kind::kAlias;
-    if (m_token_iterator->lexeme == "defparam") return DirectiveDeclaration::Kind::kDefparam;
+    if (m_token_iterator->lexeme == "bind")
+      return DirectiveDeclaration::Kind::kBind;
+    if (m_token_iterator->lexeme == "alias")
+      return DirectiveDeclaration::Kind::kAlias;
+    if (m_token_iterator->lexeme == "defparam")
+      return DirectiveDeclaration::Kind::kDefparam;
     return DirectiveDeclaration::Kind::kLet;
   }()};
   rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
@@ -5591,7 +5628,8 @@ auto Parser::ParseDirectiveDeclaration() -> DirectiveDeclaration {
   DirectiveDeclaration declaration{.kind = kind};
   declaration.head = {content_begin,
                       equals == content_end ? content_end : equals};
-  if (equals != content_end) declaration.body = {std::next(equals), content_end};
+  if (equals != content_end)
+    declaration.body = {std::next(equals), content_end};
   if (m_token_iterator != rng::cend(m_tokens) and
       m_token_iterator->type == TokenType::kSemicolon) {
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
@@ -5617,7 +5655,8 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
   }
   declaration.header = {header_begin, header_end};
   auto const event_begin{rng::find_if(
-      declaration.header, [](Token const& token) { return token.type == TokenType::kAt; })};
+      declaration.header,
+      [](Token const& token) { return token.type == TokenType::kAt; })};
   if (event_begin != declaration.header.end()) {
     declaration.event = {event_begin, declaration.header.end()};
   }
@@ -5637,8 +5676,8 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
     }
     CovergroupDeclaration::Item item{};
     item.tokens = item_tokens;
-    auto const keyword_iterator{rng::find_if(
-        item_tokens, [](Token const& token) {
+    auto const keyword_iterator{
+        rng::find_if(item_tokens, [](Token const& token) {
           return token.lexeme == "coverpoint" or token.lexeme == "cross" or
                  token.lexeme == "option" or token.lexeme == "with" or
                  token.lexeme == "bins" or token.lexeme == "ignore_bins";
@@ -5656,18 +5695,22 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
         item.kind = CovergroupDeclaration::ItemKind::kBin;
       }
     }
-    auto const colon_iterator{rng::find_if(
-        item_tokens, [](Token const& token) { return token.type == TokenType::kColon; })};
-    if (colon_iterator != item_tokens.end() and colon_iterator != item_tokens.begin() and
+    auto const colon_iterator{rng::find_if(item_tokens, [](Token const& token) {
+      return token.type == TokenType::kColon;
+    })};
+    if (colon_iterator != item_tokens.end() and
+        colon_iterator != item_tokens.begin() and
         std::prev(colon_iterator)->type == TokenType::kIdentifier) {
       item.name = std::prev(colon_iterator)->lexeme;
     }
     auto const coverpoint_iterator{rng::find_if(
-        item_tokens, [](Token const& token) { return token.lexeme == "coverpoint"; })};
+        item_tokens,
+        [](Token const& token) { return token.lexeme == "coverpoint"; })};
     if (coverpoint_iterator != item_tokens.end()) {
       auto expression_begin{std::next(coverpoint_iterator)};
       auto expression_end{item_tokens.end()};
-      for (auto iterator{expression_begin}; iterator != item_tokens.end(); ++iterator) {
+      for (auto iterator{expression_begin}; iterator != item_tokens.end();
+           ++iterator) {
         if (iterator->lexeme == "iff" or iterator->lexeme == "{") {
           expression_end = iterator;
           break;
@@ -5680,8 +5723,9 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
     if (iff_iterator != item_tokens.end()) {
       item.iff_condition = {std::next(iff_iterator), item_tokens.end()};
     }
-    auto const with_iterator{rng::find_if(
-        item_tokens, [](Token const& token) { return token.lexeme == "with"; })};
+    auto const with_iterator{rng::find_if(item_tokens, [](Token const& token) {
+      return token.lexeme == "with";
+    })};
     if (with_iterator != item_tokens.end()) {
       item.with_clause = {with_iterator, item_tokens.end()};
       if (item.kind == CovergroupDeclaration::ItemKind::kSample) {
@@ -5689,9 +5733,9 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
       }
     }
     item.transition = rng::find_if(item_tokens, [](Token const& token) {
-      return token.lexeme == "=>" or token.lexeme == "->" or
-             token.lexeme == "[->" or token.lexeme == "[=";
-    }) != item_tokens.end();
+                        return token.lexeme == "=>" or token.lexeme == "->" or
+                               token.lexeme == "[->" or token.lexeme == "[=";
+                      }) != item_tokens.end();
     for (auto iterator{item_tokens.begin()}; iterator != item_tokens.end();
          ++iterator) {
       if (iterator->lexeme != "bins" and iterator->lexeme != "ignore_bins") {
@@ -5700,10 +5744,10 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
       auto const name_iterator{std::next(iterator)};
       if (name_iterator != item_tokens.end() and
           name_iterator->type == TokenType::kIdentifier) {
-        item.bins.push_back(CovergroupDeclaration::Bin{
-            .kind = iterator->lexeme,
-            .name = name_iterator->lexeme,
-            .tokens = item_tokens});
+        item.bins.push_back(
+            CovergroupDeclaration::Bin{.kind = iterator->lexeme,
+                                       .name = name_iterator->lexeme,
+                                       .tokens = item_tokens});
       }
     }
     declaration.items.push_back(std::move(item));
@@ -5741,15 +5785,13 @@ auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
     if (item_tokens.front().lexeme == "design") {
       item.kind = ConfigDeclaration::ItemKind::kDesign;
     } else if (item_tokens.front().lexeme == "default" and
-               std::ranges::contains(item_tokens, "liblist",
-                                     &Token::lexeme)) {
+               std::ranges::contains(item_tokens, "liblist", &Token::lexeme)) {
       item.kind = ConfigDeclaration::ItemKind::kDefaultLiblist;
     } else if (item_tokens.front().lexeme == "cell" and
                std::ranges::contains(item_tokens, "use", &Token::lexeme)) {
       item.kind = ConfigDeclaration::ItemKind::kCellUse;
     } else if (item_tokens.front().lexeme == "instance" and
-               std::ranges::contains(item_tokens, "liblist",
-                                     &Token::lexeme)) {
+               std::ranges::contains(item_tokens, "liblist", &Token::lexeme)) {
       item.kind = ConfigDeclaration::ItemKind::kInstanceLiblist;
     } else if (item_tokens.front().lexeme == "instance" and
                std::ranges::contains(item_tokens, "use", &Token::lexeme)) {
@@ -5757,7 +5799,8 @@ auto Parser::ParseConfigDeclaration() -> ConfigDeclaration {
     }
     auto const first_after{std::next(item_tokens.begin())};
     auto const liblist_iterator{rng::find_if(
-        item_tokens, [](Token const& token) { return token.lexeme == "liblist"; })};
+        item_tokens,
+        [](Token const& token) { return token.lexeme == "liblist"; })};
     auto const use_iterator{rng::find_if(
         item_tokens, [](Token const& token) { return token.lexeme == "use"; })};
     if (item.kind == ConfigDeclaration::ItemKind::kDesign) {
@@ -5816,7 +5859,8 @@ auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
       item.kind = SpecifyBlock::ItemKind::kPath;
     }
     auto const equals_iterator{rng::find_if(
-        item_tokens, [](Token const& token) { return token.type == TokenType::kEquals; })};
+        item_tokens,
+        [](Token const& token) { return token.type == TokenType::kEquals; })};
     auto const if_iterator{rng::find_if(
         item_tokens, [](Token const& token) { return token.lexeme == "if"; })};
     if (if_iterator != item_tokens.end()) {
@@ -5866,11 +5910,14 @@ auto Parser::ParseAssertionDeclaration() -> AssertionDeclaration {
   }
   ExpectToken(TokenType::kSemicolon, "assertion declaration");
   auto const body_begin{m_token_iterator};
-  auto const end_iterator{rng::find_if(
-      tokens_t{m_token_iterator, rng::cend(m_tokens)},
-      [end_keyword](Token const& token) { return token.IsKeyword(end_keyword); })};
+  auto const end_iterator{
+      rng::find_if(tokens_t{m_token_iterator, rng::cend(m_tokens)},
+                   [end_keyword](Token const& token) {
+                     return token.IsKeyword(end_keyword);
+                   })};
   if (end_iterator == rng::cend(m_tokens)) {
-    throw std::runtime_error{fmt::format("[Parser] expected '{}'", end_keyword)};
+    throw std::runtime_error{
+        fmt::format("[Parser] expected '{}'", end_keyword)};
   }
   declaration.body = {body_begin, end_iterator};
   m_token_iterator = end_iterator;
@@ -5884,14 +5931,15 @@ auto Parser::ParseAssertionStatement() -> AssertionStatement {
   auto const begin{m_token_iterator};
   AssertionStatement statement{.kind = m_token_iterator->lexeme};
   auto const expression_begin{std::next(begin)};
-  auto const statement_end{::FindTopLevelStatementEnd(
-      expression_begin, rng::cend(m_tokens))};
-  auto const action_begin{rng::find_if(
-      tokens_t{expression_begin, statement_end},
-      [](Token const& token) { return token.lexeme == "else"; })};
+  auto const statement_end{
+      ::FindTopLevelStatementEnd(expression_begin, rng::cend(m_tokens))};
+  auto const action_begin{
+      rng::find_if(tokens_t{expression_begin, statement_end},
+                   [](Token const& token) { return token.lexeme == "else"; })};
   statement.expression = {expression_begin, action_begin};
-  auto const iff_iterator{rng::find_if(
-      statement.expression, [](Token const& token) { return token.lexeme == "iff"; })};
+  auto const iff_iterator{
+      rng::find_if(statement.expression,
+                   [](Token const& token) { return token.lexeme == "iff"; })};
   if (iff_iterator != statement.expression.end()) {
     statement.disable_condition = {std::next(iff_iterator), action_begin};
   }
@@ -5951,14 +5999,15 @@ auto Parser::ParseClockingDeclaration() -> ClockingDeclaration {
     } else if (item_tokens.front().lexeme == "inout") {
       item.direction = ClockingDeclaration::ItemDirection::kInout;
     }
-    auto const name_iterator{rng::find_if(
-        item_tokens, [](Token const& token) {
-          return token.type == TokenType::kIdentifier;
-        })};
+    auto const name_iterator{rng::find_if(item_tokens, [](Token const& token) {
+      return token.type == TokenType::kIdentifier;
+    })};
     if (name_iterator != item_tokens.end()) item.name = name_iterator->lexeme;
-    auto const skew_begin{rng::find_if(
-        item_tokens, [](Token const& token) { return token.type == TokenType::kHash; })};
-    if (skew_begin != item_tokens.end()) item.skew = {skew_begin, name_iterator};
+    auto const skew_begin{rng::find_if(item_tokens, [](Token const& token) {
+      return token.type == TokenType::kHash;
+    })};
+    if (skew_begin != item_tokens.end())
+      item.skew = {skew_begin, name_iterator};
     declaration.items.push_back(item);
   }
   m_token_iterator = end_iterator;
@@ -6146,9 +6195,8 @@ auto Parser::ParseModuleDeclaration() -> ModuleDeclaration {
       } catch (std::runtime_error const&) {
         m_token_iterator = module_item_begin_iterator;
         auto const unsupported{ParseUnsupportedModuleItem()};
-        module_declaration.items.emplace_back(
-            TokenPreservingDeclaration{.kind = unsupported.kind,
-                                        .tokens = unsupported.tokens});
+        module_declaration.items.emplace_back(TokenPreservingDeclaration{
+            .kind = unsupported.kind, .tokens = unsupported.tokens});
       }
     } else {
       module_declaration.items.push_back(ParseModuleItem());
@@ -6272,15 +6320,18 @@ auto Parser::ParseModuleItem() -> ModuleItem {
       if (m_token_iterator->IsKeyword("default") and
           rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
               rng::cend(m_tokens) and
-          rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("disable")) {
+          rng::next(m_token_iterator, 1, rng::cend(m_tokens))
+              ->IsKeyword("disable")) {
         return ModuleItem{std::in_place_type<DefaultDisableIffDeclaration>,
                           ParseDefaultDisableIffDeclaration()};
       }
       if (m_token_iterator->IsKeyword("extern") and
           rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
               rng::cend(m_tokens) and
-          (rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("function") or
-           rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("task"))) {
+          (rng::next(m_token_iterator, 1, rng::cend(m_tokens))
+               ->IsKeyword("function") or
+           rng::next(m_token_iterator, 1, rng::cend(m_tokens))
+               ->IsKeyword("task"))) {
         return ModuleItem{std::in_place_type<SubroutineDeclaration>,
                           ParseSubroutineDeclaration()};
       }
@@ -6312,7 +6363,8 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("default"):
           if (rng::next(m_token_iterator, 1, rng::cend(m_tokens)) !=
                   rng::cend(m_tokens) and
-              rng::next(m_token_iterator, 1, rng::cend(m_tokens))->IsKeyword("clocking")) {
+              rng::next(m_token_iterator, 1, rng::cend(m_tokens))
+                  ->IsKeyword("clocking")) {
             return ModuleItem{std::in_place_type<ClockingDeclaration>,
                               ParseClockingDeclaration()};
           }
@@ -6409,7 +6461,7 @@ auto Parser::ParseModuleItem() -> ModuleItem {
       break;
     }
 
-        case TokenType::kIdentifier: {
+    case TokenType::kIdentifier: {
       auto const module_item_begin_iterator{m_token_iterator};
       try {
         return ModuleItem{std::in_place_type<ModuleInstantiation>,
@@ -6419,13 +6471,15 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         if (::IsPrimitiveGateName(m_token_iterator->lexeme)) {
           auto const gate{m_token_iterator->lexeme};
           auto const declaration{ParseTokenPreservingDeclaration()};
-          return ModuleItem{std::in_place_type<PrimitiveGateInstantiation>,
-                            PrimitiveGateInstantiation{gate, declaration.tokens}};
+          return ModuleItem{
+              std::in_place_type<PrimitiveGateInstantiation>,
+              PrimitiveGateInstantiation{gate, declaration.tokens}};
         }
         auto const unsupported{ParseUnsupportedModuleItem()};
-        return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
-                          TokenPreservingDeclaration{.kind = unsupported.kind,
-                                                      .tokens = unsupported.tokens}};
+        return ModuleItem{
+            std::in_place_type<TokenPreservingDeclaration>,
+            TokenPreservingDeclaration{.kind = unsupported.kind,
+                                       .tokens = unsupported.tokens}};
       }
     }
 
@@ -6457,7 +6511,7 @@ auto Parser::ParseModuleItem() -> ModuleItem {
     auto const unsupported{ParseUnsupportedModuleItem()};
     return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
                       TokenPreservingDeclaration{.kind = unsupported.kind,
-                                                  .tokens = unsupported.tokens}};
+                                                 .tokens = unsupported.tokens}};
   }
 
   throw std::runtime_error{

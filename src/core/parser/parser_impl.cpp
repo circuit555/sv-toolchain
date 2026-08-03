@@ -142,6 +142,11 @@ using ProceduralContinuousAssignStatement =
 using SystemTaskCallStatement = ::svt::model::SystemTaskCallStatement;
 using UnsupportedStatement = ::svt::model::UnsupportedStatement;
 using TokenPreservingStatement = ::svt::model::TokenPreservingStatement;
+using ReturnStatement = ::svt::model::ReturnStatement;
+using BreakStatement = ::svt::model::BreakStatement;
+using ContinueStatement = ::svt::model::ContinueStatement;
+using DisableStatement = ::svt::model::DisableStatement;
+using ExpectStatement = ::svt::model::ExpectStatement;
 using PackedDimension = ::svt::model::PackedDimension;
 using PackedRangeDimension = ::svt::model::PackedRangeDimension;
 using PackedSizeDimension = ::svt::model::PackedSizeDimension;
@@ -1049,15 +1054,72 @@ class StatementParser final : private TokenParserBase {
         m_token_iterator->IsKeyword("expect")) {
       auto const begin{m_token_iterator};
       auto const kind{m_token_iterator->lexeme};
-      while (not AtEnd() and m_token_iterator->type != TokenType::kSemicolon) {
-        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      auto const body_begin{m_token_iterator};
+      auto const statement_end_iterator{
+          ::FindTopLevelStatementEnd(body_begin, rng::cend(m_tokens))};
+      auto const body_end{statement_end_iterator};
+      if (kind == "return") {
+        auto expression = body_begin == body_end
+                              ? ExpressionPtr{}
+                              : ParseExpressionOrUnsupported(
+                                    tokens_t{body_begin, body_end});
+        m_token_iterator = statement_end_iterator;
+        if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
+          rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        }
+        return std::make_unique<Statement>(
+            StatementNode{std::in_place_type<ReturnStatement>,
+                          ReturnStatement{std::move(expression)}},
+            tokens_t{begin, m_token_iterator});
       }
-      if (not AtEnd()) {
+      if (kind == "break" or kind == "continue") {
+        std::string_view label;
+        auto label_iterator{body_begin};
+        if (label_iterator != body_end and label_iterator->lexeme == ":") {
+          label_iterator = std::next(label_iterator);
+        }
+        if (label_iterator != body_end) label = label_iterator->lexeme;
+        m_token_iterator = statement_end_iterator;
+        if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
+          rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        }
+        if (kind == "break") {
+          return std::make_unique<Statement>(
+              StatementNode{std::in_place_type<BreakStatement>,
+                            BreakStatement{label}},
+              tokens_t{begin, m_token_iterator});
+        }
+        return std::make_unique<Statement>(
+            StatementNode{std::in_place_type<ContinueStatement>,
+                          ContinueStatement{label}},
+            tokens_t{begin, m_token_iterator});
+      }
+      if (kind == "disable") {
+        m_token_iterator = statement_end_iterator;
+        if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
+          rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+        }
+        return std::make_unique<Statement>(
+            StatementNode{std::in_place_type<DisableStatement>,
+                          DisableStatement{tokens_t{body_begin, body_end}}},
+            tokens_t{begin, m_token_iterator});
+      }
+      auto const action_begin{std::find_if(
+          body_begin, body_end, [](Token const& token) {
+            return token.lexeme == "else";
+          })};
+      auto const condition_end{action_begin};
+      m_token_iterator = statement_end_iterator;
+      if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
         rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
       }
       return std::make_unique<Statement>(
-          StatementNode{std::in_place_type<TokenPreservingStatement>,
-                        TokenPreservingStatement{kind, {begin, m_token_iterator}}},
+          StatementNode{std::in_place_type<ExpectStatement>,
+                        ExpectStatement{tokens_t{body_begin, condition_end},
+                                         action_begin == body_end
+                                             ? tokens_t{}
+                                             : tokens_t{std::next(action_begin), body_end}}},
           tokens_t{begin, m_token_iterator});
     }
     if (m_token_iterator->IsKeyword("assign") or

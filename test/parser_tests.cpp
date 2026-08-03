@@ -109,6 +109,8 @@ using ContinueStatement = svt::model::ContinueStatement;
 using DisableStatement = svt::model::DisableStatement;
 using ExpectStatement = svt::model::ExpectStatement;
 using ProceduralDeclarationStatement = svt::model::ProceduralDeclarationStatement;
+using EventTriggerStatement = svt::model::EventTriggerStatement;
+using RandomizationBlockStatement = svt::model::RandomizationBlockStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
 using CastExpression = svt::model::CastExpression;
@@ -471,6 +473,18 @@ TEST_CASE("Parse distribution expressions", "[parser]") {
   REQUIRE(std::ranges::find_if(distribution.distributions, [](auto const& token) {
             return token.lexeme == ":/";
           }) != distribution.distributions.end());
+}
+
+TEST_CASE("Parse event triggers and randomization blocks", "[parser]") {
+  Parser parser{std::string{"module m; initial begin -> ev; ->> ev2; randcase 1: x = 1; endcase randsequence(main) A: x; endsequence end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE_FALSE(StmtAs<EventTriggerStatement>(*block.statements.at(0)).nonblocking);
+  REQUIRE(StmtAs<EventTriggerStatement>(*block.statements.at(1)).nonblocking);
+  REQUIRE_FALSE(StmtAs<RandomizationBlockStatement>(*block.statements.at(2)).sequence);
+  REQUIRE(StmtAs<RandomizationBlockStatement>(*block.statements.at(3)).sequence);
 }
 
 TEST_CASE("Parse config declarations", "[parser]") {

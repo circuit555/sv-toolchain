@@ -145,6 +145,9 @@ using ProceduralContinuousAssignStatement =
 using SystemTaskCallStatement = ::svt::model::SystemTaskCallStatement;
 using ProceduralDeclarationStatement =
     ::svt::model::ProceduralDeclarationStatement;
+using EventTriggerStatement = ::svt::model::EventTriggerStatement;
+using RandomizationBlockStatement =
+    ::svt::model::RandomizationBlockStatement;
 using UnsupportedStatement = ::svt::model::UnsupportedStatement;
 using TokenPreservingStatement = ::svt::model::TokenPreservingStatement;
 using ReturnStatement = ::svt::model::ReturnStatement;
@@ -1133,6 +1136,47 @@ class StatementParser final : private TokenParserBase {
     }
     if (m_token_iterator->IsKeyword("fork")) {
       return ParseForkJoinStatement();
+    }
+    if (m_token_iterator->lexeme == "->" or m_token_iterator->lexeme == "->>") {
+      auto const begin{m_token_iterator};
+      auto nonblocking{m_token_iterator->lexeme == "->>"};
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      if (not nonblocking and not AtEnd() and m_token_iterator->lexeme == ">") {
+        nonblocking = true;
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      }
+      auto const event_begin{m_token_iterator};
+      auto const end{::FindTopLevelStatementEnd(m_token_iterator,
+                                                rng::cend(m_tokens))};
+      m_token_iterator = end;
+      if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      }
+      return std::make_unique<Statement>(
+          StatementNode{std::in_place_type<EventTriggerStatement>,
+                        EventTriggerStatement{nonblocking,
+                                               tokens_t{event_begin, end}}},
+          tokens_t{begin, m_token_iterator});
+    }
+    if (m_token_iterator->lexeme == "randcase" or
+        m_token_iterator->lexeme == "randsequence") {
+      auto const begin{m_token_iterator};
+      auto const sequence{m_token_iterator->lexeme == "randsequence"};
+      auto const end_keyword{sequence ? "endsequence" : "endcase"};
+      auto const body_begin{std::next(begin)};
+      auto const end{rng::find_if(
+          body_begin, rng::cend(m_tokens), [end_keyword](Token const& token) {
+            return token.lexeme == end_keyword;
+          })};
+      if (end == rng::cend(m_tokens)) {
+        throw std::runtime_error{"[StatementParser] expected randomization block end"};
+      }
+      m_token_iterator = std::next(end);
+      return std::make_unique<Statement>(
+          StatementNode{std::in_place_type<RandomizationBlockStatement>,
+                        RandomizationBlockStatement{sequence,
+                                                    tokens_t{body_begin, end}}},
+          tokens_t{begin, m_token_iterator});
     }
     static constexpr auto declaration_keywords = std::to_array<std::string_view>({
         "bit", "logic", "reg", "int", "integer", "shortint", "longint",

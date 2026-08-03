@@ -78,6 +78,7 @@ using GenerateItemPtr = ::svt::model::GenerateItemPtr;
 using UnsupportedGenerateItem = ::svt::model::UnsupportedGenerateItem;
 using NullGenerateItem = ::svt::model::NullGenerateItem;
 using ModuleInstantiation = ::svt::model::ModuleInstantiation;
+using PrimitiveGateInstantiation = ::svt::model::PrimitiveGateInstantiation;
 using ModuleItem = ::svt::model::ModuleItem;
 using UnsupportedModuleItem = ::svt::model::UnsupportedModuleItem;
 using TimeDeclaration = ::svt::model::TimeDeclaration;
@@ -6210,8 +6211,10 @@ auto Parser::ParseModuleItem() -> ModuleItem {
       } catch (std::runtime_error const&) {
         m_token_iterator = module_item_begin_iterator;
         if (::IsPrimitiveGateName(m_token_iterator->lexeme)) {
-          return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
-                            ParseTokenPreservingDeclaration()};
+          auto const gate{m_token_iterator->lexeme};
+          auto const declaration{ParseTokenPreservingDeclaration()};
+          return ModuleItem{std::in_place_type<PrimitiveGateInstantiation>,
+                            PrimitiveGateInstantiation{gate, declaration.tokens}};
         }
         auto const unsupported{ParseUnsupportedModuleItem()};
         return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,

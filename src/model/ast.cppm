@@ -14,7 +14,22 @@ export enum class PortDirection : std::uint8_t {
   kRef
 };
 
-export enum class NetType : std::uint8_t { kWire, kLogic };
+export enum class NetType : std::uint8_t {
+  kWire,
+  kLogic,
+  kTri,
+  kTri0,
+  kTri1,
+  kTriand,
+  kTrior,
+  kTrireg,
+  kUwire,
+  kWand,
+  kWor,
+  kSupply0,
+  kSupply1,
+  kInterconnect
+};
 
 export enum class VariableType : std::uint8_t {
   kReg,
@@ -34,6 +49,8 @@ export enum class VariableType : std::uint8_t {
 };
 
 export enum class ParameterKind : std::uint8_t { kParameter, kLocalparam };
+
+export enum class ModuleSourceKind : std::uint8_t { kModule, kMacromodule };
 
 export enum class TypeDeclarationKind : std::uint8_t {
   kTypedef,
@@ -100,6 +117,23 @@ export struct ConcatenationExpression {
   std::vector<ExpressionPtr> expressions;
 };
 
+export struct StreamingConcatenationExpression {
+  std::string_view direction;
+  std::span<Token const> slice_size;
+  std::span<Token const> elements;
+};
+
+export struct DistributionExpression {
+  ExpressionPtr value;
+  std::span<Token const> distributions;
+};
+
+export struct MinTypMaxExpression {
+  ExpressionPtr minimum;
+  ExpressionPtr typical;
+  ExpressionPtr maximum;
+};
+
 export struct ReplicationExpression {
   ExpressionPtr count;
   std::vector<ExpressionPtr> expressions;
@@ -108,23 +142,50 @@ export struct ReplicationExpression {
 export struct CallExpression {
   ExpressionPtr callee;
   std::vector<ExpressionPtr> arguments;
+  std::span<Token const> with_clause;
+  bool unique{false};
 };
 
 export struct AssignmentPatternExpression {
+  struct Entry {
+    std::span<Token const> key;
+    ExpressionPtr value;
+  };
   std::vector<ExpressionPtr> expressions;
+  std::vector<Entry> entries;
+};
+
+export struct CastExpression {
+  std::span<Token const> type_specifier;
+  ExpressionPtr expression;
+};
+
+export struct TypeExpression {
+  std::span<Token const> specifier;
+};
+
+export struct EventExpression {
+  std::span<Token const> control;
+};
+
+export struct MemberAccessExpression {
+  ExpressionPtr base;
+  std::string_view separator;
+  std::string_view member;
 };
 
 export struct UnsupportedExpression {
   std::span<Token const> tokens;
 };
 
-export using ExpressionNode =
-    std::variant<std::monostate, IdentifierExpression,
-                 SystemIdentifierExpression, LiteralExpression, UnaryExpression,
-                 BinaryExpression, ConditionalExpression, IndexExpression,
-                 RangeSelectExpression, ConcatenationExpression,
-                 ReplicationExpression, CallExpression,
-                 AssignmentPatternExpression, UnsupportedExpression>;
+export using ExpressionNode = std::variant<
+    std::monostate, IdentifierExpression, SystemIdentifierExpression,
+    LiteralExpression, UnaryExpression, BinaryExpression, ConditionalExpression,
+    IndexExpression, RangeSelectExpression, ConcatenationExpression,
+    StreamingConcatenationExpression, DistributionExpression,
+    MinTypMaxExpression, ReplicationExpression, CallExpression,
+    AssignmentPatternExpression, CastExpression, TypeExpression,
+    EventExpression, MemberAccessExpression, UnsupportedExpression>;
 
 export struct Expression {
   ExpressionNode node;
@@ -169,6 +230,7 @@ export enum class ProceduralContinuousAssignKind : std::uint8_t {
 };
 
 export struct BeginEndBlockStatement {
+  std::string_view label;
   std::vector<StatementPtr> statements;
 };
 
@@ -225,8 +287,15 @@ export struct LoopStatement {
   StatementPtr body;
 };
 
+export struct TimeLiteral {
+  std::string_view magnitude;
+  std::string_view unit;
+  std::span<Token const> tokens;
+};
+
 export struct DelayControl {
   ExpressionPtr expression;
+  std::optional<TimeLiteral> semantic_time;
 };
 
 export struct EventControl {
@@ -274,8 +343,48 @@ export struct SystemTaskCallStatement {
   std::vector<ExpressionPtr> arguments;
 };
 
+export struct ProceduralDeclarationStatement {
+  std::span<Token const> declaration;
+};
+
+export struct EventTriggerStatement {
+  bool nonblocking{false};
+  std::span<Token const> event;
+};
+
+export struct RandomizationBlockStatement {
+  bool sequence{false};
+  std::span<Token const> body;
+};
+
 export struct UnsupportedStatement {
   std::span<Token const> tokens;
+};
+
+export struct TokenPreservingStatement {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
+export struct ReturnStatement {
+  ExpressionPtr expression;
+};
+
+export struct BreakStatement {
+  std::string_view label;
+};
+
+export struct ContinueStatement {
+  std::string_view label;
+};
+
+export struct DisableStatement {
+  std::span<Token const> target;
+};
+
+export struct ExpectStatement {
+  std::span<Token const> condition;
+  std::span<Token const> action;
 };
 
 export using StatementNode =
@@ -283,7 +392,10 @@ export using StatementNode =
                  IfElseStatement, CaseStatement, LoopStatement,
                  TimingControlStatement, WaitStatement, ForkJoinStatement,
                  ProceduralContinuousAssignStatement, SystemTaskCallStatement,
-                 UnsupportedStatement>;
+                 ProceduralDeclarationStatement, EventTriggerStatement,
+                 RandomizationBlockStatement, ReturnStatement, BreakStatement,
+                 ContinueStatement, DisableStatement, ExpectStatement,
+                 TokenPreservingStatement, UnsupportedStatement>;
 
 export struct Statement {
   StatementNode node;
@@ -324,6 +436,7 @@ export struct ModulePort : Declaration {
 
 export struct NetDeclaration : Declaration {
   NetType type;
+  std::vector<std::string_view> names;
   std::span<Token const> type_specifier;
   std::vector<PackedDimension> packed_dimensions;
 };
@@ -391,8 +504,88 @@ export struct ContinuousAssign {
 export struct ModuleInstantiation {
   std::string_view module_name;
   std::string_view instance_name;
+  std::span<Token const> instance_dimensions;
   std::span<Token const> parameter_overrides;
   std::span<Token const> port_connections;
+};
+
+export struct PrimitiveGateInstantiation {
+  std::string_view gate;
+  std::span<Token const> tokens;
+};
+
+export struct ClassDeclaration : Declaration {
+  enum class MemberKind : std::uint8_t {
+    kField,
+    kMethod,
+    kConstraint,
+    kType,
+    kOther
+  };
+  struct Member {
+    MemberKind kind{MemberKind::kOther};
+    std::string_view name;
+    bool random{false};
+    bool extern_declaration{false};
+    std::span<Token const> header;
+    std::span<Token const> body;
+    std::span<Token const> tokens;
+  };
+  std::string_view lifetime;
+  std::vector<ParameterDeclaration> parameters;
+  std::vector<Member> members;
+  std::span<Token const> extends;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct SubroutineDeclaration : Declaration {
+  bool task{false};
+  bool extern_declaration{false};
+  std::string_view lifetime;
+  std::span<Token const> return_type;
+  std::span<Token const> ports;
+  std::vector<std::span<Token const>> default_arguments;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct DpiDeclaration {
+  bool export_declaration{false};
+  std::string_view language;
+  std::span<Token const> declaration;
+  std::span<Token const> tokens;
+};
+
+export struct SpecifyBlock {
+  enum class ItemKind : std::uint8_t { kSpecparam, kPath, kOther };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::span<Token const> condition;
+    std::span<Token const> path;
+    std::span<Token const> timing_values;
+    std::span<Token const> tokens;
+  };
+  std::vector<Item> structured_items;
+  std::span<Token const> items;
+  std::span<Token const> tokens;
+};
+
+export struct AssertionDeclaration {
+  bool sequence{false};
+  std::string_view name;
+  std::span<Token const> header;
+  std::span<Token const> ports;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct AssertionStatement {
+  std::string_view kind;
+  std::span<Token const> expression;
+  std::span<Token const> disable_condition;
+  std::span<Token const> action;
+  std::span<Token const> tokens;
 };
 
 export struct AlwaysBlock {
@@ -458,10 +651,13 @@ export struct UnsupportedGenerateItem {
   std::string_view kind;
 };
 
+export struct NullGenerateItem {};
+
 export using GenerateItemNode =
     std::variant<GenvarDeclaration, GenerateFor, GenerateIf, GenerateCase,
                  GenerateRegion, ContinuousAssign, NetDeclaration,
-                 ModuleInstantiation, UnsupportedGenerateItem>;
+                 ModuleInstantiation, NullGenerateItem,
+                 UnsupportedGenerateItem>;
 
 export struct GenerateItem {
   GenerateItemNode node;
@@ -477,6 +673,8 @@ export struct TimeDeclaration {
   TimeDeclarationKind kind{};
   std::span<Token const> time_value;
   std::span<Token const> precision_value;
+  std::optional<TimeLiteral> semantic_time_value;
+  std::optional<TimeLiteral> semantic_precision_value;
   std::span<Token const> tokens;
 };
 
@@ -495,6 +693,111 @@ export struct DefaultClockingDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct ClockingDeclaration {
+  enum class ItemDirection : std::uint8_t { kInput, kOutput, kInout, kOther };
+  struct Item {
+    ItemDirection direction{ItemDirection::kOther};
+    std::string_view name;
+    std::span<Token const> skew;
+    std::span<Token const> tokens;
+  };
+  bool global{false};
+  bool default_clocking{false};
+  std::string_view name;
+  std::vector<Item> items;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct DefaultDisableIffDeclaration {
+  std::span<Token const> tokens;
+};
+
+export struct CheckerDeclaration : Declaration {
+  enum class ItemKind : std::uint8_t {
+    kDeclaration,
+    kClocking,
+    kDefaultDisable,
+    kAssertion,
+    kGenerate,
+    kOther
+  };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::string_view name;
+    std::span<Token const> tokens;
+  };
+  std::vector<ModulePort> ports;
+  std::vector<Item> items;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct TokenPreservingDeclaration {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
+export struct DirectiveDeclaration {
+  enum class Kind : std::uint8_t { kBind, kAlias, kDefparam, kLet };
+  Kind kind{Kind::kBind};
+  std::span<Token const> head;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct CovergroupDeclaration : Declaration {
+  enum class ItemKind : std::uint8_t {
+    kCoverpoint,
+    kCross,
+    kOption,
+    kBin,
+    kSample,
+    kOther
+  };
+  struct Bin {
+    std::string_view kind;
+    std::string_view name;
+    std::span<Token const> tokens;
+  };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::string_view name;
+    std::vector<Bin> bins;
+    std::span<Token const> expression;
+    std::span<Token const> iff_condition;
+    std::span<Token const> with_clause;
+    std::span<Token const> sample_signature;
+    bool transition{false};
+    std::span<Token const> tokens;
+  };
+  std::vector<Item> items;
+  std::span<Token const> header;
+  std::span<Token const> event;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct ConfigDeclaration : Declaration {
+  enum class ItemKind : std::uint8_t {
+    kDesign,
+    kDefaultLiblist,
+    kCellUse,
+    kInstanceLiblist,
+    kInstanceUse,
+    kOther
+  };
+  struct Item {
+    ItemKind kind{ItemKind::kOther};
+    std::span<Token const> subject;
+    std::span<Token const> libraries;
+    std::span<Token const> tokens;
+  };
+  std::vector<Item> items;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct InterfaceItemDeclaration {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -504,7 +807,8 @@ export using InterfaceItem =
     std::variant<TimeDeclaration, ModulePort, VariableDeclaration,
                  TypeDeclaration, StructuredVariableDeclaration,
                  ModportDeclaration, InterfaceSubroutineDeclaration,
-                 DefaultClockingDeclaration, InterfaceItemDeclaration>;
+                 DefaultClockingDeclaration, ClockingDeclaration,
+                 DefaultDisableIffDeclaration, InterfaceItemDeclaration>;
 
 export struct InterfaceDeclaration : Declaration {
   std::string_view lifetime;
@@ -541,7 +845,9 @@ export struct UnsupportedPackageItem {
 
 export using PackageItem =
     std::variant<TimeDeclaration, ParameterDeclaration, TypeDeclaration,
-                 ImportDeclaration, ExportDeclaration, UnsupportedPackageItem>;
+                 ImportDeclaration, ExportDeclaration,
+                 TokenPreservingDeclaration, DirectiveDeclaration,
+                 UnsupportedPackageItem>;
 
 export struct PackageDeclaration : Declaration {
   // TODO(): maybe std::optional<std::string_view> lifetime{};
@@ -555,19 +861,39 @@ export struct UnsupportedModuleItem {
   std::span<Token const> tokens;
 };
 
-export using ModuleItem =
-    std::variant<NetDeclaration, VariableDeclaration, ParameterDeclaration,
-                 TypeDeclaration, StructuredVariableDeclaration,
-                 UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
-                 InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
-                 TimeDeclaration, ImportDeclaration, UnsupportedModuleItem>;
+export using ModuleItem = std::variant<
+    NetDeclaration, VariableDeclaration, ParameterDeclaration, TypeDeclaration,
+    StructuredVariableDeclaration, UserDefinedNetDeclaration, ContinuousAssign,
+    AlwaysBlock, InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
+    PrimitiveGateInstantiation, TimeDeclaration, ImportDeclaration,
+    ClassDeclaration, SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
+    AssertionStatement, ClockingDeclaration, DefaultClockingDeclaration,
+    DefaultDisableIffDeclaration, DpiDeclaration, CheckerDeclaration,
+    DirectiveDeclaration, TokenPreservingDeclaration, CovergroupDeclaration,
+    ConfigDeclaration, UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
+  ModuleSourceKind source_kind{ModuleSourceKind::kModule};
   std::string_view lifetime;
   std::vector<ParameterDeclaration> parameters;
   std::vector<ImportDeclaration> imports;
   std::vector<ModulePort> ports;
   std::vector<ModuleItem> items;
+};
+
+export struct ProgramDeclaration : Declaration {
+  std::string_view lifetime;
+  std::vector<ModulePort> ports;
+  std::vector<ModuleItem> items;
+  std::span<Token const> tokens;
+};
+
+export struct PrimitiveDeclaration : Declaration {
+  std::vector<ModulePort> ports;
+  std::span<Token const> table;
+  std::vector<std::span<Token const>> table_rows;
+  std::span<Token const> initial_statement;
+  std::span<Token const> tokens;
 };
 
 export struct UnsupportedDesignElement {
@@ -577,8 +903,11 @@ export struct UnsupportedDesignElement {
 
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
-    std::variant<ModuleDeclaration, PackageDeclaration, InterfaceDeclaration,
-                 TypeDeclaration, TimeDeclaration, ImportDeclaration,
-                 UnsupportedDesignElement>;
+    std::variant<ModuleDeclaration, ProgramDeclaration, PrimitiveDeclaration,
+                 PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
+                 SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
+                 ImportDeclaration, ExportDeclaration, CheckerDeclaration,
+                 DirectiveDeclaration, TokenPreservingDeclaration,
+                 DpiDeclaration, ConfigDeclaration, UnsupportedDesignElement>;
 
 }  // namespace svt::model

@@ -25,6 +25,7 @@ using GenerateCase = svt::model::GenerateCase;
 using GenerateRegion = svt::model::GenerateRegion;
 using GenerateItem = svt::model::GenerateItem;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
+using PrimitiveGateInstantiation = svt::model::PrimitiveGateInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 using VariableDeclaration = svt::model::VariableDeclaration;
@@ -40,6 +41,7 @@ using InterfaceSubroutineDeclaration =
 using DefaultClockingDeclaration = svt::model::DefaultClockingDeclaration;
 using UnsupportedModuleItem = svt::model::UnsupportedModuleItem;
 using UnsupportedDesignElement = svt::model::UnsupportedDesignElement;
+using UnsupportedGenerateItem = svt::model::UnsupportedGenerateItem;
 using TimeDeclaration = svt::model::TimeDeclaration;
 using TimeDeclarationKind = svt::model::TimeDeclarationKind;
 using PackageDeclaration = svt::model::PackageDeclaration;
@@ -57,6 +59,7 @@ using IndexExpression = svt::model::IndexExpression;
 using RangeSelectExpression = svt::model::RangeSelectExpression;
 using ConcatenationExpression = svt::model::ConcatenationExpression;
 using UnsupportedExpression = svt::model::UnsupportedExpression;
+using AssignmentPatternExpression = svt::model::AssignmentPatternExpression;
 using PackedRangeDimension = svt::model::PackedRangeDimension;
 using PackedSizeDimension = svt::model::PackedSizeDimension;
 using Statement = svt::model::Statement;
@@ -88,6 +91,40 @@ using WaitKind = svt::model::WaitKind;
 using ForkJoinKind = svt::model::ForkJoinKind;
 using ProceduralContinuousAssignKind =
     svt::model::ProceduralContinuousAssignKind;
+using ProgramDeclaration = svt::model::ProgramDeclaration;
+using PrimitiveDeclaration = svt::model::PrimitiveDeclaration;
+using ModuleSourceKind = svt::model::ModuleSourceKind;
+using ClassDeclaration = svt::model::ClassDeclaration;
+using SubroutineDeclaration = svt::model::SubroutineDeclaration;
+using SpecifyBlock = svt::model::SpecifyBlock;
+using AssertionDeclaration = svt::model::AssertionDeclaration;
+using AssertionStatement = svt::model::AssertionStatement;
+using ClockingDeclaration = svt::model::ClockingDeclaration;
+using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
+using CheckerDeclaration = svt::model::CheckerDeclaration;
+using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
+using DirectiveDeclaration = svt::model::DirectiveDeclaration;
+using TokenPreservingStatement = svt::model::TokenPreservingStatement;
+using ReturnStatement = svt::model::ReturnStatement;
+using BreakStatement = svt::model::BreakStatement;
+using ContinueStatement = svt::model::ContinueStatement;
+using DisableStatement = svt::model::DisableStatement;
+using ExpectStatement = svt::model::ExpectStatement;
+using ProceduralDeclarationStatement = svt::model::ProceduralDeclarationStatement;
+using EventTriggerStatement = svt::model::EventTriggerStatement;
+using RandomizationBlockStatement = svt::model::RandomizationBlockStatement;
+using CovergroupDeclaration = svt::model::CovergroupDeclaration;
+using ConfigDeclaration = svt::model::ConfigDeclaration;
+using CallExpression = svt::model::CallExpression;
+using CastExpression = svt::model::CastExpression;
+using DpiDeclaration = svt::model::DpiDeclaration;
+using MemberAccessExpression = svt::model::MemberAccessExpression;
+using StreamingConcatenationExpression = svt::model::StreamingConcatenationExpression;
+using DistributionExpression = svt::model::DistributionExpression;
+using MinTypMaxExpression = svt::model::MinTypMaxExpression;
+using TypeExpression = svt::model::TypeExpression;
+using EventExpression = svt::model::EventExpression;
+using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -138,6 +175,521 @@ auto ReadFixture(std::filesystem::path const& fixture_path) -> std::string {
   return source;
 }
 }  // namespace
+
+TEST_CASE("Parse program and primitive declarations", "[parser]") {
+  std::string src = R"(
+    program automatic p(input clk);
+      timeunit 1ns;
+      integer value;
+      initial value = 1;
+    endprogram : p
+    primitive udp(output y, input a);
+      table
+        0 : 1;
+      endtable
+      initial y = 0;
+    endprimitive : udp
+  )";
+
+  Parser parser{std::move(src)};
+  auto translation_unit = parser.Parse();
+  REQUIRE(translation_unit.size() == 2);
+
+  auto const& program = std::get<ProgramDeclaration>(translation_unit.at(0));
+  REQUIRE(program.name == "p");
+  REQUIRE(program.lifetime == "automatic");
+  REQUIRE(program.ports.size() == 1);
+  REQUIRE(program.items.size() == 3);
+
+  auto const& primitive =
+      std::get<PrimitiveDeclaration>(translation_unit.at(1));
+  REQUIRE(primitive.name == "udp");
+  REQUIRE(primitive.ports.size() == 2);
+  REQUIRE_FALSE(primitive.table.empty());
+  REQUIRE(primitive.table_rows.size() == 1);
+  REQUIRE_FALSE(primitive.initial_statement.empty());
+
+  Parser macro_parser{"macromodule legacy; endmodule : legacy"};
+  auto macro_translation_unit = macro_parser.Parse();
+  auto const& macromodule = std::get<svt::model::ModuleDeclaration>(
+      macro_translation_unit.front());
+  REQUIRE(macromodule.source_kind == ModuleSourceKind::kMacromodule);
+}
+
+TEST_CASE("Parse subroutine declarations", "[parser]") {
+  Parser parser{std::string{R"(
+    function int top(input int value); endfunction : top
+    module m;
+      task automatic work(input int value); endtask
+      extern function void declared(input int value);
+    endmodule
+  )"}};
+  auto translation_unit = parser.Parse();
+  auto const& function_declaration =
+      std::get<SubroutineDeclaration>(translation_unit.at(0));
+  REQUIRE_FALSE(function_declaration.task);
+  REQUIRE(function_declaration.name == "top");
+  REQUIRE(function_declaration.body.empty());
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.at(1));
+  REQUIRE(std::holds_alternative<SubroutineDeclaration>(module.items.at(0)));
+  auto const& task = std::get<SubroutineDeclaration>(module.items.at(0));
+  REQUIRE(task.task);
+  REQUIRE(task.lifetime == "automatic");
+  REQUIRE(std::get<SubroutineDeclaration>(module.items.at(1))
+              .extern_declaration);
+}
+
+TEST_CASE("Parse specify blocks as isolated module items", "[parser]") {
+  Parser parser{std::string{"module m; specify specparam t = 1; endspecify endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& specify = std::get<SpecifyBlock>(module.items.front());
+  REQUIRE_FALSE(specify.items.empty());
+  REQUIRE(specify.structured_items.size() == 1);
+  REQUIRE(specify.structured_items.front().kind == SpecifyBlock::ItemKind::kSpecparam);
+  REQUIRE(specify.tokens.front().lexeme == "specify");
+}
+
+TEST_CASE("Classify specify paths", "[parser]") {
+  Parser parser{std::string{"module m; specify (a *> y) = (1:2:3); endspecify endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& specify = std::get<SpecifyBlock>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  REQUIRE(specify.structured_items.size() == 1);
+  REQUIRE(specify.structured_items.front().kind == SpecifyBlock::ItemKind::kPath);
+  REQUIRE_FALSE(specify.structured_items.front().path.empty());
+  REQUIRE(specify.structured_items.front().timing_values.front().lexeme == "(");
+}
+
+TEST_CASE("Parse assertion declarations and statements", "[parser]") {
+  Parser parser{std::string{"module m; property p; a |-> b; endproperty sequence s; a ##1 b; endsequence assert property (p); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& property = std::get<AssertionDeclaration>(module.items.at(0));
+  REQUIRE_FALSE(property.sequence);
+  REQUIRE(property.name == "p");
+  REQUIRE_FALSE(property.header.empty());
+  auto const& sequence = std::get<AssertionDeclaration>(module.items.at(1));
+  REQUIRE(sequence.sequence);
+  REQUIRE(sequence.name == "s");
+  REQUIRE(sequence.ports.empty());
+  auto const& assertion = std::get<AssertionStatement>(module.items.at(2));
+  REQUIRE(assertion.kind == "assert");
+  REQUIRE_FALSE(assertion.expression.empty());
+}
+
+TEST_CASE("Parse assertion disable conditions", "[parser]") {
+  Parser parser{std::string{"module m; assert property (disable iff (reset) p); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& assertion = std::get<AssertionStatement>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  REQUIRE_FALSE(assertion.disable_condition.empty());
+  REQUIRE(assertion.disable_condition.front().lexeme == "(");
+}
+
+TEST_CASE("Parse clocking and default directives", "[parser]") {
+  Parser parser{std::string{"module m; clocking cb @(posedge clk); input #1 a; output b; endclocking default clocking cb; default disable iff (reset); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& clocking = std::get<ClockingDeclaration>(module.items.at(0));
+  REQUIRE(clocking.name == "cb");
+  REQUIRE_FALSE(clocking.body.empty());
+  REQUIRE(clocking.items.size() == 2);
+  REQUIRE(clocking.items.at(0).direction == ClockingDeclaration::ItemDirection::kInput);
+  REQUIRE(clocking.items.at(0).name == "a");
+  REQUIRE(clocking.items.at(0).skew.size() == 2);
+  REQUIRE(clocking.items.at(1).direction == ClockingDeclaration::ItemDirection::kOutput);
+  REQUIRE(std::get<ClockingDeclaration>(module.items.at(1)).default_clocking);
+  REQUIRE(std::holds_alternative<DefaultDisableIffDeclaration>(module.items.at(2)));
+}
+
+TEST_CASE("Parse checker declarations", "[parser]") {
+  Parser parser{std::string{"checker c(input clk); default clocking cb; assert property (p); endchecker : c"}};
+  auto translation_unit = parser.Parse();
+  auto const& checker = std::get<CheckerDeclaration>(translation_unit.front());
+  REQUIRE(checker.name == "c");
+  REQUIRE(checker.ports.size() == 1);
+  REQUIRE_FALSE(checker.body.empty());
+  REQUIRE(checker.items.size() == 2);
+  REQUIRE(checker.items.at(0).kind == CheckerDeclaration::ItemKind::kDefaultDisable);
+  REQUIRE(checker.items.at(1).kind == CheckerDeclaration::ItemKind::kAssertion);
+}
+
+TEST_CASE("Parse null generate items", "[parser]") {
+  Parser parser{std::string{"module m; generate ; if (1) ; endgenerate endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& region = GenItemAs<GenerateRegion>(
+      std::get<GenerateItem>(module.items.front()));
+  REQUIRE(std::holds_alternative<NullGenerateItem>(region.items.front()->node));
+}
+
+TEST_CASE("Parse module instance arrays", "[parser]") {
+  Parser parser{std::string{"module m; child inst[3:1][2:0](.a(), .b()); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& instance = std::get<ModuleInstantiation>(module.items.front());
+  REQUIRE(Lexemes(instance.instance_dimensions) ==
+          std::vector<std::string_view>{"[", "3", ":", "1", "]", "[", "2", ":", "0", "]"});
+}
+
+TEST_CASE("Parse extended net types and declarators", "[parser]") {
+  Parser parser{std::string{"module m; wor u, v; tri0 [3:0] bus; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& wor = std::get<NetDeclaration>(module.items.at(0));
+  REQUIRE(wor.type == NetType::kWor);
+  REQUIRE(wor.names == std::vector<std::string_view>{"u", "v"});
+  REQUIRE(std::get<NetDeclaration>(module.items.at(1)).type == NetType::kTri0);
+}
+
+TEST_CASE("Preserve primitive gate instances", "[parser]") {
+  Parser parser{std::string{"module m; rcmos #1step (q, r, s, t); pullup (strong1) p1(a), p2(b); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  REQUIRE(std::get<PrimitiveGateInstantiation>(module.items.at(0)).gate == "rcmos");
+  REQUIRE(std::get<PrimitiveGateInstantiation>(module.items.at(1)).gate == "pullup");
+}
+
+TEST_CASE("Parse bind alias defparam and let declarations", "[parser]") {
+  Parser parser{std::string{"bind target checker_inst ci(); module m; alias a = b; defparam m.W = 1; let inc(x) = x + 1; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& bind = std::get<DirectiveDeclaration>(translation_unit.at(0));
+  REQUIRE(bind.kind == DirectiveDeclaration::Kind::kBind);
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.at(1));
+  REQUIRE(std::get<DirectiveDeclaration>(module.items.at(0)).kind == DirectiveDeclaration::Kind::kAlias);
+  REQUIRE(std::get<DirectiveDeclaration>(module.items.at(1)).kind == DirectiveDeclaration::Kind::kDefparam);
+  REQUIRE(std::get<DirectiveDeclaration>(module.items.at(2)).kind == DirectiveDeclaration::Kind::kLet);
+  REQUIRE(std::get<DirectiveDeclaration>(module.items.at(1)).head.front().lexeme == "m");
+}
+
+TEST_CASE("Parse token-preserving procedural controls", "[parser]") {
+  Parser parser{std::string{"module m; initial begin return; break; continue; disable fork; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& initial = std::get<InitialBlock>(module.items.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(*initial.statement);
+  REQUIRE(StmtAs<ReturnStatement>(*block.statements.at(0)).expression == nullptr);
+  REQUIRE(StmtAs<BreakStatement>(*block.statements.at(1)).label.empty());
+  REQUIRE(StmtAs<ContinueStatement>(*block.statements.at(2)).label.empty());
+  REQUIRE(StmtAs<DisableStatement>(*block.statements.at(3)).target.front().lexeme == "fork");
+}
+
+TEST_CASE("Parse structured procedural control statements", "[parser]") {
+  Parser parser{std::string{"module m; initial begin return count; break: done; continue: next; expect (a) else b; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(*std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(StmtAs<ReturnStatement>(*block.statements.at(0)).expression != nullptr);
+  REQUIRE(StmtAs<BreakStatement>(*block.statements.at(1)).label == "done");
+  REQUIRE(StmtAs<ContinueStatement>(*block.statements.at(2)).label == "next");
+  auto const& expect = StmtAs<ExpectStatement>(*block.statements.at(3));
+  REQUIRE(expect.condition.front().lexeme == "(");
+  REQUIRE(expect.condition.size() >= 3);
+}
+
+TEST_CASE("Parse procedural declarations inside blocks", "[parser]") {
+  Parser parser{std::string{"module m; initial begin int i = 1; logic ready; i = 2; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(std::holds_alternative<ProceduralDeclarationStatement>(block.statements.at(0)->node));
+  REQUIRE(std::holds_alternative<ProceduralDeclarationStatement>(block.statements.at(1)->node));
+  REQUIRE(std::holds_alternative<AssignmentStatement>(block.statements.at(2)->node));
+}
+
+TEST_CASE("Parse covergroup declarations", "[parser]") {
+  Parser parser{std::string{"module m; covergroup cg @(posedge clk); cp: coverpoint data; endgroup : cg endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
+  REQUIRE(covergroup.name == "cg");
+  REQUIRE_FALSE(covergroup.header.empty());
+  REQUIRE_FALSE(covergroup.event.empty());
+  REQUIRE_FALSE(covergroup.body.empty());
+  REQUIRE(covergroup.items.size() == 1);
+  REQUIRE(covergroup.items.front().kind == CovergroupDeclaration::ItemKind::kCoverpoint);
+  REQUIRE(covergroup.items.front().name == "cp");
+}
+
+TEST_CASE("Parse covergroup conditions and transition bins", "[parser]") {
+  Parser parser{std::string{"module m; covergroup cg; c: coverpoint x iff (en) { bins t = (1 => 2); bins w = x with (item > 0); } endgroup endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
+  REQUIRE(covergroup.items.size() == 1);
+  auto const& item = covergroup.items.front();
+  REQUIRE(item.name == "c");
+  REQUIRE_FALSE(item.expression.empty());
+  REQUIRE_FALSE(item.iff_condition.empty());
+  REQUIRE(item.transition);
+  REQUIRE_FALSE(item.with_clause.empty());
+  REQUIRE(item.bins.size() == 2);
+}
+
+TEST_CASE("Parse inside and matches expression operators", "[parser]") {
+  Parser parser{std::string{"module m; initial begin x = a inside {1, 2}; y = a matches b; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& inside = StmtAs<AssignmentStatement>(*block.statements.at(0));
+  REQUIRE(std::get<BinaryExpression>(inside.right_hand_side->node).operator_lexeme == "inside");
+  auto const& matches = StmtAs<AssignmentStatement>(*block.statements.at(1));
+  REQUIRE(std::get<BinaryExpression>(matches.right_hand_side->node).operator_lexeme == "matches");
+}
+
+TEST_CASE("Model semantic delay time literals", "[parser]") {
+  Parser parser{std::string{"module m; initial #5ns x = 1; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& timing = StmtAs<TimingControlStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& delay = std::get<DelayControl>(timing.control);
+  REQUIRE(delay.semantic_time.has_value());
+  REQUIRE(delay.semantic_time->magnitude == "5");
+  REQUIRE(delay.semantic_time->unit == "ns");
+}
+
+TEST_CASE("Parse streaming concatenations", "[parser]") {
+  Parser parser{std::string{"module m; initial {<< byte{a, b}} = value; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& statement = StmtAs<AssignmentStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& streaming = std::get<StreamingConcatenationExpression>(
+      statement.left_hand_side->node);
+  REQUIRE(streaming.direction == "<<");
+  REQUIRE(streaming.slice_size.front().lexeme == "byte");
+  REQUIRE(streaming.elements.front().lexeme == "a");
+}
+
+TEST_CASE("Parse keyed assignment patterns", "[parser]") {
+  Parser parser{std::string{"module m; initial value = '{key: 1, default: 0}; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assignment = StmtAs<AssignmentStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& pattern = std::get<AssignmentPatternExpression>(
+      assignment.right_hand_side->node);
+  REQUIRE(pattern.entries.size() == 2);
+  REQUIRE(pattern.entries.at(0).key.front().lexeme == "key");
+  REQUIRE(pattern.entries.at(1).key.front().lexeme == "default");
+}
+
+TEST_CASE("Parse distribution expressions", "[parser]") {
+  Parser parser{std::string{"module m; initial value = a dist { [1:2] :/ 3, 4 }; endmodule"}};
+  auto translation_unit = parser.Parse();
+  REQUIRE_FALSE(translation_unit.empty());
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assignment = StmtAs<AssignmentStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(std::holds_alternative<DistributionExpression>(
+      assignment.right_hand_side->node));
+  auto const& distribution = std::get<DistributionExpression>(
+      assignment.right_hand_side->node);
+  REQUIRE(ExprAs<IdentifierExpression>(*distribution.value).name == "a");
+  REQUIRE(distribution.distributions.front().lexeme == "[");
+  REQUIRE(std::ranges::find_if(distribution.distributions, [](auto const& token) {
+            return token.lexeme == ":/";
+          }) != distribution.distributions.end());
+}
+
+TEST_CASE("Parse event triggers and randomization blocks", "[parser]") {
+  Parser parser{std::string{"module m; initial begin -> ev; ->> ev2; randcase 1: x = 1; endcase randsequence(main) A: x; endsequence end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE_FALSE(StmtAs<EventTriggerStatement>(*block.statements.at(0)).nonblocking);
+  REQUIRE(StmtAs<EventTriggerStatement>(*block.statements.at(1)).nonblocking);
+  REQUIRE_FALSE(StmtAs<RandomizationBlockStatement>(*block.statements.at(2)).sequence);
+  REQUIRE(StmtAs<RandomizationBlockStatement>(*block.statements.at(3)).sequence);
+}
+
+TEST_CASE("Parse min typ max expressions", "[parser]") {
+  Parser parser{std::string{"module m; assign y = (1:2:3); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assign = std::get<ContinuousAssign>(module.items.front());
+  auto const& min_typ_max = std::get<MinTypMaxExpression>(assign.right_hand_side->node);
+  REQUIRE(ExprAs<LiteralExpression>(*min_typ_max.minimum).value == "1");
+  REQUIRE(ExprAs<LiteralExpression>(*min_typ_max.typical).value == "2");
+  REQUIRE(ExprAs<LiteralExpression>(*min_typ_max.maximum).value == "3");
+}
+
+TEST_CASE("Parse temporal expression operators", "[parser]") {
+  Parser parser{std::string{"module m; assign y = a throughout b; assign z = a until_with b; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& throughout = std::get<ContinuousAssign>(module.items.at(0));
+  REQUIRE(std::get<BinaryExpression>(throughout.right_hand_side->node).operator_lexeme == "throughout");
+  auto const& until_with = std::get<ContinuousAssign>(module.items.at(1));
+  REQUIRE(std::get<BinaryExpression>(until_with.right_hand_side->node).operator_lexeme == "until_with");
+}
+
+TEST_CASE("Preserve procedural block labels", "[parser]") {
+  Parser parser{std::string{"module m; initial begin : named x = 1; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(block.label == "named");
+}
+
+TEST_CASE("Parse config declarations", "[parser]") {
+  Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
+  auto translation_unit = parser.Parse();
+  auto const& config = std::get<ConfigDeclaration>(translation_unit.front());
+  REQUIRE(config.name == "cfg");
+  REQUIRE_FALSE(config.body.empty());
+  REQUIRE(config.items.size() == 3);
+  REQUIRE(config.items.at(0).kind == ConfigDeclaration::ItemKind::kDesign);
+  REQUIRE(config.items.at(1).kind == ConfigDeclaration::ItemKind::kDefaultLiblist);
+  REQUIRE(config.items.at(2).kind == ConfigDeclaration::ItemKind::kCellUse);
+  REQUIRE(config.items.at(0).subject.front().lexeme == "top");
+  REQUIRE(config.items.at(1).libraries.front().lexeme == "work");
+  REQUIRE(config.items.at(2).subject.front().lexeme == "top");
+  REQUIRE(config.items.at(2).libraries.size() == 3);
+  REQUIRE(config.items.at(2).libraries.at(0).lexeme == "work");
+  REQUIRE(config.items.at(2).libraries.at(1).lexeme == ".");
+  REQUIRE(config.items.at(2).libraries.at(2).lexeme == "top");
+}
+
+TEST_CASE("Model semantic time literals", "[parser]") {
+  Parser parser{std::string{"timeunit 10ns / 1ps;"}};
+  auto translation_unit = parser.Parse();
+  auto const& time = std::get<TimeDeclaration>(translation_unit.front());
+  REQUIRE(time.semantic_time_value->magnitude == "10");
+  REQUIRE(time.semantic_time_value->unit == "ns");
+  REQUIRE(time.semantic_precision_value->magnitude == "1");
+  REQUIRE(time.semantic_precision_value->unit == "ps");
+}
+
+TEST_CASE("Reject invalid time declaration forms", "[parser]") {
+  REQUIRE_THROWS(Parser{std::string{"timeunit 1hour;"}}.Parse());
+  REQUIRE_THROWS(Parser{std::string{"timeprecision 1ns / 1ps;"}}.Parse());
+}
+
+TEST_CASE("Parse config instance use clauses", "[parser]") {
+  Parser parser{std::string{"config cfg; instance top use work.top; endconfig"}};
+  auto translation_unit = parser.Parse();
+  auto const& config = std::get<ConfigDeclaration>(translation_unit.front());
+  REQUIRE(config.items.size() == 1);
+  REQUIRE(config.items.front().kind == ConfigDeclaration::ItemKind::kInstanceUse);
+  REQUIRE(config.items.front().subject.front().lexeme == "top");
+  REQUIRE(config.items.front().libraries.front().lexeme == "work");
+}
+
+TEST_CASE("Parse package directives", "[parser]") {
+  Parser parser{std::string{"package p; let inc(x) = x + 1; endpackage"}};
+  auto translation_unit = parser.Parse();
+  auto const& package = std::get<PackageDeclaration>(translation_unit.front());
+  REQUIRE(package.items.size() == 1);
+  REQUIRE(std::get<DirectiveDeclaration>(package.items.front()).kind ==
+          DirectiveDeclaration::Kind::kLet);
+}
+
+TEST_CASE("Parse covergroup sample signatures", "[parser]") {
+  Parser parser{std::string{"module m; covergroup cg with function sample(int value); endgroup endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& covergroup = std::get<CovergroupDeclaration>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  REQUIRE(covergroup.items.empty());
+  REQUIRE(std::ranges::find_if(covergroup.header, [](auto const& token) {
+            return token.lexeme == "with";
+          }) != covergroup.header.end());
+}
+
+TEST_CASE("Parse expression casts", "[parser]") {
+  Parser parser{std::string{"module m; assign y = int'(x + 1); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& assign = std::get<ContinuousAssign>(module.items.front());
+  auto const& cast = ExprAs<CastExpression>(*assign.right_hand_side);
+  REQUIRE(Lexemes(cast.type_specifier) == std::vector<std::string_view>{"int"});
+  REQUIRE(Lexemes(cast.expression->tokens) ==
+          std::vector<std::string_view>{"x", "+", "1"});
+}
+
+TEST_CASE("Parse scoped type casts", "[parser]") {
+  Parser parser{std::string{"module m; assign y = pkg::T'(x); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& assign = std::get<ContinuousAssign>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  auto const& cast = ExprAs<CastExpression>(*assign.right_hand_side);
+  REQUIRE(Lexemes(cast.type_specifier) ==
+          std::vector<std::string_view>{"pkg", "::", "T"});
+}
+
+TEST_CASE("Parse type expressions", "[parser]") {
+  Parser parser{std::string{"module m; assign y = type(b); assign z = $bits(int); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& type_assign = std::get<ContinuousAssign>(module.items.at(0));
+  REQUIRE(std::holds_alternative<TypeExpression>(type_assign.right_hand_side->node));
+  auto const& bits_assign = std::get<ContinuousAssign>(module.items.at(1));
+  auto const& call = ExprAs<CallExpression>(*bits_assign.right_hand_side);
+  REQUIRE(ExprAs<IdentifierExpression>(*call.arguments.front()).name == "int");
+}
+
+TEST_CASE("Parse event and with call expressions", "[parser]") {
+  Parser parser{std::string{
+      "module m; assign y = $rose(c, @(posedge clk)); assign z = obj.randomize() with { x < 3 }; assign w = a.find(x) with (x > 5).unique; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& rose = ExprAs<CallExpression>(
+      *std::get<ContinuousAssign>(module.items.at(0)).right_hand_side);
+  REQUIRE(std::holds_alternative<EventExpression>(rose.arguments.at(1)->node));
+  auto const& randomize = ExprAs<CallExpression>(
+      *std::get<ContinuousAssign>(module.items.at(1)).right_hand_side);
+  REQUIRE(not randomize.with_clause.empty());
+  auto const& find = ExprAs<CallExpression>(
+      *std::get<ContinuousAssign>(module.items.at(2)).right_hand_side);
+  REQUIRE(find.unique);
+  REQUIRE(not find.with_clause.empty());
+}
+
+TEST_CASE("Parse DPI declarations and subroutine defaults", "[parser]") {
+  Parser parser{std::string{"import \"DPI-C\" function void dpi(input int x); export \"DPI-C\" function void dpo(input int x); function void f(input int x = 1); endfunction"}};
+  auto translation_unit = parser.Parse();
+  REQUIRE(std::get<DpiDeclaration>(translation_unit.at(0)).language == "DPI-C");
+  REQUIRE(std::get<DpiDeclaration>(translation_unit.at(1)).export_declaration);
+  auto const& function = std::get<SubroutineDeclaration>(translation_unit.at(2));
+  REQUIRE(Lexemes(function.ports) ==
+          std::vector<std::string_view>{"(", "input", "int", "x", "=", "1"});
+  REQUIRE(function.default_arguments.size() == 1);
+  REQUIRE(Lexemes(function.default_arguments.front()) ==
+          std::vector<std::string_view>{"1"});
+}
+
+TEST_CASE("Parse member and scoped expression access", "[parser]") {
+  Parser parser{std::string{"module m; assign y = obj.field + pkg::value; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& assign = std::get<ContinuousAssign>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  auto const& binary = ExprAs<BinaryExpression>(*assign.right_hand_side);
+  auto const& member = ExprAs<MemberAccessExpression>(*binary.left);
+  REQUIRE(member.member == "field");
+  auto const& scoped = ExprAs<MemberAccessExpression>(*binary.right);
+  REQUIRE(scoped.separator == "::");
+  REQUIRE(scoped.member == "value");
+}
+
+TEST_CASE("Parse all.sv regression fixture", "[parser][regression]") {
+  auto const fixture_path{std::filesystem::path{__FILE__}.parent_path() /
+                          "all.sv"};
+  std::ifstream file_stream{fixture_path, std::ios::binary | std::ios::ate};
+  REQUIRE(file_stream.is_open());
+  std::string source{};
+  source.resize(file_stream.tellg());
+  file_stream.seekg(0);
+  file_stream.read(source.data(), static_cast<std::streamsize>(source.size()));
+  Parser parser{std::move(source)};
+  auto translation_unit = parser.Parse();
+  REQUIRE(translation_unit.size() > 1);
+}
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
   std::string src = R"(
@@ -398,9 +950,9 @@ TEST_CASE("Parse package declarations", "[parser]") {
   REQUIRE(export_declaration.names.front().scope == "*");
   REQUIRE(export_declaration.names.front().name == "*");
 
-  auto const& unsupported_item{
-      std::get<UnsupportedPackageItem>(package_declaration.items.at(5))};
-  REQUIRE(unsupported_item.kind == "program");
+  auto const& preserved_item{
+      std::get<TokenPreservingDeclaration>(package_declaration.items.at(5))};
+  REQUIRE(preserved_item.kind == "program");
 
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(1)).name == "foo");
 }
@@ -444,7 +996,7 @@ TEST_CASE("Parse import declarations", "[parser]") {
   REQUIRE(module_item_import.names.front().name == "x");
 }
 
-TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
+TEST_CASE("Parse compilation-unit class declarations", "[parser]") {
   std::string src = R"(
     timeunit 1ns / 1ps;
 
@@ -467,9 +1019,26 @@ TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
   REQUIRE(std::get<TimeDeclaration>(translation_unit.at(0)).kind ==
           TimeDeclarationKind::kTimeUnit);
   REQUIRE(std::get<PackageDeclaration>(translation_unit.at(1)).name == "p");
-  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(2)).kind ==
-          "class");
+  auto const& class_declaration =
+      std::get<ClassDeclaration>(translation_unit.at(2));
+  REQUIRE(class_declaration.name == "C");
+  REQUIRE_FALSE(class_declaration.body.empty());
+  REQUIRE(class_declaration.members.size() == 1);
+  REQUIRE(class_declaration.members.front().kind ==
+          ClassDeclaration::MemberKind::kField);
+  REQUIRE(class_declaration.members.front().name == "i");
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(3)).name == "foo");
+}
+
+TEST_CASE("Model class member qualifiers and bodies", "[parser]") {
+  Parser parser{std::string{"class C; rand int value; constraint limits { value > 0 } extern function void f(); endclass"}};
+  auto translation_unit = parser.Parse();
+  auto const& class_declaration = std::get<ClassDeclaration>(translation_unit.front());
+  REQUIRE(class_declaration.members.size() == 3);
+  REQUIRE(class_declaration.members.at(0).random);
+  REQUIRE(class_declaration.members.at(1).kind == ClassDeclaration::MemberKind::kConstraint);
+  REQUIRE_FALSE(class_declaration.members.at(1).body.empty());
+  REQUIRE(class_declaration.members.at(2).extern_declaration);
 }
 
 TEST_CASE("Parse module ports", "[parser]") {
@@ -902,18 +1471,17 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.items.size() == 5);
 
-  auto const expected_kinds{
-      std::vector<std::string_view>{"genvar", "wor", "let", "defparam"}};
   auto const& genvar_declaration{GenItemAs<GenvarDeclaration>(
       std::get<GenerateItem>(module_declaration.items.at(0)))};
   REQUIRE(genvar_declaration.identifiers.size() == 1);
   REQUIRE(genvar_declaration.identifiers.front().name == "g");
-  for (auto const item_index : std::views::iota(1UZ, 4UZ)) {
-    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
-        module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
-    REQUIRE(not unsupported_item.tokens.empty());
-  }
+  auto const& wor_item{std::get<NetDeclaration>(
+      module_declaration.items.at(1))};
+  REQUIRE(wor_item.type == NetType::kWor);
+  REQUIRE(std::get<DirectiveDeclaration>(module_declaration.items.at(2)).kind ==
+          DirectiveDeclaration::Kind::kLet);
+  REQUIRE(std::get<DirectiveDeclaration>(module_declaration.items.at(3)).kind ==
+          DirectiveDeclaration::Kind::kDefparam);
 
   auto const& continuous_assign{
       std::get<ContinuousAssign>(module_declaration.items.at(4))};
@@ -963,24 +1531,27 @@ TEST_CASE("Parse unsupported module item blocks without losing sync",
 
   auto const& module_declaration{
       std::get<ModuleDeclaration>(translation_unit.front())};
-  REQUIRE(module_declaration.items.size() == 13);
+  REQUIRE(module_declaration.items.size() == 14);
 
-  auto const expected_kinds{std::vector<std::string_view>{
-      "function", "task", "class", "specify", "default", "property", "sequence",
-      "covergroup", "checker", "assert", "bind"}};
-  for (auto const item_index : std::views::iota(0UZ, expected_kinds.size())) {
-    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
-        module_declaration.items.at(item_index))};
-    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
-    REQUIRE(not unsupported_item.tokens.empty());
-  }
-
-  REQUIRE(std::holds_alternative<FinalBlock>(module_declaration.items.at(11)));
-
-  auto const& done_declaration{
-      std::get<NetDeclaration>(module_declaration.items.at(12))};
-  REQUIRE(done_declaration.name == "done");
-  REQUIRE(done_declaration.type == NetType::kLogic);
+  REQUIRE(std::holds_alternative<SubroutineDeclaration>(
+      module_declaration.items.at(0)));
+  REQUIRE(std::holds_alternative<SubroutineDeclaration>(
+      module_declaration.items.at(1)));
+  auto const& nested_class =
+      std::get<ClassDeclaration>(module_declaration.items.at(2));
+  REQUIRE(nested_class.name == "C");
+  auto const& specify =
+      std::get<SpecifyBlock>(module_declaration.items.at(3));
+  REQUIRE_FALSE(specify.items.empty());
+  REQUIRE(std::ranges::find_if(module_declaration.items, [](auto const& item) {
+            return std::holds_alternative<FinalBlock>(item);
+          }) != module_declaration.items.end());
+  auto const done_iterator{std::ranges::find_if(
+      module_declaration.items, [](auto const& item) {
+        return std::holds_alternative<NetDeclaration>(item) and
+               std::get<NetDeclaration>(item).name == "done";
+      })};
+  REQUIRE(done_iterator != module_declaration.items.end());
 }
 
 TEST_CASE("Parse unsupported module instances without losing sync",
@@ -1001,12 +1572,9 @@ TEST_CASE("Parse unsupported module instances without losing sync",
   REQUIRE(module_declaration.items.size() == 3);
 
   auto const& array_instance{
-      std::get<UnsupportedModuleItem>(module_declaration.items.at(0))};
-  REQUIRE(array_instance.kind == "m13");
-  REQUIRE(Lexemes(array_instance.tokens) ==
-          std::vector<std::string_view>{"m13", "instArr", "[", "3", ":", "1",
-                                        "]", "[", "2", ":", "5", "]", "(", ")",
-                                        ";"});
+      std::get<ModuleInstantiation>(module_declaration.items.at(0))};
+  REQUIRE(array_instance.instance_name == "instArr");
+  REQUIRE_FALSE(array_instance.instance_dimensions.empty());
 
   auto const& primitive_instance{
       std::get<ModuleInstantiation>(module_declaration.items.at(1))};
@@ -1718,7 +2286,7 @@ TEST_CASE("Parse module-scope generate constructs", "[parser]") {
   REQUIRE(generate_case.items.at(1).body.size() == 1);
 }
 
-TEST_CASE("Treat bare begin-end blocks in module body as unsupported",
+TEST_CASE("Preserve bare begin-end blocks in module body",
           "[parser]") {
   std::string src = R"(
     module foo ();
@@ -1735,10 +2303,9 @@ TEST_CASE("Treat bare begin-end blocks in module body as unsupported",
       std::get<ModuleDeclaration>(translation_unit.front())};
   REQUIRE(module_declaration.items.size() == 1);
 
-  auto const& unsupported_item{
-      std::get<UnsupportedModuleItem>(module_declaration.items.front())};
-  REQUIRE(unsupported_item.kind == "begin");
-  REQUIRE(not unsupported_item.tokens.empty());
+  auto const& preserved_item{
+      std::get<TokenPreservingDeclaration>(module_declaration.items.front())};
+  REQUIRE(preserved_item.kind == "begin");
 }
 
 TEST_CASE("Parse module instantiations", "[parser]") {
@@ -1922,4 +2489,41 @@ TEST_CASE("Parse all SystemVerilog fixture as compilation unit", "[parser]") {
         std::get_if<ModuleDeclaration>(&design_element)};
     return module_declaration != nullptr and module_declaration->name == "m9";
   }));
+}
+
+TEST_CASE("all.sv has no unsupported AST variants", "[parser][regression]") {
+  Parser parser{ReadFixture("all.sv")};
+  auto translation_unit = parser.Parse();
+  std::size_t unsupported = 0;
+  for (auto const& element : translation_unit) {
+    std::visit(
+        [&unsupported](auto const& value) {
+          using Value = std::remove_cvref_t<decltype(value)>;
+          if constexpr (std::same_as<Value, UnsupportedDesignElement>) {
+            ++unsupported;
+          } else if constexpr (std::same_as<Value, ModuleDeclaration>) {
+            for (auto const& item : value.items) {
+              std::visit(
+                  [&unsupported](auto const& module_item) {
+                    using Item = std::remove_cvref_t<decltype(module_item)>;
+                    if constexpr (std::same_as<Item, UnsupportedModuleItem>) {
+                      ++unsupported;
+                    } else if constexpr (std::same_as<Item, GenerateItem>) {
+                      std::visit(
+                          [&unsupported](auto const& generate_item) {
+                            using Generate = std::remove_cvref_t<decltype(generate_item)>;
+                            if constexpr (std::same_as<Generate, UnsupportedGenerateItem>) {
+                              ++unsupported;
+                            }
+                          },
+                          module_item.node);
+                    }
+                  },
+                  item);
+            }
+          }
+        },
+        element);
+  }
+  REQUIRE(unsupported == 0);
 }

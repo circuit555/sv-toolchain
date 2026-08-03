@@ -28,6 +28,7 @@ class TokenParserBase {
 
   tokens_t m_tokens;
   tokens_t::iterator m_token_iterator;
+  bool m_parsing_macromodule{false};
 };
 
 /// @brief Lexical analyzer for SystemVerilog source text.
@@ -110,6 +111,23 @@ export class Parser final : private TokenParserBase {
   auto ParseExportDeclaration() -> ::svt::model::ExportDeclaration;
 
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
+  auto ParseProgramDeclaration() -> ::svt::model::ProgramDeclaration;
+  auto ParsePrimitiveDeclaration() -> ::svt::model::PrimitiveDeclaration;
+  auto ParseClassDeclaration() -> ::svt::model::ClassDeclaration;
+  auto ParseSubroutineDeclaration() -> ::svt::model::SubroutineDeclaration;
+  auto ParseDpiDeclaration() -> ::svt::model::DpiDeclaration;
+  auto ParseSpecifyBlock() -> ::svt::model::SpecifyBlock;
+  auto ParseAssertionDeclaration() -> ::svt::model::AssertionDeclaration;
+  auto ParseAssertionStatement() -> ::svt::model::AssertionStatement;
+  auto ParseClockingDeclaration() -> ::svt::model::ClockingDeclaration;
+  auto ParseDefaultDisableIffDeclaration()
+      -> ::svt::model::DefaultDisableIffDeclaration;
+  auto ParseCheckerDeclaration() -> ::svt::model::CheckerDeclaration;
+  auto ParseTokenPreservingDeclaration()
+      -> ::svt::model::TokenPreservingDeclaration;
+  auto ParseDirectiveDeclaration() -> ::svt::model::DirectiveDeclaration;
+  auto ParseCovergroupDeclaration() -> ::svt::model::CovergroupDeclaration;
+  auto ParseConfigDeclaration() -> ::svt::model::ConfigDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
   auto ParseTypeDeclaration() -> ::svt::model::TypeDeclaration;

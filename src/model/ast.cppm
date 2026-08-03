@@ -243,8 +243,15 @@ export struct LoopStatement {
   StatementPtr body;
 };
 
+export struct TimeLiteral {
+  std::string_view magnitude;
+  std::string_view unit;
+  std::span<Token const> tokens;
+};
+
 export struct DelayControl {
   ExpressionPtr expression;
+  std::optional<TimeLiteral> semantic_time;
 };
 
 export struct EventControl {
@@ -586,12 +593,6 @@ export struct GenerateItem {
 export enum class TimeDeclarationKind : std::uint8_t {
   kTimeUnit,
   kTimePrecision
-};
-
-export struct TimeLiteral {
-  std::string_view magnitude;
-  std::string_view unit;
-  std::span<Token const> tokens;
 };
 
 export struct TimeDeclaration {

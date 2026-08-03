@@ -4126,6 +4126,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             PrintImportDeclaration(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   ExportDeclaration>) {
+            PrintExportDeclaration(resolved_node);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    CheckerDeclaration>) {
             fmt::println("checker {}", resolved_node.name);
           } else if constexpr (std::same_as<

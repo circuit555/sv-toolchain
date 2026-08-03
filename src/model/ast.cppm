@@ -697,7 +697,7 @@ export using DesignElement =
     std::variant<ModuleDeclaration, ProgramDeclaration, PrimitiveDeclaration,
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
-                 ImportDeclaration, CheckerDeclaration,
+                 ImportDeclaration, ExportDeclaration, CheckerDeclaration,
                  TokenPreservingDeclaration,
                  ConfigDeclaration,
                  UnsupportedDesignElement>;

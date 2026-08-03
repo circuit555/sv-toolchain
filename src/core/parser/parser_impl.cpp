@@ -1295,7 +1295,14 @@ class StatementParser final : private TokenParserBase {
     auto const begin_iterator{m_token_iterator};
 
     MatchKeyword("begin");
-    ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+    std::string_view label;
+    if (not AtEnd() and m_token_iterator->type == TokenType::kColon) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      if (not AtEnd() and m_token_iterator->type == TokenType::kIdentifier) {
+        label = m_token_iterator->lexeme;
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      }
+    }
 
     std::vector<StatementPtr> statements{};
     while (not AtEnd() and not m_token_iterator->IsKeyword("end")) {
@@ -1315,7 +1322,7 @@ class StatementParser final : private TokenParserBase {
 
     return std::make_unique<Statement>(
         StatementNode{std::in_place_type<BeginEndBlockStatement>,
-                      std::move(statements)},
+                      BeginEndBlockStatement{label, std::move(statements)}},
         tokens_t{begin_iterator, m_token_iterator});
   }
 

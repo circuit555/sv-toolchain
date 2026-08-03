@@ -205,6 +205,7 @@ export enum class ProceduralContinuousAssignKind : std::uint8_t {
 };
 
 export struct BeginEndBlockStatement {
+  std::string_view label;
   std::vector<StatementPtr> statements;
 };
 

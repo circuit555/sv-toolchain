@@ -113,6 +113,7 @@ export class Parser final : private TokenParserBase {
   auto ParseModuleDeclaration() -> ::svt::model::ModuleDeclaration;
   auto ParseProgramDeclaration() -> ::svt::model::ProgramDeclaration;
   auto ParsePrimitiveDeclaration() -> ::svt::model::PrimitiveDeclaration;
+  auto ParseClassDeclaration() -> ::svt::model::ClassDeclaration;
   auto ParseModuleItem() -> ::svt::model::ModuleItem;
   auto ParseVariableDeclaration() -> ::svt::model::VariableDeclaration;
   auto ParseTypeDeclaration() -> ::svt::model::TypeDeclaration;

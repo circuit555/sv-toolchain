@@ -397,6 +397,14 @@ export struct ModuleInstantiation {
   std::span<Token const> port_connections;
 };
 
+export struct ClassDeclaration : Declaration {
+  std::string_view lifetime;
+  std::vector<ParameterDeclaration> parameters;
+  std::span<Token const> extends;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct AlwaysBlock {
   ProceduralBlockKind kind{ProceduralBlockKind::kAlways};
   StatementPtr statement;
@@ -562,7 +570,8 @@ export using ModuleItem =
                  TypeDeclaration, StructuredVariableDeclaration,
                  UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
                  InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
-                 TimeDeclaration, ImportDeclaration, UnsupportedModuleItem>;
+                 TimeDeclaration, ImportDeclaration, ClassDeclaration,
+                 UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
   ModuleSourceKind source_kind{ModuleSourceKind::kModule};
@@ -595,8 +604,8 @@ export struct UnsupportedDesignElement {
 /// @brief Top-level SystemVerilog design element.
 export using DesignElement =
     std::variant<ModuleDeclaration, ProgramDeclaration, PrimitiveDeclaration,
-                 PackageDeclaration, InterfaceDeclaration, TypeDeclaration,
-                 TimeDeclaration, ImportDeclaration,
+                 PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
+                 TypeDeclaration, TimeDeclaration, ImportDeclaration,
                  UnsupportedDesignElement>;
 
 }  // namespace svt::model

@@ -91,6 +91,7 @@ using ProceduralContinuousAssignKind =
 using ProgramDeclaration = svt::model::ProgramDeclaration;
 using PrimitiveDeclaration = svt::model::PrimitiveDeclaration;
 using ModuleSourceKind = svt::model::ModuleSourceKind;
+using ClassDeclaration = svt::model::ClassDeclaration;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -486,7 +487,7 @@ TEST_CASE("Parse import declarations", "[parser]") {
   REQUIRE(module_item_import.names.front().name == "x");
 }
 
-TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
+TEST_CASE("Parse compilation-unit class declarations", "[parser]") {
   std::string src = R"(
     timeunit 1ns / 1ps;
 
@@ -509,8 +510,10 @@ TEST_CASE("Parse unsupported compilation-unit design elements", "[parser]") {
   REQUIRE(std::get<TimeDeclaration>(translation_unit.at(0)).kind ==
           TimeDeclarationKind::kTimeUnit);
   REQUIRE(std::get<PackageDeclaration>(translation_unit.at(1)).name == "p");
-  REQUIRE(std::get<UnsupportedDesignElement>(translation_unit.at(2)).kind ==
-          "class");
+  auto const& class_declaration =
+      std::get<ClassDeclaration>(translation_unit.at(2));
+  REQUIRE(class_declaration.name == "C");
+  REQUIRE_FALSE(class_declaration.body.empty());
   REQUIRE(std::get<ModuleDeclaration>(translation_unit.at(3)).name == "foo");
 }
 
@@ -1008,12 +1011,21 @@ TEST_CASE("Parse unsupported module item blocks without losing sync",
   REQUIRE(module_declaration.items.size() == 13);
 
   auto const expected_kinds{std::vector<std::string_view>{
-      "function", "task", "class", "specify", "default", "property", "sequence",
+      "function", "task", "specify", "default", "property", "sequence",
       "covergroup", "checker", "assert", "bind"}};
-  for (auto const item_index : std::views::iota(0UZ, expected_kinds.size())) {
+  for (auto const item_index : std::views::iota(0UZ, 2UZ)) {
     auto const& unsupported_item{std::get<UnsupportedModuleItem>(
         module_declaration.items.at(item_index))};
     REQUIRE(unsupported_item.kind == expected_kinds.at(item_index));
+    REQUIRE(not unsupported_item.tokens.empty());
+  }
+  auto const& nested_class =
+      std::get<ClassDeclaration>(module_declaration.items.at(2));
+  REQUIRE(nested_class.name == "C");
+  for (auto const item_index : std::views::iota(3UZ, expected_kinds.size() + 1UZ)) {
+    auto const& unsupported_item{std::get<UnsupportedModuleItem>(
+        module_declaration.items.at(item_index))};
+    REQUIRE(unsupported_item.kind == expected_kinds.at(item_index - 1UZ));
     REQUIRE(not unsupported_item.tokens.empty());
   }
 

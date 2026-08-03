@@ -288,6 +288,14 @@ TEST_CASE("Parse extended net types and declarators", "[parser]") {
   REQUIRE(std::get<NetDeclaration>(module.items.at(1)).type == NetType::kTri0);
 }
 
+TEST_CASE("Preserve primitive gate instances", "[parser]") {
+  Parser parser{std::string{"module m; rcmos #1step (q, r, s, t); pullup (strong1) p1(a), p2(b); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(0)).kind == "rcmos");
+  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(1)).kind == "pullup");
+}
+
 TEST_CASE("Parse bind alias defparam and let declarations", "[parser]") {
   Parser parser{std::string{"bind target checker_inst ci(); module m; alias a = b; defparam m.W = 1; let inc(x) = x + 1; endmodule"}};
   auto translation_unit = parser.Parse();

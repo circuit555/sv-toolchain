@@ -641,6 +641,10 @@ export struct CovergroupDeclaration : Declaration {
     ItemKind kind{ItemKind::kOther};
     std::string_view name;
     std::vector<Bin> bins;
+    std::span<Token const> expression;
+    std::span<Token const> iff_condition;
+    std::span<Token const> with_clause;
+    bool transition{false};
     std::span<Token const> tokens;
   };
   std::vector<Item> items;

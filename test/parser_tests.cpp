@@ -25,6 +25,7 @@ using GenerateCase = svt::model::GenerateCase;
 using GenerateRegion = svt::model::GenerateRegion;
 using GenerateItem = svt::model::GenerateItem;
 using ModuleInstantiation = svt::model::ModuleInstantiation;
+using PrimitiveGateInstantiation = svt::model::PrimitiveGateInstantiation;
 using NetDeclaration = svt::model::NetDeclaration;
 using NetType = svt::model::NetType;
 using VariableDeclaration = svt::model::VariableDeclaration;
@@ -330,8 +331,8 @@ TEST_CASE("Preserve primitive gate instances", "[parser]") {
   Parser parser{std::string{"module m; rcmos #1step (q, r, s, t); pullup (strong1) p1(a), p2(b); endmodule"}};
   auto translation_unit = parser.Parse();
   auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
-  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(0)).kind == "rcmos");
-  REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(1)).kind == "pullup");
+  REQUIRE(std::get<PrimitiveGateInstantiation>(module.items.at(0)).gate == "rcmos");
+  REQUIRE(std::get<PrimitiveGateInstantiation>(module.items.at(1)).gate == "pullup");
 }
 
 TEST_CASE("Parse bind alias defparam and let declarations", "[parser]") {

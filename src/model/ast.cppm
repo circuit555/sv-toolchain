@@ -485,6 +485,11 @@ export struct ModuleInstantiation {
   std::span<Token const> port_connections;
 };
 
+export struct PrimitiveGateInstantiation {
+  std::string_view gate;
+  std::span<Token const> tokens;
+};
+
 export struct ClassDeclaration : Declaration {
   enum class MemberKind : std::uint8_t {
     kField, kMethod, kConstraint, kType, kOther
@@ -805,6 +810,7 @@ export using ModuleItem =
                  TypeDeclaration, StructuredVariableDeclaration,
                  UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
                  InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
+                 PrimitiveGateInstantiation,
                  TimeDeclaration, ImportDeclaration, ClassDeclaration,
                  SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
                  AssertionStatement, ClockingDeclaration,

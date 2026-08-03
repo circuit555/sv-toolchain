@@ -321,6 +321,16 @@ export struct ProceduralDeclarationStatement {
   std::span<Token const> declaration;
 };
 
+export struct EventTriggerStatement {
+  bool nonblocking{false};
+  std::span<Token const> event;
+};
+
+export struct RandomizationBlockStatement {
+  bool sequence{false};
+  std::span<Token const> body;
+};
+
 export struct UnsupportedStatement {
   std::span<Token const> tokens;
 };
@@ -357,6 +367,7 @@ export using StatementNode =
                  TimingControlStatement, WaitStatement, ForkJoinStatement,
                  ProceduralContinuousAssignStatement, SystemTaskCallStatement,
                  ProceduralDeclarationStatement,
+                 EventTriggerStatement, RandomizationBlockStatement,
                  ReturnStatement, BreakStatement, ContinueStatement,
                  DisableStatement, ExpectStatement, TokenPreservingStatement,
                  UnsupportedStatement>;

@@ -130,6 +130,8 @@ export struct ReplicationExpression {
 export struct CallExpression {
   ExpressionPtr callee;
   std::vector<ExpressionPtr> arguments;
+  std::span<Token const> with_clause;
+  bool unique{false};
 };
 
 export struct AssignmentPatternExpression {
@@ -148,6 +150,10 @@ export struct CastExpression {
 
 export struct TypeExpression {
   std::span<Token const> specifier;
+};
+
+export struct EventExpression {
+  std::span<Token const> control;
 };
 
 export struct MemberAccessExpression {
@@ -170,7 +176,7 @@ export using ExpressionNode =
                  MinTypMaxExpression,
                  ReplicationExpression, CallExpression,
                  AssignmentPatternExpression, CastExpression,
-                 TypeExpression,
+                 TypeExpression, EventExpression,
                  MemberAccessExpression,
                  UnsupportedExpression>;
 

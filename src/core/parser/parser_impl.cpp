@@ -34,6 +34,7 @@ using ClockingDeclaration = ::svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = ::svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = ::svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = ::svt::model::TokenPreservingDeclaration;
+using DirectiveDeclaration = ::svt::model::DirectiveDeclaration;
 using CovergroupDeclaration = ::svt::model::CovergroupDeclaration;
 using ConfigDeclaration = ::svt::model::ConfigDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
@@ -4704,7 +4705,7 @@ auto Parser::ParseDesignElement() -> DesignElement {
         return ParseConfigDeclaration();
       case ::HashLexeme("bind"):
         m_token_iterator = dispatch_iterator;
-        return ParseTokenPreservingDeclaration();
+        return ParseDirectiveDeclaration();
       case ::HashLexeme("extern"):
         m_token_iterator = dispatch_iterator;
         return ParseTokenPreservingDeclaration();
@@ -5393,6 +5394,39 @@ auto Parser::ParseTokenPreservingDeclaration()
   }
   return TokenPreservingDeclaration{.kind = kind,
                                     .tokens = {begin, m_token_iterator}};
+}
+
+auto Parser::ParseDirectiveDeclaration() -> DirectiveDeclaration {
+  auto const begin{m_token_iterator};
+  auto const kind{[this]() {
+    if (m_token_iterator->lexeme == "bind") return DirectiveDeclaration::Kind::kBind;
+    if (m_token_iterator->lexeme == "alias") return DirectiveDeclaration::Kind::kAlias;
+    if (m_token_iterator->lexeme == "defparam") return DirectiveDeclaration::Kind::kDefparam;
+    return DirectiveDeclaration::Kind::kLet;
+  }()};
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  auto const content_begin{m_token_iterator};
+  ::AdvanceToTopLevelBoundary(
+      m_token_iterator, rng::cend(m_tokens),
+      [](tokens_t::iterator const) { return false; },
+      [](tokens_t::iterator const token) {
+        return token->type == TokenType::kSemicolon;
+      },
+      true, BoundaryEndBehavior::kStopAtEnd, "directive declaration");
+  auto const content_end{m_token_iterator};
+  auto const equals{rng::find_if(
+      tokens_t{content_begin, content_end},
+      [](Token const& token) { return token.type == TokenType::kEquals; })};
+  DirectiveDeclaration declaration{.kind = kind};
+  declaration.head = {content_begin,
+                      equals == content_end ? content_end : equals};
+  if (equals != content_end) declaration.body = {std::next(equals), content_end};
+  if (m_token_iterator != rng::cend(m_tokens) and
+      m_token_iterator->type == TokenType::kSemicolon) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
 }
 
 auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
@@ -6090,8 +6124,8 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("alias"):
         case ::HashLexeme("defparam"):
         case ::HashLexeme("let"):
-          return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
-                            ParseTokenPreservingDeclaration()};
+          return ModuleItem{std::in_place_type<DirectiveDeclaration>,
+                            ParseDirectiveDeclaration()};
         case ::HashLexeme("endclocking"):
           return ModuleItem{std::in_place_type<TokenPreservingDeclaration>,
                             ParseTokenPreservingDeclaration()};

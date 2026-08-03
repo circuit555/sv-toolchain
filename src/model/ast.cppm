@@ -568,6 +568,11 @@ export struct CovergroupDeclaration : Declaration {
   std::span<Token const> tokens;
 };
 
+export struct ConfigDeclaration : Declaration {
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct InterfaceItemDeclaration {
   std::string_view kind;
   std::span<Token const> tokens;
@@ -641,6 +646,7 @@ export using ModuleItem =
                  CheckerDeclaration,
                  TokenPreservingDeclaration,
                  CovergroupDeclaration,
+                 ConfigDeclaration,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {
@@ -678,6 +684,7 @@ export using DesignElement =
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
                  ImportDeclaration, CheckerDeclaration,
                  TokenPreservingDeclaration,
+                 ConfigDeclaration,
                  UnsupportedDesignElement>;
 
 }  // namespace svt::model

@@ -102,6 +102,7 @@ using CheckerDeclaration = svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
 using TokenPreservingStatement = svt::model::TokenPreservingStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
+using ConfigDeclaration = svt::model::ConfigDeclaration;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -305,6 +306,14 @@ TEST_CASE("Parse covergroup declarations", "[parser]") {
   auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
   REQUIRE(covergroup.name == "cg");
   REQUIRE_FALSE(covergroup.body.empty());
+}
+
+TEST_CASE("Parse config declarations", "[parser]") {
+  Parser parser{std::string{"config cfg; design top; default liblist work; cell top use work.top; endconfig : cfg"}};
+  auto translation_unit = parser.Parse();
+  auto const& config = std::get<ConfigDeclaration>(translation_unit.front());
+  REQUIRE(config.name == "cfg");
+  REQUIRE_FALSE(config.body.empty());
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

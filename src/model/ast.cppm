@@ -691,6 +691,14 @@ export struct TokenPreservingDeclaration {
   std::span<Token const> tokens;
 };
 
+export struct DirectiveDeclaration {
+  enum class Kind : std::uint8_t { kBind, kAlias, kDefparam, kLet };
+  Kind kind{Kind::kBind};
+  std::span<Token const> head;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
 export struct CovergroupDeclaration : Declaration {
   enum class ItemKind : std::uint8_t {
     kCoverpoint, kCross, kOption, kBin, kSample, kOther
@@ -803,6 +811,7 @@ export using ModuleItem =
                  DefaultClockingDeclaration, DefaultDisableIffDeclaration,
                  DpiDeclaration,
                  CheckerDeclaration,
+                 DirectiveDeclaration,
                  TokenPreservingDeclaration,
                  CovergroupDeclaration,
                  ConfigDeclaration,
@@ -842,6 +851,7 @@ export using DesignElement =
                  PackageDeclaration, InterfaceDeclaration, ClassDeclaration,
                  SubroutineDeclaration, TypeDeclaration, TimeDeclaration,
                  ImportDeclaration, ExportDeclaration, CheckerDeclaration,
+                 DirectiveDeclaration,
                  TokenPreservingDeclaration, DpiDeclaration,
                  ConfigDeclaration,
                  UnsupportedDesignElement>;

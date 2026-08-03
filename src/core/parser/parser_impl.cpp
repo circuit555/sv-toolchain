@@ -5247,8 +5247,27 @@ auto Parser::ParseClassDeclaration() -> ClassDeclaration {
         return iterator->IsKeyword(keyword);
       });
   declaration.body = {body_begin, m_token_iterator};
-  for (auto const member_tokens : SplitTopLevelSeparatedTokens(
-           declaration.body, TokenType::kSemicolon, "class member", false)) {
+  auto const raw_members{SplitTopLevelSeparatedTokens(
+      declaration.body, TokenType::kSemicolon, "class member", false)};
+  std::vector<tokens_t> member_slices{};
+  for (auto const member_tokens : raw_members) {
+    auto const constraint_iterator{rng::find_if(
+        member_tokens, [](Token const& token) { return token.lexeme == "constraint"; })};
+    auto const method_iterator{rng::find_if(
+        member_tokens, [](Token const& token) {
+          return token.lexeme == "function" or token.lexeme == "task" or
+                 token.lexeme == "extern";
+        })};
+    if (constraint_iterator != member_tokens.end() and
+        method_iterator != member_tokens.end() and
+        constraint_iterator < method_iterator) {
+      member_slices.push_back({member_tokens.begin(), method_iterator});
+      member_slices.push_back({method_iterator, member_tokens.end()});
+    } else {
+      member_slices.push_back(member_tokens);
+    }
+  }
+  for (auto const member_tokens : member_slices) {
     if (member_tokens.empty()) {
       continue;
     }

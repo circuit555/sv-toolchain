@@ -135,6 +135,7 @@ using ProceduralContinuousAssignStatement =
     ::svt::model::ProceduralContinuousAssignStatement;
 using SystemTaskCallStatement = ::svt::model::SystemTaskCallStatement;
 using UnsupportedStatement = ::svt::model::UnsupportedStatement;
+using TokenPreservingStatement = ::svt::model::TokenPreservingStatement;
 using PackedDimension = ::svt::model::PackedDimension;
 using PackedRangeDimension = ::svt::model::PackedRangeDimension;
 using PackedSizeDimension = ::svt::model::PackedSizeDimension;
@@ -987,6 +988,24 @@ class StatementParser final : private TokenParserBase {
     }
     if (m_token_iterator->IsKeyword("fork")) {
       return ParseForkJoinStatement();
+    }
+    if (m_token_iterator->IsKeyword("return") or
+        m_token_iterator->IsKeyword("break") or
+        m_token_iterator->IsKeyword("continue") or
+        m_token_iterator->IsKeyword("disable") or
+        m_token_iterator->IsKeyword("expect")) {
+      auto const begin{m_token_iterator};
+      auto const kind{m_token_iterator->lexeme};
+      while (not AtEnd() and m_token_iterator->type != TokenType::kSemicolon) {
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      }
+      if (not AtEnd()) {
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      }
+      return std::make_unique<Statement>(
+          StatementNode{std::in_place_type<TokenPreservingStatement>,
+                        TokenPreservingStatement{kind, {begin, m_token_iterator}}},
+          tokens_t{begin, m_token_iterator});
     }
     if (m_token_iterator->IsKeyword("assign") or
         m_token_iterator->IsKeyword("deassign") or
@@ -3689,16 +3708,16 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
       "alias",        "always",      "always_comb",  "always_ff",
       "assert",
       "always_latch", "assign",      "assume",       "automatic",
-      "begin",        "bind",        "bit",          "case",
+      "begin",        "bind",        "bit",          "break",       "case",
       "casex",        "casez",       "chandle",      "checker",
       "class",        "clocking",    "config",       "constraint",
       "cover",        "covergroup",  "deassign",     "default",
-      "defparam",     "disable",     "else",         "end",
+      "continue",     "defparam",     "disable",     "else",         "end",
       "endchecker",   "endclass",    "endclocking",  "endconfig",
       "endfunction",  "endgenerate", "endgroup",     "endinterface",
       "endmodule",    "endpackage",  "endprimitive", "endprogram",
       "endproperty",  "endsequence", "endcase",      "endspecify",
-      "endtask",      "endtable",    "event",       "export",       "extern",
+      "endtask",      "endtable",    "event",       "expect",       "export",       "extern",
       "final",        "for",         "force",        "foreach",
       "forever",      "fork",        "function",     "generate",
       "genvar",       "global",      "if",           "import",
@@ -3709,7 +3728,7 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
       "nettype",      "output",      "package",      "parameter",     "table",
       "primitive",    "program",     "property",     "real",
       "realtime",     "ref",         "reg",          "release",
-      "repeat",       "restrict",    "sequence",     "shortint",
+      "repeat",       "restrict",    "return",       "sequence",     "shortint",
       "shortreal",    "specify",     "static",       "struct",
       "tagged",       "task",        "time",         "timeprecision",
       "timeunit",     "typedef",     "union",        "wait",

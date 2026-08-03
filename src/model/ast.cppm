@@ -280,12 +280,17 @@ export struct UnsupportedStatement {
   std::span<Token const> tokens;
 };
 
+export struct TokenPreservingStatement {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
 export using StatementNode =
     std::variant<std::monostate, BeginEndBlockStatement, AssignmentStatement,
                  IfElseStatement, CaseStatement, LoopStatement,
                  TimingControlStatement, WaitStatement, ForkJoinStatement,
                  ProceduralContinuousAssignStatement, SystemTaskCallStatement,
-                 UnsupportedStatement>;
+                 TokenPreservingStatement, UnsupportedStatement>;
 
 export struct Statement {
   StatementNode node;

@@ -113,6 +113,7 @@ using ConfigDeclaration = svt::model::ConfigDeclaration;
 using CastExpression = svt::model::CastExpression;
 using DpiDeclaration = svt::model::DpiDeclaration;
 using MemberAccessExpression = svt::model::MemberAccessExpression;
+using StreamingConcatenationExpression = svt::model::StreamingConcatenationExpression;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -424,6 +425,19 @@ TEST_CASE("Model semantic delay time literals", "[parser]") {
   REQUIRE(delay.semantic_time.has_value());
   REQUIRE(delay.semantic_time->magnitude == "5");
   REQUIRE(delay.semantic_time->unit == "ns");
+}
+
+TEST_CASE("Parse streaming concatenations", "[parser]") {
+  Parser parser{std::string{"module m; initial {<< byte{a, b}} = value; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& statement = StmtAs<AssignmentStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  auto const& streaming = std::get<StreamingConcatenationExpression>(
+      statement.left_hand_side->node);
+  REQUIRE(streaming.direction == "<<");
+  REQUIRE(streaming.slice_size.front().lexeme == "byte");
+  REQUIRE(streaming.elements.front().lexeme == "a");
 }
 
 TEST_CASE("Parse config declarations", "[parser]") {

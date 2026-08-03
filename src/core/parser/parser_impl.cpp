@@ -5212,6 +5212,31 @@ auto Parser::ParseCheckerDeclaration() -> CheckerDeclaration {
     throw std::runtime_error{"[Parser] expected 'endchecker'"};
   }
   declaration.body = {body_begin, end_iterator};
+  for (auto const item_tokens : SplitTopLevelSeparatedTokens(
+           declaration.body, TokenType::kSemicolon, "checker item", false)) {
+    if (item_tokens.empty()) continue;
+    CheckerDeclaration::Item item{.tokens = item_tokens};
+    auto const first{item_tokens.front().lexeme};
+    if (first == "clocking" or first == "default" or first == "global") {
+      item.kind = first == "clocking"
+                      ? CheckerDeclaration::ItemKind::kClocking
+                      : CheckerDeclaration::ItemKind::kDefaultDisable;
+    } else if (first == "assert" or first == "assume" or first == "cover" or
+               first == "restrict") {
+      item.kind = CheckerDeclaration::ItemKind::kAssertion;
+    } else if (first == "generate" or first == "for" or first == "if" or
+               first == "case") {
+      item.kind = CheckerDeclaration::ItemKind::kGenerate;
+    } else {
+      item.kind = CheckerDeclaration::ItemKind::kDeclaration;
+    }
+    auto const name_iterator{rng::find_if(
+        item_tokens, [](Token const& token) {
+          return token.type == TokenType::kIdentifier;
+        })};
+    if (name_iterator != item_tokens.end()) item.name = name_iterator->lexeme;
+    declaration.items.push_back(item);
+  }
   m_token_iterator = end_iterator;
   ExpectKeyword("endchecker", "checker declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));

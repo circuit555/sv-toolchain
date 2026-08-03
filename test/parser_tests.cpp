@@ -284,6 +284,9 @@ TEST_CASE("Parse checker declarations", "[parser]") {
   REQUIRE(checker.name == "c");
   REQUIRE(checker.ports.size() == 1);
   REQUIRE_FALSE(checker.body.empty());
+  REQUIRE(checker.items.size() == 2);
+  REQUIRE(checker.items.at(0).kind == CheckerDeclaration::ItemKind::kDefaultDisable);
+  REQUIRE(checker.items.at(1).kind == CheckerDeclaration::ItemKind::kAssertion);
 }
 
 TEST_CASE("Parse null generate items", "[parser]") {

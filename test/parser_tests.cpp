@@ -231,7 +231,18 @@ TEST_CASE("Parse specify blocks as isolated module items", "[parser]") {
   auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
   auto const& specify = std::get<SpecifyBlock>(module.items.front());
   REQUIRE_FALSE(specify.items.empty());
+  REQUIRE(specify.structured_items.size() == 1);
+  REQUIRE(specify.structured_items.front().kind == SpecifyBlock::ItemKind::kSpecparam);
   REQUIRE(specify.tokens.front().lexeme == "specify");
+}
+
+TEST_CASE("Classify specify paths", "[parser]") {
+  Parser parser{std::string{"module m; specify (a *> y) = (1:2:3); endspecify endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& specify = std::get<SpecifyBlock>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  REQUIRE(specify.structured_items.size() == 1);
+  REQUIRE(specify.structured_items.front().kind == SpecifyBlock::ItemKind::kPath);
 }
 
 TEST_CASE("Parse assertion declarations and statements", "[parser]") {

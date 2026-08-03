@@ -3019,7 +3019,8 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               SpecifyBlock>) {
-              fmt::println("    specify {}", JoinLexemes(resolved_item.items));
+              fmt::println("    specify {} item(s)",
+                           resolved_item.structured_items.size());
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               AssertionDeclaration>) {
@@ -5363,6 +5364,20 @@ auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
   }
   m_token_iterator = end_iterator;
   SpecifyBlock block{.items = {items_begin, m_token_iterator}};
+  for (auto const item_tokens : SplitTopLevelSeparatedTokens(
+           block.items, TokenType::kSemicolon, "specify item", false)) {
+    if (item_tokens.empty()) continue;
+    SpecifyBlock::Item item{.tokens = item_tokens};
+    if (item_tokens.front().lexeme == "specparam") {
+      item.kind = SpecifyBlock::ItemKind::kSpecparam;
+    } else if (rng::find_if(item_tokens, [](Token const& token) {
+                 return token.lexeme == "=>" or token.lexeme == "*>" or
+                        token.type == TokenType::kLParen;
+               }) != item_tokens.end()) {
+      item.kind = SpecifyBlock::ItemKind::kPath;
+    }
+    block.structured_items.push_back(item);
+  }
   ExpectKeyword("endspecify", "specify block");
   block.tokens = {begin, m_token_iterator};
   return block;

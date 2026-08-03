@@ -535,6 +535,11 @@ TEST_CASE("Model semantic time literals", "[parser]") {
   REQUIRE(time.semantic_precision_value->unit == "ps");
 }
 
+TEST_CASE("Reject invalid time declaration forms", "[parser]") {
+  REQUIRE_THROWS(Parser{std::string{"timeunit 1hour;"}}.Parse());
+  REQUIRE_THROWS(Parser{std::string{"timeprecision 1ns / 1ps;"}}.Parse());
+}
+
 TEST_CASE("Parse expression casts", "[parser]") {
   Parser parser{std::string{"module m; assign y = int'(x + 1); endmodule"}};
   auto translation_unit = parser.Parse();

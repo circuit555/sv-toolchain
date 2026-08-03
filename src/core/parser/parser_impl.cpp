@@ -4802,6 +4802,10 @@ auto Parser::ParseTimeDeclaration() -> TimeDeclaration {
   auto slash_iterator{rng::find_if(
       tokens_t{time_begin_iterator, semicolon_iterator},
       [](Token const& token) -> bool { return token.lexeme == "/"; })};
+  if (kind == TimeDeclarationKind::kTimePrecision and
+      slash_iterator != semicolon_iterator) {
+    throw std::runtime_error{"[Parser] timeprecision cannot specify a timeunit"};
+  }
   if (time_begin_iterator == slash_iterator) {
     throw std::runtime_error{"[Parser] expected time value"};
   }

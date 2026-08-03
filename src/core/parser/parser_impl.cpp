@@ -66,6 +66,7 @@ using GenerateItemNode = ::svt::model::GenerateItemNode;
 using GenerateItem = ::svt::model::GenerateItem;
 using GenerateItemPtr = ::svt::model::GenerateItemPtr;
 using UnsupportedGenerateItem = ::svt::model::UnsupportedGenerateItem;
+using NullGenerateItem = ::svt::model::NullGenerateItem;
 using ModuleInstantiation = ::svt::model::ModuleInstantiation;
 using ModuleItem = ::svt::model::ModuleItem;
 using UnsupportedModuleItem = ::svt::model::UnsupportedModuleItem;
@@ -1668,6 +1669,11 @@ class GenerateItemParser final : private TokenParserBase {
 
   auto ParseOne() -> GenerateItem {
     auto const item_begin{m_token_iterator};
+    if (m_token_iterator->type == TokenType::kSemicolon) {
+      rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      return GenerateItem{.node = NullGenerateItem{},
+                          .tokens = {item_begin, m_token_iterator}};
+    }
     switch (m_token_iterator->type) {
       case TokenType::kKeyword: {
         switch (::HashLexeme(m_token_iterator->lexeme)) {

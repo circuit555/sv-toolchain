@@ -2521,6 +2521,30 @@ auto ToString(NetType const type) -> std::string_view {
       return "wire";
     case NetType::kLogic:
       return "logic";
+    case NetType::kTri:
+      return "tri";
+    case NetType::kTri0:
+      return "tri0";
+    case NetType::kTri1:
+      return "tri1";
+    case NetType::kTriand:
+      return "triand";
+    case NetType::kTrior:
+      return "trior";
+    case NetType::kTrireg:
+      return "trireg";
+    case NetType::kUwire:
+      return "uwire";
+    case NetType::kWand:
+      return "wand";
+    case NetType::kWor:
+      return "wor";
+    case NetType::kSupply0:
+      return "supply0";
+    case NetType::kSupply1:
+      return "supply1";
+    case NetType::kInterconnect:
+      return "interconnect";
   }
 
   std::unreachable();
@@ -3381,6 +3405,20 @@ auto TokenParserBase::ParseNetDeclaration() -> NetDeclaration {
       return NetType::kLogic;
     }
 
+    static constexpr auto names{std::to_array<std::string_view>({
+        "tri", "tri0", "tri1", "triand", "trior", "trireg", "uwire",
+        "wand", "wor", "supply0", "supply1", "interconnect"})};
+    static constexpr auto values{std::to_array<NetType>({
+        NetType::kTri, NetType::kTri0, NetType::kTri1, NetType::kTriand,
+        NetType::kTrior, NetType::kTrireg, NetType::kUwire, NetType::kWand,
+        NetType::kWor, NetType::kSupply0, NetType::kSupply1,
+        NetType::kInterconnect})};
+    for (std::size_t index{}; index < names.size(); ++index) {
+      if (token_iterator->lexeme == names[index]) {
+        return values[index];
+      }
+    }
+
     throw std::runtime_error{fmt::format(
         "[Parser] expected net type at ({}, {})", token_iterator->location.row,
         token_iterator->location.column)};
@@ -3432,6 +3470,24 @@ auto TokenParserBase::ParseNetDeclaration() -> NetDeclaration {
   NetDeclaration net_declaration{};
   net_declaration.type = net_type;
   net_declaration.name = name_iterator->lexeme;
+  auto bracket_depth{0UZ};
+  for (auto iterator{declaration_begin_iterator}; iterator != declaration_end_iterator;
+       rng::advance(iterator, 1, declaration_end_iterator)) {
+    if (iterator->type == TokenType::kLBracket) {
+      ++bracket_depth;
+    } else if (iterator->type == TokenType::kRBracket and bracket_depth != 0UZ) {
+      --bracket_depth;
+    } else if (iterator->type == TokenType::kIdentifier and bracket_depth == 0UZ) {
+      auto const previous{iterator == declaration_begin_iterator
+                              ? declaration_end_iterator
+                              : rng::prev(iterator)};
+      if (previous == declaration_end_iterator or
+          previous->type == TokenType::kComma or
+          previous->type == TokenType::kRBracket) {
+        net_declaration.names.push_back(iterator->lexeme);
+      }
+    }
+  }
   net_declaration.type_specifier =
       std::span{declaration_begin_iterator, name_iterator};
   net_declaration.packed_dimensions =
@@ -3804,6 +3860,9 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
       "timeunit",     "typedef",     "union",        "wait",
       "wait_order",   "wand",        "while",        "with",
       "wire",         "wor",         "enum",         "packed",
+      "tri",          "tri0",        "tri1",         "triand",
+      "trior",        "trireg",      "uwire",        "supply0",
+      "supply1",      "interconnect",
   })};
 
   auto const start_position{m_position - 1};
@@ -5470,6 +5529,18 @@ auto Parser::ParseModuleItem() -> ModuleItem {
                             ParseTokenPreservingDeclaration()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
+        case ::HashLexeme("tri"):
+        case ::HashLexeme("tri0"):
+        case ::HashLexeme("tri1"):
+        case ::HashLexeme("triand"):
+        case ::HashLexeme("trior"):
+        case ::HashLexeme("trireg"):
+        case ::HashLexeme("uwire"):
+        case ::HashLexeme("wand"):
+        case ::HashLexeme("wor"):
+        case ::HashLexeme("supply0"):
+        case ::HashLexeme("supply1"):
+        case ::HashLexeme("interconnect"):
           return ModuleItem{std::in_place_type<NetDeclaration>,
                             ParseNetDeclaration()};
         case ::HashLexeme("assign"):

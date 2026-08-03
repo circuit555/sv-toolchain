@@ -19,6 +19,7 @@ using ModuleDeclaration = ::svt::model::ModuleDeclaration;
 using ModuleSourceKind = ::svt::model::ModuleSourceKind;
 using ProgramDeclaration = ::svt::model::ProgramDeclaration;
 using PrimitiveDeclaration = ::svt::model::PrimitiveDeclaration;
+using ClassDeclaration = ::svt::model::ClassDeclaration;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -3999,6 +4000,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
             PrintImportDeclaration(resolved_node);
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
+                                   ClassDeclaration>) {
+            fmt::println("class {}", resolved_node.name);
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
                                    UnsupportedDesignElement>) {
             fmt::println("{} <unsupported>", resolved_node.kind);
           } else {
@@ -4218,9 +4223,12 @@ auto Parser::ParseDesignElement() -> DesignElement {
       case ::HashLexeme("program"):
         m_token_iterator = dispatch_iterator;
         return ParseProgramDeclaration();
-      case ::HashLexeme("primitive"):
+          case ::HashLexeme("primitive"):
         m_token_iterator = dispatch_iterator;
         return ParsePrimitiveDeclaration();
+      case ::HashLexeme("class"):
+        m_token_iterator = dispatch_iterator;
+        return ParseClassDeclaration();
       case ::HashLexeme("package"):
         return ParsePackageDeclaration();
       case ::HashLexeme("interface"):
@@ -4586,6 +4594,44 @@ auto Parser::ParsePrimitiveDeclaration() -> PrimitiveDeclaration {
   return declaration;
 }
 
+auto Parser::ParseClassDeclaration() -> ClassDeclaration {
+  auto const declaration_begin_iterator{m_token_iterator};
+  ExpectKeyword("class", "class declaration");
+  ClassDeclaration declaration{};
+  if (m_token_iterator->IsKeyword("automatic") or
+      m_token_iterator->IsKeyword("static")) {
+    declaration.lifetime = m_token_iterator->lexeme;
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  if (m_token_iterator->type != TokenType::kIdentifier) {
+    throw std::runtime_error{"[Parser] expected class name"};
+  }
+  declaration.name = m_token_iterator->lexeme;
+  rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  if (m_token_iterator->type == TokenType::kHash) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+    declaration.parameters = ParseParameters();
+  }
+  auto const extends_begin{m_token_iterator};
+  while (m_token_iterator->type != TokenType::kSemicolon and
+         m_token_iterator->type != TokenType::kEndOfFile) {
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  declaration.extends = {extends_begin, m_token_iterator};
+  ExpectToken(TokenType::kSemicolon, "class declaration");
+  auto const body_begin{m_token_iterator};
+  ::AdvanceToMatchingEndKeyword(
+      m_token_iterator, rng::cend(m_tokens), "class", "endclass", 0UZ,
+      [](tokens_t::iterator const iterator, std::string_view keyword) {
+        return iterator->IsKeyword(keyword);
+      });
+  declaration.body = {body_begin, m_token_iterator};
+  ExpectKeyword("endclass", "class declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {declaration_begin_iterator, m_token_iterator};
+  return declaration;
+}
+
 auto Parser::SkipUnsupportedElementToSemicolon(
     std::string_view const stop_keyword) -> void {
   ::AdvanceToTopLevelBoundary(
@@ -4870,6 +4916,9 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("timeprecision"):
           return ModuleItem{std::in_place_type<TimeDeclaration>,
                             ParseTimeDeclaration()};
+        case ::HashLexeme("class"):
+          return ModuleItem{std::in_place_type<ClassDeclaration>,
+                            ParseClassDeclaration()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
           return ModuleItem{std::in_place_type<NetDeclaration>,

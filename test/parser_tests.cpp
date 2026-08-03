@@ -203,6 +203,7 @@ TEST_CASE("Parse program and primitive declarations", "[parser]") {
   REQUIRE(primitive.name == "udp");
   REQUIRE(primitive.ports.size() == 2);
   REQUIRE_FALSE(primitive.table.empty());
+  REQUIRE(primitive.table_rows.size() == 1);
   REQUIRE_FALSE(primitive.initial_statement.empty());
 
   Parser macro_parser{"macromodule legacy; endmodule : legacy"};

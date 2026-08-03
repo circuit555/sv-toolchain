@@ -857,6 +857,7 @@ export struct ProgramDeclaration : Declaration {
 export struct PrimitiveDeclaration : Declaration {
   std::vector<ModulePort> ports;
   std::span<Token const> table;
+  std::vector<std::span<Token const>> table_rows;
   std::span<Token const> initial_statement;
   std::span<Token const> tokens;
 };

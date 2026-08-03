@@ -292,6 +292,10 @@ export struct SystemTaskCallStatement {
   std::vector<ExpressionPtr> arguments;
 };
 
+export struct ProceduralDeclarationStatement {
+  std::span<Token const> declaration;
+};
+
 export struct UnsupportedStatement {
   std::span<Token const> tokens;
 };
@@ -327,6 +331,7 @@ export using StatementNode =
                  IfElseStatement, CaseStatement, LoopStatement,
                  TimingControlStatement, WaitStatement, ForkJoinStatement,
                  ProceduralContinuousAssignStatement, SystemTaskCallStatement,
+                 ProceduralDeclarationStatement,
                  ReturnStatement, BreakStatement, ContinueStatement,
                  DisableStatement, ExpectStatement, TokenPreservingStatement,
                  UnsupportedStatement>;

@@ -106,6 +106,7 @@ using BreakStatement = svt::model::BreakStatement;
 using ContinueStatement = svt::model::ContinueStatement;
 using DisableStatement = svt::model::DisableStatement;
 using ExpectStatement = svt::model::ExpectStatement;
+using ProceduralDeclarationStatement = svt::model::ProceduralDeclarationStatement;
 using CovergroupDeclaration = svt::model::CovergroupDeclaration;
 using ConfigDeclaration = svt::model::ConfigDeclaration;
 using CastExpression = svt::model::CastExpression;
@@ -350,6 +351,17 @@ TEST_CASE("Parse structured procedural control statements", "[parser]") {
   auto const& expect = StmtAs<ExpectStatement>(*block.statements.at(3));
   REQUIRE(expect.condition.front().lexeme == "(");
   REQUIRE(expect.condition.size() >= 3);
+}
+
+TEST_CASE("Parse procedural declarations inside blocks", "[parser]") {
+  Parser parser{std::string{"module m; initial begin int i = 1; logic ready; i = 2; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(
+      *std::get<InitialBlock>(module.items.front()).statement);
+  REQUIRE(std::holds_alternative<ProceduralDeclarationStatement>(block.statements.at(0)->node));
+  REQUIRE(std::holds_alternative<ProceduralDeclarationStatement>(block.statements.at(1)->node));
+  REQUIRE(std::holds_alternative<AssignmentStatement>(block.statements.at(2)->node));
 }
 
 TEST_CASE("Parse covergroup declarations", "[parser]") {

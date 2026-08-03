@@ -22,6 +22,8 @@ using PrimitiveDeclaration = ::svt::model::PrimitiveDeclaration;
 using ClassDeclaration = ::svt::model::ClassDeclaration;
 using SubroutineDeclaration = ::svt::model::SubroutineDeclaration;
 using SpecifyBlock = ::svt::model::SpecifyBlock;
+using AssertionDeclaration = ::svt::model::AssertionDeclaration;
+using AssertionStatement = ::svt::model::AssertionStatement;
 using InterfaceDeclaration = ::svt::model::InterfaceDeclaration;
 using InterfaceItem = ::svt::model::InterfaceItem;
 using InterfaceItemDeclaration = ::svt::model::InterfaceItemDeclaration;
@@ -3662,6 +3664,7 @@ auto Lexer::ScanIdentifierOrKeyword(SourceLocation const& token_source_location)
     -> Token {
   static constexpr auto kKeywords{std::to_array<std::string_view>({
       "alias",        "always",      "always_comb",  "always_ff",
+      "assert",
       "always_latch", "assign",      "assume",       "automatic",
       "begin",        "bind",        "bit",          "case",
       "casex",        "casez",       "chandle",      "checker",
@@ -4720,6 +4723,45 @@ auto Parser::ParseSpecifyBlock() -> SpecifyBlock {
   return block;
 }
 
+auto Parser::ParseAssertionDeclaration() -> AssertionDeclaration {
+  auto const begin{m_token_iterator};
+  AssertionDeclaration declaration{};
+  declaration.sequence = m_token_iterator->IsKeyword("sequence");
+  auto const start_keyword{declaration.sequence ? "sequence" : "property"};
+  auto const end_keyword{declaration.sequence ? "endsequence" : "endproperty"};
+  ExpectKeyword(start_keyword, "assertion declaration");
+  while (m_token_iterator->type != TokenType::kSemicolon and
+         m_token_iterator->type != TokenType::kEndOfFile) {
+    if (m_token_iterator->type == TokenType::kIdentifier and
+        declaration.name.empty()) {
+      declaration.name = m_token_iterator->lexeme;
+    }
+    rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+  }
+  ExpectToken(TokenType::kSemicolon, "assertion declaration");
+  auto const body_begin{m_token_iterator};
+  auto const end_iterator{rng::find_if(
+      tokens_t{m_token_iterator, rng::cend(m_tokens)},
+      [end_keyword](Token const& token) { return token.IsKeyword(end_keyword); })};
+  if (end_iterator == rng::cend(m_tokens)) {
+    throw std::runtime_error{fmt::format("[Parser] expected '{}'", end_keyword)};
+  }
+  declaration.body = {body_begin, end_iterator};
+  m_token_iterator = end_iterator;
+  ExpectKeyword(end_keyword, "assertion declaration");
+  ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));
+  declaration.tokens = {begin, m_token_iterator};
+  return declaration;
+}
+
+auto Parser::ParseAssertionStatement() -> AssertionStatement {
+  auto const begin{m_token_iterator};
+  AssertionStatement statement{.kind = m_token_iterator->lexeme};
+  SkipUnsupportedElementToSemicolon();
+  statement.tokens = {begin, m_token_iterator};
+  return statement;
+}
+
 auto Parser::SkipUnsupportedElementToSemicolon(
     std::string_view const stop_keyword) -> void {
   ::AdvanceToTopLevelBoundary(
@@ -5022,6 +5064,16 @@ auto Parser::ParseModuleItem() -> ModuleItem {
         case ::HashLexeme("specify"):
           return ModuleItem{std::in_place_type<SpecifyBlock>,
                             ParseSpecifyBlock()};
+        case ::HashLexeme("property"):
+        case ::HashLexeme("sequence"):
+          return ModuleItem{std::in_place_type<AssertionDeclaration>,
+                            ParseAssertionDeclaration()};
+        case ::HashLexeme("assert"):
+        case ::HashLexeme("assume"):
+        case ::HashLexeme("cover"):
+        case ::HashLexeme("restrict"):
+          return ModuleItem{std::in_place_type<AssertionStatement>,
+                            ParseAssertionStatement()};
         case ::HashLexeme("wire"):
         case ::HashLexeme("logic"):
           return ModuleItem{std::in_place_type<NetDeclaration>,

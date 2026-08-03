@@ -94,6 +94,8 @@ using ModuleSourceKind = svt::model::ModuleSourceKind;
 using ClassDeclaration = svt::model::ClassDeclaration;
 using SubroutineDeclaration = svt::model::SubroutineDeclaration;
 using SpecifyBlock = svt::model::SpecifyBlock;
+using AssertionDeclaration = svt::model::AssertionDeclaration;
+using AssertionStatement = svt::model::AssertionStatement;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
   std::vector<std::string_view> result{};
@@ -214,6 +216,19 @@ TEST_CASE("Parse specify blocks as isolated module items", "[parser]") {
   auto const& specify = std::get<SpecifyBlock>(module.items.front());
   REQUIRE_FALSE(specify.items.empty());
   REQUIRE(specify.tokens.front().lexeme == "specify");
+}
+
+TEST_CASE("Parse assertion declarations and statements", "[parser]") {
+  Parser parser{std::string{"module m; property p; a |-> b; endproperty sequence s; a ##1 b; endsequence assert property (p); endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& property = std::get<AssertionDeclaration>(module.items.at(0));
+  REQUIRE_FALSE(property.sequence);
+  REQUIRE(property.name == "p");
+  auto const& sequence = std::get<AssertionDeclaration>(module.items.at(1));
+  REQUIRE(sequence.sequence);
+  REQUIRE(sequence.name == "s");
+  REQUIRE(std::get<AssertionStatement>(module.items.at(2)).kind == "assert");
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {

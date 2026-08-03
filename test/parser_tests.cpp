@@ -389,6 +389,8 @@ TEST_CASE("Parse covergroup declarations", "[parser]") {
   auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
   auto const& covergroup = std::get<CovergroupDeclaration>(module.items.front());
   REQUIRE(covergroup.name == "cg");
+  REQUIRE_FALSE(covergroup.header.empty());
+  REQUIRE_FALSE(covergroup.event.empty());
   REQUIRE_FALSE(covergroup.body.empty());
   REQUIRE(covergroup.items.size() == 1);
   REQUIRE(covergroup.items.front().kind == CovergroupDeclaration::ItemKind::kCoverpoint);
@@ -551,6 +553,17 @@ TEST_CASE("Parse config instance use clauses", "[parser]") {
   REQUIRE(config.items.front().kind == ConfigDeclaration::ItemKind::kInstanceUse);
   REQUIRE(config.items.front().subject.front().lexeme == "top");
   REQUIRE(config.items.front().libraries.front().lexeme == "work");
+}
+
+TEST_CASE("Parse covergroup sample signatures", "[parser]") {
+  Parser parser{std::string{"module m; covergroup cg with function sample(int value); endgroup endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& covergroup = std::get<CovergroupDeclaration>(
+      std::get<ModuleDeclaration>(translation_unit.front()).items.front());
+  REQUIRE(covergroup.items.empty());
+  REQUIRE(std::ranges::find_if(covergroup.header, [](auto const& token) {
+            return token.lexeme == "with";
+          }) != covergroup.header.end());
 }
 
 TEST_CASE("Parse expression casts", "[parser]") {

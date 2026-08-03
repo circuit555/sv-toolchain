@@ -5434,6 +5434,7 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
   auto const begin{m_token_iterator};
   ExpectKeyword("covergroup", "covergroup declaration");
   CovergroupDeclaration declaration{};
+  auto const header_begin{m_token_iterator};
   if (m_token_iterator->type == TokenType::kIdentifier) {
     declaration.name = m_token_iterator->lexeme;
     rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
@@ -5443,6 +5444,12 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
       [](Token const& token) { return token.type == TokenType::kSemicolon; })};
   if (header_end == rng::cend(m_tokens)) {
     throw std::runtime_error{"[Parser] expected ';' while parsing covergroup"};
+  }
+  declaration.header = {header_begin, header_end};
+  auto const event_begin{rng::find_if(
+      declaration.header, [](Token const& token) { return token.type == TokenType::kAt; })};
+  if (event_begin != declaration.header.end()) {
+    declaration.event = {event_begin, declaration.header.end()};
   }
   m_token_iterator = rng::next(header_end, 1, rng::cend(m_tokens));
   auto const body_begin{m_token_iterator};
@@ -5507,6 +5514,9 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
         item_tokens, [](Token const& token) { return token.lexeme == "with"; })};
     if (with_iterator != item_tokens.end()) {
       item.with_clause = {with_iterator, item_tokens.end()};
+      if (item.kind == CovergroupDeclaration::ItemKind::kSample) {
+        item.sample_signature = {with_iterator, item_tokens.end()};
+      }
     }
     item.transition = rng::find_if(item_tokens, [](Token const& token) {
       return token.lexeme == "=>" or token.lexeme == "->" or

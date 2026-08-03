@@ -124,6 +124,12 @@ export struct CastExpression {
   ExpressionPtr expression;
 };
 
+export struct MemberAccessExpression {
+  ExpressionPtr base;
+  std::string_view separator;
+  std::string_view member;
+};
+
 export struct UnsupportedExpression {
   std::span<Token const> tokens;
 };
@@ -135,6 +141,7 @@ export using ExpressionNode =
                  RangeSelectExpression, ConcatenationExpression,
                  ReplicationExpression, CallExpression,
                  AssignmentPatternExpression, CastExpression,
+                 MemberAccessExpression,
                  UnsupportedExpression>;
 
 export struct Expression {

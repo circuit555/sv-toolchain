@@ -420,6 +420,18 @@ export struct SpecifyBlock {
   std::span<Token const> tokens;
 };
 
+export struct AssertionDeclaration {
+  bool sequence{false};
+  std::string_view name;
+  std::span<Token const> body;
+  std::span<Token const> tokens;
+};
+
+export struct AssertionStatement {
+  std::string_view kind;
+  std::span<Token const> tokens;
+};
+
 export struct AlwaysBlock {
   ProceduralBlockKind kind{ProceduralBlockKind::kAlways};
   StatementPtr statement;
@@ -586,7 +598,8 @@ export using ModuleItem =
                  UserDefinedNetDeclaration, ContinuousAssign, AlwaysBlock,
                  InitialBlock, FinalBlock, GenerateItem, ModuleInstantiation,
                  TimeDeclaration, ImportDeclaration, ClassDeclaration,
-                 SubroutineDeclaration, SpecifyBlock,
+                 SubroutineDeclaration, SpecifyBlock, AssertionDeclaration,
+                 AssertionStatement,
                  UnsupportedModuleItem>;
 
 export struct ModuleDeclaration : Declaration {

@@ -3149,6 +3149,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                            JoinLexemes(resolved_item.port_connections));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
+                                              PrimitiveGateInstantiation>) {
+              fmt::println("    primitive gate {}", resolved_item.gate);
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
                                               TimeDeclaration>) {
               PrintTimeDeclaration(resolved_item, "    ");
             } else if constexpr (std::same_as<std::remove_cvref_t<
@@ -3159,6 +3163,10 @@ auto PrintModule(ModuleDeclaration const& module_declaration) -> void {
                                                   decltype(resolved_item)>,
                                               TokenPreservingDeclaration>) {
               fmt::println("    {}", JoinLexemes(resolved_item.tokens));
+            } else if constexpr (std::same_as<std::remove_cvref_t<
+                                                  decltype(resolved_item)>,
+                                              DirectiveDeclaration>) {
+              fmt::println("    directive {}", JoinLexemes(resolved_item.tokens));
             } else if constexpr (std::same_as<std::remove_cvref_t<
                                                   decltype(resolved_item)>,
                                               CovergroupDeclaration>) {
@@ -4458,6 +4466,10 @@ auto Print(Parser::TranslationUnit const& translation_unit) -> void {
                              ? "export"
                              : "import",
                          JoinLexemes(resolved_node.declaration));
+          } else if constexpr (std::same_as<
+                                   std::remove_cvref_t<decltype(resolved_node)>,
+                                   DirectiveDeclaration>) {
+            fmt::println("directive {}", JoinLexemes(resolved_node.tokens));
           } else if constexpr (std::same_as<
                                    std::remove_cvref_t<decltype(resolved_node)>,
                                    CheckerDeclaration>) {

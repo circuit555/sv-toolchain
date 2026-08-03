@@ -5439,6 +5439,16 @@ auto Parser::ParseAssertionDeclaration() -> AssertionDeclaration {
 auto Parser::ParseAssertionStatement() -> AssertionStatement {
   auto const begin{m_token_iterator};
   AssertionStatement statement{.kind = m_token_iterator->lexeme};
+  auto const expression_begin{std::next(begin)};
+  auto const statement_end{::FindTopLevelStatementEnd(
+      expression_begin, rng::cend(m_tokens))};
+  auto const action_begin{rng::find_if(
+      tokens_t{expression_begin, statement_end},
+      [](Token const& token) { return token.lexeme == "else"; })};
+  statement.expression = {expression_begin, action_begin};
+  if (action_begin != statement_end) {
+    statement.action = {std::next(action_begin), statement_end};
+  }
   SkipUnsupportedElementToSemicolon();
   statement.tokens = {begin, m_token_iterator};
   return statement;

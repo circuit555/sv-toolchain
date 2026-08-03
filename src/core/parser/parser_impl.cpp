@@ -5051,6 +5051,54 @@ auto Parser::ParseCovergroupDeclaration() -> CovergroupDeclaration {
     throw std::runtime_error{"[Parser] expected 'endgroup'"};
   }
   declaration.body = {body_begin, end_iterator};
+  for (auto const item_tokens : SplitTopLevelSeparatedTokens(
+           declaration.body, TokenType::kSemicolon, "covergroup item", false)) {
+    if (item_tokens.empty()) {
+      continue;
+    }
+    CovergroupDeclaration::Item item{};
+    item.tokens = item_tokens;
+    auto const keyword_iterator{rng::find_if(
+        item_tokens, [](Token const& token) {
+          return token.lexeme == "coverpoint" or token.lexeme == "cross" or
+                 token.lexeme == "option" or token.lexeme == "with" or
+                 token.lexeme == "bins" or token.lexeme == "ignore_bins";
+        })};
+    if (keyword_iterator != item_tokens.end()) {
+      if (keyword_iterator->lexeme == "coverpoint") {
+        item.kind = CovergroupDeclaration::ItemKind::kCoverpoint;
+      } else if (keyword_iterator->lexeme == "cross") {
+        item.kind = CovergroupDeclaration::ItemKind::kCross;
+      } else if (keyword_iterator->lexeme == "option") {
+        item.kind = CovergroupDeclaration::ItemKind::kOption;
+      } else if (keyword_iterator->lexeme == "with") {
+        item.kind = CovergroupDeclaration::ItemKind::kSample;
+      } else {
+        item.kind = CovergroupDeclaration::ItemKind::kBin;
+      }
+    }
+    auto const colon_iterator{rng::find_if(
+        item_tokens, [](Token const& token) { return token.type == TokenType::kColon; })};
+    if (colon_iterator != item_tokens.end() and colon_iterator != item_tokens.begin() and
+        std::prev(colon_iterator)->type == TokenType::kIdentifier) {
+      item.name = std::prev(colon_iterator)->lexeme;
+    }
+    for (auto iterator{item_tokens.begin()}; iterator != item_tokens.end();
+         ++iterator) {
+      if (iterator->lexeme != "bins" and iterator->lexeme != "ignore_bins") {
+        continue;
+      }
+      auto const name_iterator{std::next(iterator)};
+      if (name_iterator != item_tokens.end() and
+          name_iterator->type == TokenType::kIdentifier) {
+        item.bins.push_back(CovergroupDeclaration::Bin{
+            .kind = iterator->lexeme,
+            .name = name_iterator->lexeme,
+            .tokens = item_tokens});
+      }
+    }
+    declaration.items.push_back(std::move(item));
+  }
   m_token_iterator = end_iterator;
   ExpectKeyword("endgroup", "covergroup declaration");
   ::AdvancePastOptionalBlockLabel(m_token_iterator, rng::cend(m_tokens));

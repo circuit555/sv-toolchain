@@ -140,6 +140,8 @@ using ForkJoinStatement = ::svt::model::ForkJoinStatement;
 using ProceduralContinuousAssignStatement =
     ::svt::model::ProceduralContinuousAssignStatement;
 using SystemTaskCallStatement = ::svt::model::SystemTaskCallStatement;
+using ProceduralDeclarationStatement =
+    ::svt::model::ProceduralDeclarationStatement;
 using UnsupportedStatement = ::svt::model::UnsupportedStatement;
 using TokenPreservingStatement = ::svt::model::TokenPreservingStatement;
 using ReturnStatement = ::svt::model::ReturnStatement;
@@ -1045,6 +1047,22 @@ class StatementParser final : private TokenParserBase {
     }
     if (m_token_iterator->IsKeyword("fork")) {
       return ParseForkJoinStatement();
+    }
+    static constexpr auto declaration_keywords = std::to_array<std::string_view>({
+        "bit", "logic", "reg", "int", "integer", "shortint", "longint",
+        "byte", "real", "shortreal", "time", "realtime", "string", "event",
+        "var", "const", "static", "automatic"});
+    if (rng::contains(declaration_keywords, m_token_iterator->lexeme)) {
+      auto const begin{m_token_iterator};
+      auto const end{::FindTopLevelStatementEnd(begin, rng::cend(m_tokens))};
+      m_token_iterator = end;
+      if (not AtEnd() and m_token_iterator->type == TokenType::kSemicolon) {
+        rng::advance(m_token_iterator, 1, rng::cend(m_tokens));
+      }
+      return std::make_unique<Statement>(
+          StatementNode{std::in_place_type<ProceduralDeclarationStatement>,
+                        ProceduralDeclarationStatement{{begin, m_token_iterator}}},
+          tokens_t{begin, m_token_iterator});
     }
     if (m_token_iterator->IsKeyword("return") or
         m_token_iterator->IsKeyword("break") or

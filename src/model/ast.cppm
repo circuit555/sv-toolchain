@@ -14,7 +14,10 @@ export enum class PortDirection : std::uint8_t {
   kRef
 };
 
-export enum class NetType : std::uint8_t { kWire, kLogic };
+export enum class NetType : std::uint8_t {
+  kWire, kLogic, kTri, kTri0, kTri1, kTriand, kTrior, kTrireg, kUwire,
+  kWand, kWor, kSupply0, kSupply1, kInterconnect
+};
 
 export enum class VariableType : std::uint8_t {
   kReg,
@@ -337,6 +340,7 @@ export struct ModulePort : Declaration {
 
 export struct NetDeclaration : Declaration {
   NetType type;
+  std::vector<std::string_view> names;
   std::span<Token const> type_specifier;
   std::vector<PackedDimension> packed_dimensions;
 };

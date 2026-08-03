@@ -278,6 +278,16 @@ TEST_CASE("Parse module instance arrays", "[parser]") {
           std::vector<std::string_view>{"[", "3", ":", "1", "]", "[", "2", ":", "0", "]"});
 }
 
+TEST_CASE("Parse extended net types and declarators", "[parser]") {
+  Parser parser{std::string{"module m; wor u, v; tri0 [3:0] bus; endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& wor = std::get<NetDeclaration>(module.items.at(0));
+  REQUIRE(wor.type == NetType::kWor);
+  REQUIRE(wor.names == std::vector<std::string_view>{"u", "v"});
+  REQUIRE(std::get<NetDeclaration>(module.items.at(1)).type == NetType::kTri0);
+}
+
 TEST_CASE("Parse bind alias defparam and let declarations", "[parser]") {
   Parser parser{std::string{"bind target checker_inst ci(); module m; alias a = b; defparam m.W = 1; let inc(x) = x + 1; endmodule"}};
   auto translation_unit = parser.Parse();
@@ -1121,9 +1131,9 @@ TEST_CASE("Parse unsupported module item declarations without losing sync",
       std::get<GenerateItem>(module_declaration.items.at(0)))};
   REQUIRE(genvar_declaration.identifiers.size() == 1);
   REQUIRE(genvar_declaration.identifiers.front().name == "g");
-  auto const& wor_item{std::get<UnsupportedModuleItem>(
+  auto const& wor_item{std::get<NetDeclaration>(
       module_declaration.items.at(1))};
-  REQUIRE(wor_item.kind == "wor");
+  REQUIRE(wor_item.type == NetType::kWor);
   REQUIRE(std::get<TokenPreservingDeclaration>(module_declaration.items.at(2)).kind == "let");
   REQUIRE(std::get<TokenPreservingDeclaration>(module_declaration.items.at(3)).kind == "defparam");
 

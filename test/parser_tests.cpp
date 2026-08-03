@@ -100,6 +100,7 @@ using ClockingDeclaration = svt::model::ClockingDeclaration;
 using DefaultDisableIffDeclaration = svt::model::DefaultDisableIffDeclaration;
 using CheckerDeclaration = svt::model::CheckerDeclaration;
 using TokenPreservingDeclaration = svt::model::TokenPreservingDeclaration;
+using TokenPreservingStatement = svt::model::TokenPreservingStatement;
 using NullGenerateItem = svt::model::NullGenerateItem;
 
 auto Lexemes(auto const& tokens) -> std::vector<std::string_view> {
@@ -283,6 +284,17 @@ TEST_CASE("Parse bind alias defparam and let declarations", "[parser]") {
   REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(0)).kind == "alias");
   REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(1)).kind == "defparam");
   REQUIRE(std::get<TokenPreservingDeclaration>(module.items.at(2)).kind == "let");
+}
+
+TEST_CASE("Parse token-preserving procedural controls", "[parser]") {
+  Parser parser{std::string{"module m; initial begin return; break; continue; disable fork; end endmodule"}};
+  auto translation_unit = parser.Parse();
+  auto const& module = std::get<ModuleDeclaration>(translation_unit.front());
+  auto const& initial = std::get<InitialBlock>(module.items.front());
+  auto const& block = StmtAs<BeginEndBlockStatement>(*initial.statement);
+  REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(0)).kind == "return");
+  REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(1)).kind == "break");
+  REQUIRE(StmtAs<TokenPreservingStatement>(*block.statements.at(2)).kind == "continue");
 }
 
 TEST_CASE("Parse generic module parameters", "[parser]") {
